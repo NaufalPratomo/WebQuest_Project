@@ -18,16 +18,22 @@ const Login = () => {
     e.preventDefault();
     setLoading(true);
 
-    const success = await login(email, password);
-    
-    if (success) {
-      toast.success('Login berhasil!');
-      navigate('/dashboard');
-    } else {
-      toast.error('Email atau password salah');
+    try {
+      const user = await login(email, password);
+      if (user) {
+        toast.success('Login berhasil!');
+        // redirect based on role to avoid forbidden-dashboard redirect loop
+        if (user.role === 'employee') {
+          navigate('/activities/input');
+        } else {
+          navigate('/dashboard');
+        }
+      } else {
+        toast.error('Email atau password salah');
+      }
+    } finally {
+      setLoading(false);
     }
-    
-    setLoading(false);
   };
 
   return (

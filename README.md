@@ -1,121 +1,199 @@
-# WebQuest - Digital Transformation Partner
+# SawiTrack
 
-> **"The Platform for Your Digital Quest"** 🚀
+> Aplikasi manajemen dan pencatatan aktivitas lapangan perkebunan kelapa sawit berbasis web dan mobile
 
-## 🚀 About Us
+[![React](https://img.shields.io/badge/React-18.3-61DAFB?logo=react)](https://reactjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?logo=typescript)](https://www.typescriptlang.org/)
+[![Vite](https://img.shields.io/badge/Vite-6.0-646CFF?logo=vite)](https://vitejs.dev/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind-3.4-06B6D4?logo=tailwindcss)](https://tailwindcss.com/)
 
-WebQuest adalah startup teknologi yang berfokus pada pengembangan solusi web untuk membantu bisnis Anda bertransformasi digital. Kami percaya bahwa setiap layanan, produk, atau jasa dapat dioptimalkan melalui teknologi web yang tepat.
+## 📋 Deskripsi
 
-## 🎯 Visi & Misi
+SawiTrack adalah aplikasi frontend modern untuk manajemen aktivitas lapangan perkebunan kelapa sawit. Aplikasi ini menyediakan sistem pencatatan, monitoring, dan pelaporan kegiatan lapangan dengan antarmuka yang responsif dan mudah digunakan.
 
-**Visi:** Menjadi partner terpercaya dalam transformasi digital untuk UMKM dan perusahaan di Indonesia.
+**Status**: Demo Frontend (Autentikasi Mock)  
+**URL Demo**: Coming Soon
 
-**Misi:** 
-- Memudahkan akses teknologi web untuk semua kalangan
-- Mendigitalisasi layanan tradisional menjadi solusi modern
-- Meningkatkan efisiensi bisnis melalui teknologi
+## ✨ Fitur Utama
 
-## 🛠️ Layanan Kami
+### 🔐 Autentikasi & Otorisasi
+- Login dengan role-based access control
+- Proteksi route berdasarkan role pengguna
+- Session management dengan localStorage
 
-### 🌐 Web Development
-- **Website Perusahaan** - Profesional dan responsive
-- **E-commerce Platform** - Toko online lengkap dengan sistem pembayaran
-- **Web Application** - Aplikasi web custom sesuai kebutuhan bisnis
-- **Landing Page** - Halaman penjualan yang efektif
+### 📊 Dashboard & Monitoring
+- Ringkasan aktivitas real-time
+- Visualisasi data lapangan
+- Quick access ke fitur utama
 
-### 📱 Digital Solutions
-- **Sistem Manajemen** - CRM, Inventory, HR Management
-- **API Development** - Integrasi sistem dan data
-- **Database Design** - Optimasi dan keamanan data
-- **Cloud Solutions** - Hosting dan deployment
+### 👥 Master Data (Manager Only)
+- **Employees**: Manajemen data karyawan
+- **Locations**: Manajemen lokasi kebun
+- **Targets**: Setting target produksi
 
-### 🔧 Maintenance & Support
-- **Website Maintenance** - Update dan backup berkala
-- **Technical Support** - Bantuan teknis 24/7
-- **Performance Optimization** - Peningkatan kecepatan dan SEO
-- **Security Updates** - Perlindungan dari ancaman siber
+### 📝 Manajemen Aktivitas
+- Input laporan kegiatan lapangan
+- Riwayat aktivitas lengkap
+- Verifikasi laporan (Foreman)
+- Rekap & laporan terperinci
 
-## 💼 Sektor yang Kami Layani
+### 👤 Role-Based Features
+- **Manager**: Full access ke semua fitur
+- **Foreman**: Verifikasi laporan & monitoring tim
+- **Employee**: Input & view aktivitas pribadi
 
-- **UMKM & Startup** - Solusi terjangkau untuk bisnis kecil
-- **E-commerce** - Platform jual beli online
-- **Pendidikan** - Sistem pembelajaran digital
-- **Kesehatan** - Aplikasi manajemen klinik/rumah sakit
-- **Pemerintahan** - Digitalisasi layanan publik
-- **Perusahaan** - Sistem manajemen internal
+## 🚀 Quick Start
 
-## 🌟 Keunggulan Kami
+### Prerequisites
 
-### ✅ **Harga Terjangkau**
-Solusi teknologi berkualitas dengan harga yang ramah untuk UMKM
+- Node.js (v18 atau lebih baru)
+- npm atau yarn
+- Git
 
-### ✅ **Tim Berpengalaman**
-Developer berpengalaman dengan track record proyek sukses
+### Instalasi
+```bash
+# Clone repository
+git clone https://github.com/username/sawitrack.git
+cd sawitrack
 
-### ✅ **Support 24/7**
-Bantuan teknis kapan saja Anda butuhkan
+# Install dependencies
+npm install
 
-### ✅ **Garansi Kualitas**
-Kami berkomitmen memberikan hasil terbaik untuk setiap proyek
+# Jalankan development server
+npm run dev
+```
 
-### ✅ **Update Berkala**
-Sistem selalu up-to-date dengan teknologi terbaru
+Aplikasi akan berjalan di `http://localhost:5173`
 
-## 🚀 Proses Kerja
+## 🧪 Akun Demo
 
-1. **Konsultasi Gratis** - Diskusi kebutuhan dan solusi terbaik
-2. **Analisis & Planning** - Perencanaan detail proyek
-3. **Development** - Pengembangan sesuai timeline
-4. **Testing & Quality Assurance** - Uji coba menyeluruh
-5. **Deployment** - Go live dengan support penuh
-6. **Maintenance** - Perawatan dan update berkala
+Gunakan kredensial berikut untuk mencoba aplikasi:
 
-## 📞 Hubungi Kami
+| Role | Email | Password |
+|------|-------|----------|
+| 👔 Manager | `manager@sawit.com` | `manager123` |
+| 👷 Foreman | `foreman@sawit.com` | `foreman123` |
+| 👤 Employee | `employee@sawit.com` | `employee123` |
 
-### 📧 Email
-- **General:** project.by.webquest@gmail.com
+> ⚠️ **Note**: Kredensial ini hanya untuk demo dan disimpan di `src/contexts/AuthContext.tsx`
 
-### 📱 Phone
-- **WhatsApp:** +62 85190069401
+## 🛠️ Tech Stack
 
-## 💡 Mengapa Memilih WebQuest?
+### Core
+- **[Vite](https://vitejs.dev/)** - Build tool & dev server
+- **[React 18](https://reactjs.org/)** - UI library
+- **[TypeScript](https://www.typescriptlang.org/)** - Type safety
 
-- **Fokus pada UMKM** - Kami memahami kebutuhan bisnis kecil
-- **Teknologi Terkini** - Menggunakan framework dan tools modern
-- **Tim Lokal** - Komunikasi mudah dalam bahasa Indonesia
-- **Harga Transparan** - Tidak ada biaya tersembunyi
-- **Hasil Terukur** - Setiap proyek memiliki KPI yang jelas
+### Styling & UI
+- **[Tailwind CSS](https://tailwindcss.com/)** - Utility-first CSS
+- **[shadcn/ui](https://ui.shadcn.com/)** - Component library
+- **[Lucide React](https://lucide.dev/)** - Icon library
 
-## 🔮 Teknologi yang Kami Gunakan
+### Code Quality
+- **ESLint** - Code linting
+- **TypeScript ESLint** - TS-specific rules
 
-### Frontend
-- React.js, Vue.js, Angular
-- HTML5, CSS3, JavaScript ES6+
-- Bootstrap, Tailwind CSS
-- Progressive Web Apps (PWA)
+## 📁 Struktur Proyek
+```
+SawiTrack/
+├── public/              # Static assets
+├── src/
+│   ├── components/      # Reusable components
+│   │   ├── ui/         # shadcn/ui components
+│   │   └── layout/     # Layout components
+│   ├── pages/          # Page components
+│   │   ├── Dashboard.tsx
+│   │   ├── Login.tsx
+│   │   ├── Reports.tsx
+│   │   └── ...
+│   ├── contexts/       # React contexts
+│   │   └── AuthContext.tsx
+│   ├── lib/            # Utilities & helpers
+│   ├── hooks/          # Custom hooks
+│   ├── App.tsx         # App routing & providers
+│   └── main.tsx        # Entry point
+├── index.html
+├── package.json
+├── tsconfig.json
+├── vite.config.ts
+└── tailwind.config.ts
+```
 
-### Backend
-- Node.js, PHP Laravel, Python Django
-- MySQL, PostgreSQL, MongoDB
-- RESTful API, GraphQL
-- Microservices Architecture
+## 📜 Available Scripts
+```bash
+# Development
+npm run dev          # Start dev server with hot reload
 
-### Cloud & DevOps
-- AWS, Google Cloud, DigitalOcean
-- Docker, Kubernetes
-- CI/CD Pipeline
-- Automated Testing
+# Production
+npm run build        # Build for production
+npm run preview      # Preview production build locally
 
+# Code Quality
+npm run lint         # Run ESLint
+```
 
-## 🚀 Ready to Transform Your Business?
+## 🔧 Konfigurasi
 
-Jangan biarkan bisnis Anda tertinggal di era digital. Mari diskusikan bagaimana WebQuest dapat membantu mendigitalisasi layanan Anda!
+### Environment Variables
 
-### 📞 **Konsultasi Gratis Sekarang!**
-Hubungi kami untuk konsultasi gratis dan dapatkan proposal custom untuk bisnis Anda.
+Saat ini aplikasi tidak memerlukan environment variables. Jika akan mengintegrasikan backend, buat file `.env`:
+```env
+VITE_API_URL=http://localhost:3000/api
+VITE_APP_NAME=SawiTrack
+```
+
+### Tailwind Configuration
+
+Kustomisasi tema di `tailwind.config.ts`:
+```typescript
+export default {
+  theme: {
+    extend: {
+      colors: {
+        // Your custom colors
+      },
+    },
+  },
+}
+```
+
+## 👥 Tim Pengembang
+
+## 👥 Contributors
+
+<table>
+  <tr>
+    <td align="center">
+      <a href="https://github.com/NaufalPratomo">
+        <img src="https://avatars.githubusercontent.com/u/140324988?v=4" width="100px" alt="Muhammad Naufal Pratomo"/><br />
+        <sub><b>Muhammad Naufal Pratomo</b></sub>
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/DanendraPassadhi">
+        <img src="https://avatars.githubusercontent.com/u/143127813?v=4" width="100px" alt="Danendra Nayaka Passadhi"/><br />
+        <sub><b>Danendra Nayaka Passadhi</b></sub>
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/Ruphasa">
+        <img src="https://avatars.githubusercontent.com/u/143374926?v=4?s=100" width="100px" alt="Rizqi Fauzan"/><br />
+        <sub><b>Rizqi Fauzan</b></sub>
+      </a>
+    </td>
+  </tr>
+</table>
+
+## 📞 Kontak & Support
+
+- 📧 Email: project.by.webquest@gmail.com
+- 📱 Phone: +62 85190069401
+- 🐛 Issues: [GitHub Issues](https://github.com/NaufalPratomo/WebQuest_Project/issues)
 
 ---
 
-**WebQuest - Your Digital Transformation Partner** 🚀
-
-*Membuat teknologi web mudah diakses untuk semua bisnis di Indonesia*
+<div align="center">
+  Made with ❤️ for better plantation management
+  
+  ⭐ Star project ini jika berguna!
+</div>

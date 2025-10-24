@@ -132,33 +132,6 @@ npm run preview      # Preview production build locally
 npm run lint         # Run ESLint
 ```
 
-## 🔧 Konfigurasi
-
-### Environment Variables
-
-Saat ini aplikasi tidak memerlukan environment variables. Jika akan mengintegrasikan backend, buat file `.env`:
-```env
-VITE_API_URL=http://localhost:3000/api
-VITE_APP_NAME=SawiTrack
-```
-
-### Tailwind Configuration
-
-Kustomisasi tema di `tailwind.config.ts`:
-```typescript
-export default {
-  theme: {
-    extend: {
-      colors: {
-        // Your custom colors
-      },
-    },
-  },
-}
-```
-
-## 👥 Tim Pengembang
-
 ## 👥 Contributors
 
 <table>

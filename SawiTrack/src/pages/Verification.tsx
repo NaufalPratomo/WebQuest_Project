@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import {
@@ -21,6 +21,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
+import { api, ReportDoc } from '@/lib/api';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 interface Report {
@@ -35,48 +36,56 @@ interface Report {
 }
 
 const Verification = () => {
-  const [reports] = useState<Report[]>([
-    {
-      id: '1',
-      employeeName: 'Ahmad Yani',
-      date: '2025-10-17',
-      division: 'APK',
-      jobType: 'Panen',
-      hk: 1.0,
-      notes: 'Panen area blok A',
-      status: 'pending',
-    },
-    {
-      id: '2',
-      employeeName: 'Siti Nurhaliza',
-      date: '2025-10-17',
-      division: 'TPN',
-      jobType: 'Perawatan',
-      hk: 0.5,
-      notes: 'Pemupukan area blok B',
-      status: 'pending',
-    },
-    {
-      id: '3',
-      employeeName: 'Budi Santoso',
-      date: '2025-10-16',
-      division: 'APK',
-      jobType: 'Penanaman',
-      hk: 1.0,
-      notes: 'Penanaman bibit baru',
-      status: 'approved',
-    },
-  ]);
+  const [reports, setReports] = useState<Report[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const pendingReports = reports.filter(r => r.status === 'pending');
-  const verifiedReports = reports.filter(r => r.status !== 'pending');
+  useEffect(() => {
+    let mounted = true;
+    setLoading(true);
+    api.reports()
+      .then((list: ReportDoc[]) => {
+        if (!mounted) return;
+        const mapped: Report[] = list.map(r => ({
+          id: r._id,
+          employeeName: r.employeeName,
+          date: r.date,
+          division: r.division,
+          jobType: r.jobType,
+          hk: r.hk,
+          notes: r.notes || '',
+          status: r.status,
+        }));
+        setReports(mapped);
+      })
+      .catch(e => setError(e.message || String(e)))
+      .finally(() => setLoading(false));
+    return () => { mounted = false; };
+  }, []);
 
-  const handleApprove = (id: string) => {
-    toast.success('Laporan berhasil disetujui');
+  const pendingReports = useMemo(() => reports.filter(r => r.status === 'pending'), [reports]);
+  const verifiedReports = useMemo(() => reports.filter(r => r.status !== 'pending'), [reports]);
+
+  const handleApprove = async (id: string) => {
+    try {
+      await api.approveReport(id);
+      setReports(prev => prev.map(r => (r.id === id ? { ...r, status: 'approved' } : r)));
+      toast.success('Laporan berhasil disetujui');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Gagal menyetujui laporan';
+      toast.error(msg);
+    }
   };
 
-  const handleReject = (id: string) => {
-    toast.success('Laporan berhasil ditolak');
+  const handleReject = async (id: string) => {
+    try {
+      await api.rejectReport(id);
+      setReports(prev => prev.map(r => (r.id === id ? { ...r, status: 'rejected' } : r)));
+      toast.success('Laporan berhasil ditolak');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Gagal menolak laporan';
+      toast.error(msg);
+    }
   };
 
   const ReportTable = ({ data }: { data: Report[] }) => (
@@ -226,9 +235,9 @@ const Verification = () => {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold">Verifikasi Laporan</h1>
-        <p className="text-muted-foreground">
-          Verifikasi laporan harian dari karyawan
-        </p>
+        <p className="text-muted-foreground">Verifikasi laporan harian dari karyawan</p>
+        {error && <p className="text-sm text-red-600">{error}</p>}
+        {loading && <p className="text-sm text-muted-foreground">Memuat data...</p>}
       </div>
 
       <Tabs defaultValue="pending" className="w-full">

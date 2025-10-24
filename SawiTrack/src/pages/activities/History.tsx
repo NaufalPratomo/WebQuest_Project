@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -19,8 +19,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useAuth } from '@/contexts/AuthContext';
+import { api, ReportDoc } from '@/lib/api';
 
-interface Report {
+interface ReportRow {
   id: string;
   date: string;
   division: string;
@@ -32,20 +34,39 @@ interface Report {
 const History = () => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  
-  const [reports] = useState<Report[]>([
-    { id: '1', date: '2025-10-17', division: 'APK', jobType: 'Panen', hk: 1.0, status: 'approved' },
-    { id: '2', date: '2025-10-16', division: 'TPN', jobType: 'Perawatan', hk: 0.5, status: 'pending' },
-    { id: '3', date: '2025-10-15', division: 'APK', jobType: 'Penanaman', hk: 1.0, status: 'approved' },
-    { id: '4', date: '2025-10-14', division: 'Divisi', jobType: 'Transport', hk: 0.5, status: 'rejected' },
-  ]);
+  const [rows, setRows] = useState<ReportRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { user } = useAuth();
 
-  const filteredReports = reports.filter(report => {
+  useEffect(() => {
+    let mounted = true;
+    if (!user?.name) return;
+    setLoading(true);
+    api.reports({ employeeName: user.name })
+      .then((list: ReportDoc[]) => {
+        if (!mounted) return;
+        const mapped: ReportRow[] = list.map(r => ({
+          id: r._id,
+          date: r.date,
+          division: r.division,
+          jobType: r.jobType,
+          hk: r.hk,
+          status: r.status,
+        }));
+        setRows(mapped);
+      })
+      .catch(e => setError(e.message || String(e)))
+      .finally(() => setLoading(false));
+    return () => { mounted = false; };
+  }, [user?.name]);
+
+  const filteredReports = useMemo(() => rows.filter(report => {
     const matchesSearch = report.division.toLowerCase().includes(search.toLowerCase()) ||
       report.jobType.toLowerCase().includes(search.toLowerCase());
     const matchesStatus = statusFilter === 'all' || report.status === statusFilter;
     return matchesSearch && matchesStatus;
-  });
+  }), [rows, search, statusFilter]);
 
   const getStatusBadge = (status: string) => {
     const variants: Record<string, 'default' | 'secondary' | 'destructive'> = {
@@ -66,6 +87,8 @@ const History = () => {
       <div>
         <h1 className="text-3xl font-bold">Riwayat Laporan</h1>
         <p className="text-muted-foreground">Lihat semua laporan yang telah disubmit</p>
+        {error && <p className="text-sm text-red-600">{error}</p>}
+        {loading && <p className="text-sm text-muted-foreground">Memuat data...</p>}
       </div>
 
       <Card>

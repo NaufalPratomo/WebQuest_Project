@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -28,8 +28,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'sonner';
+import { api, Target as TargetDoc } from '@/lib/api';
 
-interface Target {
+interface TargetRow {
   id: string;
   division: string;
   period: string;
@@ -40,16 +41,35 @@ interface Target {
 
 const Targets = () => {
   const [search, setSearch] = useState('');
-  const [targets] = useState<Target[]>([
-    { id: '1', division: 'APK', period: '2025-01', target: 1000, achieved: 750, status: 'active' },
-    { id: '2', division: 'TPN', period: '2025-01', target: 800, achieved: 720, status: 'active' },
-    { id: '3', division: 'Divisi', period: '2025-01', target: 1200, achieved: 600, status: 'active' },
-  ]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [rows, setRows] = useState<TargetRow[]>([]);
 
-  const filteredTargets = targets.filter(t =>
+  useEffect(() => {
+    let mounted = true;
+    setLoading(true);
+    api.targets()
+      .then((list: TargetDoc[]) => {
+        if (!mounted) return;
+        const mapped: TargetRow[] = list.map(t => ({
+          id: t._id,
+          division: t.division,
+          period: t.period,
+          target: t.target,
+          achieved: t.achieved,
+          status: t.status,
+        }));
+        setRows(mapped);
+      })
+      .catch(e => setError(e.message || String(e)))
+      .finally(() => setLoading(false));
+    return () => { mounted = false; };
+  }, []);
+
+  const filteredTargets = useMemo(() => rows.filter(t =>
     t.division.toLowerCase().includes(search.toLowerCase()) ||
     t.period.includes(search)
-  );
+  ), [rows, search]);
 
   const getPercentage = (achieved: number, target: number) => {
     return ((achieved / target) * 100).toFixed(0);
@@ -61,6 +81,8 @@ const Targets = () => {
         <div>
           <h1 className="text-3xl font-bold">Target Penanaman</h1>
           <p className="text-muted-foreground">Kelola target penanaman per divisi</p>
+          {error && <p className="text-sm text-red-600">{error}</p>}
+          {loading && <p className="text-sm text-muted-foreground">Memuat data...</p>}
         </div>
         <Dialog>
           <DialogTrigger asChild>

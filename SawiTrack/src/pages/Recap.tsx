@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
@@ -14,16 +14,30 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Download } from 'lucide-react';
 import { toast } from 'sonner';
+import { api, RecapHKRow } from '@/lib/api';
 
 const Recap = () => {
   const [startDate, setStartDate] = useState('2025-10-01');
   const [endDate, setEndDate] = useState('2025-10-31');
 
-  const hkData = [
-    { employee: 'Ahmad Yani', division: 'APK', totalHK: 22.0, approved: 22.0, pending: 0, rejected: 0 },
-    { employee: 'Siti Nurhaliza', division: 'TPN', totalHK: 20.5, approved: 18.5, pending: 2.0, rejected: 0 },
-    { employee: 'Budi Santoso', division: 'APK', totalHK: 21.0, approved: 21.0, pending: 0, rejected: 0 },
-  ];
+  const [hkRows, setHkRows] = useState<RecapHKRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchHK = useCallback(async () => {
+    try {
+      setLoading(true);
+      const data = await api.recapHK({ startDate, endDate });
+      setHkRows(data);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Gagal memuat data rekap';
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  }, [startDate, endDate]);
+
+  useEffect(() => { void fetchHK(); }, [fetchHK]);
 
   const costData = [
     {
@@ -86,7 +100,7 @@ const Recap = () => {
               />
             </div>
             <div className="flex items-end">
-              <Button className="w-full" onClick={() => toast.success('Data berhasil difilter')}>
+              <Button className="w-full" onClick={fetchHK}>
                 Filter
               </Button>
             </div>
@@ -112,6 +126,8 @@ const Recap = () => {
               </div>
             </CardHeader>
             <CardContent>
+              {error && <p className="text-sm text-red-600">{error}</p>}
+              {loading && <p className="text-sm text-muted-foreground">Memuat data...</p>}
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -124,7 +140,7 @@ const Recap = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {hkData.map((row, idx) => (
+                  {hkRows.map((row, idx) => (
                     <TableRow key={idx}>
                       <TableCell className="font-medium">{row.employee}</TableCell>
                       <TableCell>{row.division}</TableCell>
@@ -137,16 +153,16 @@ const Recap = () => {
                   <TableRow className="bg-muted/50 font-semibold">
                     <TableCell colSpan={2}>Total</TableCell>
                     <TableCell className="text-right">
-                      {hkData.reduce((sum, row) => sum + row.totalHK, 0).toFixed(1)}
+                      {hkRows.reduce((sum, row) => sum + row.totalHK, 0).toFixed(1)}
                     </TableCell>
                     <TableCell className="text-right">
-                      {hkData.reduce((sum, row) => sum + row.approved, 0).toFixed(1)}
+                      {hkRows.reduce((sum, row) => sum + row.approved, 0).toFixed(1)}
                     </TableCell>
                     <TableCell className="text-right">
-                      {hkData.reduce((sum, row) => sum + row.pending, 0).toFixed(1)}
+                      {hkRows.reduce((sum, row) => sum + row.pending, 0).toFixed(1)}
                     </TableCell>
                     <TableCell className="text-right">
-                      {hkData.reduce((sum, row) => sum + row.rejected, 0).toFixed(1)}
+                      {hkRows.reduce((sum, row) => sum + row.rejected, 0).toFixed(1)}
                     </TableCell>
                   </TableRow>
                 </TableBody>

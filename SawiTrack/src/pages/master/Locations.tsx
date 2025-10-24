@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -21,21 +21,53 @@ import {
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
+import { api } from '@/lib/api';
 
-interface Location {
-  id: string;
-  code: string;
-  name: string;
-  description: string;
-}
+type Division = { division_id: number };
+type EstateLite = { _id: string; estate_name: string };
 
 const Locations = () => {
   const [search, setSearch] = useState('');
-  const [locations] = useState<Location[]>([
-    { id: '1', code: 'APK-01', name: 'Divisi APK 1', description: 'Area penanaman kelapa sawit bagian utara' },
-    { id: '2', code: 'TPN-01', name: 'Divisi TPN 1', description: 'Area tanaman produktif bagian timur' },
-    { id: '3', code: 'DIV-01', name: 'Divisi 1', description: 'Divisi pemanenan utama' },
-  ]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [estates, setEstates] = useState<EstateLite[]>([]);
+  const [selectedEstate, setSelectedEstate] = useState<string | null>(null);
+  const [divisions, setDivisions] = useState<Division[]>([]);
+
+  useEffect(() => {
+    let mounted = true;
+    setLoading(true);
+    api.estates()
+      .then((data) => {
+        if (!mounted) return;
+        setEstates(data);
+        if (data.length > 0) setSelectedEstate(data[0]._id);
+      })
+      .catch((e) => setError(e.message || String(e)))
+      .finally(() => setLoading(false));
+    return () => { mounted = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!selectedEstate) return;
+    let mounted = true;
+    setLoading(true);
+    api.divisions(selectedEstate)
+      .then((data) => { if (mounted) setDivisions(data); })
+      .catch((e) => setError(e.message || String(e)))
+      .finally(() => setLoading(false));
+    return () => { mounted = false; };
+  }, [selectedEstate]);
+
+  const locations = useMemo(() => {
+    // Map divisions to a simple location view
+    return divisions.map((d) => ({
+      id: `${selectedEstate}-${d.division_id}`,
+      code: `DIV-${d.division_id.toString().padStart(2, '0')}`,
+      name: `Divisi ${d.division_id}`,
+      description: estates.find(e => e._id === selectedEstate)?.estate_name || 'Divisi estate',
+    }));
+  }, [divisions, selectedEstate, estates]);
 
   const filteredLocations = locations.filter(loc =>
     loc.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -48,6 +80,8 @@ const Locations = () => {
         <div>
           <h1 className="text-3xl font-bold">Lokasi</h1>
           <p className="text-muted-foreground">Kelola data lokasi/Divisi</p>
+          {error && <p className="text-sm text-red-600">{error}</p>}
+          {loading && <p className="text-sm text-muted-foreground">Memuat data...</p>}
         </div>
         <Dialog>
           <DialogTrigger asChild>

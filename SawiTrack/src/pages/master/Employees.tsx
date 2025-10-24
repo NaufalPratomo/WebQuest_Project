@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -28,28 +28,48 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'sonner';
+import { api, Employee as EmployeeDoc } from '@/lib/api';
 
-interface Employee {
+interface EmployeeRow {
   id: string;
   name: string;
   email: string;
   role: string;
-  division: string;
+  division?: string;
   status: string;
 }
 
 const Employees = () => {
   const [search, setSearch] = useState('');
-  const [employees] = useState<Employee[]>([
-    { id: '1', name: 'Ahmad Yani', email: 'ahmad@sawit.com', role: 'employee', division: 'APK', status: 'active' },
-    { id: '2', name: 'Siti Nurhaliza', email: 'siti@sawit.com', role: 'employee', division: 'TPN', status: 'active' },
-    { id: '3', name: 'Budi Santoso', email: 'budi@sawit.com', role: 'foreman', division: 'APK', status: 'active' },
-  ]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [rows, setRows] = useState<EmployeeRow[]>([]);
 
-  const filteredEmployees = employees.filter(emp =>
+  useEffect(() => {
+    let mounted = true;
+    setLoading(true);
+    api.employees()
+      .then((list: EmployeeDoc[]) => {
+        if (!mounted) return;
+        const mapped: EmployeeRow[] = list.map((e) => ({
+          id: e._id,
+          name: e.name,
+          email: e.email,
+          role: e.role,
+          division: e.division,
+          status: e.status,
+        }));
+        setRows(mapped);
+      })
+      .catch((e) => setError(e.message || String(e)))
+      .finally(() => setLoading(false));
+    return () => { mounted = false; };
+  }, []);
+
+  const filteredEmployees = useMemo(() => rows.filter(emp =>
     emp.name.toLowerCase().includes(search.toLowerCase()) ||
     emp.email.toLowerCase().includes(search.toLowerCase())
-  );
+  ), [rows, search]);
 
   return (
     <div className="space-y-6">
@@ -57,6 +77,8 @@ const Employees = () => {
         <div>
           <h1 className="text-3xl font-bold">Karyawan</h1>
           <p className="text-muted-foreground">Kelola data karyawan</p>
+          {error && <p className="text-sm text-red-600">{error}</p>}
+          {loading && <p className="text-sm text-muted-foreground">Memuat data...</p>}
         </div>
         <Dialog>
           <DialogTrigger asChild>

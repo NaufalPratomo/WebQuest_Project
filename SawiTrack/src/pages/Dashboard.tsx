@@ -1,16 +1,38 @@
+import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Users, FileText, CheckCircle, Target } from 'lucide-react';
+import { api } from '@/lib/api';
 
 const Dashboard = () => {
   const { user } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [stats, setStats] = useState<{
+    totalEmployees: number;
+    todayReports: number;
+    pendingCount: number;
+    targetsPercent: number;
+  } | null>(null);
 
-  const stats = [
-    { title: 'Total Karyawan', value: '156', icon: Users, color: 'text-primary' },
-    { title: 'Laporan Hari Ini', value: '23', icon: FileText, color: 'text-accent' },
-    { title: 'Menunggu Verifikasi', value: '8', icon: CheckCircle, color: 'text-muted-foreground' },
-    { title: 'Target Bulan Ini', value: '85%', icon: Target, color: 'text-success' },
-  ];
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        setLoading(true);
+        const data = await api.stats();
+        if (mounted) setStats(data);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Gagal memuat statistik';
+        if (mounted) setError(msg);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -22,22 +44,47 @@ const Dashboard = () => {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat) => {
-          const Icon = stat.icon;
-          return (
-            <Card key={stat.title}>
+        {loading ? (
+          [1, 2, 3, 4].map((i) => (
+            <Card key={i}>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
-                  {stat.title}
-                </CardTitle>
-                <Icon className={`h-4 w-4 ${stat.color}`} />
+                <CardTitle className="text-sm font-medium">Memuat…</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{stat.value}</div>
+                <div className="text-2xl font-bold">—</div>
               </CardContent>
             </Card>
-          );
-        })}
+          ))
+        ) : error ? (
+          <Card className="md:col-span-2 lg:col-span-4">
+            <CardHeader>
+              <CardTitle>Error</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-sm text-destructive">{error}</div>
+            </CardContent>
+          </Card>
+        ) : stats ? (
+          [
+            { title: 'Total Karyawan', value: String(stats.totalEmployees), icon: Users, color: 'text-primary' },
+            { title: 'Laporan Hari Ini', value: String(stats.todayReports), icon: FileText, color: 'text-accent' },
+            { title: 'Menunggu Verifikasi', value: String(stats.pendingCount), icon: CheckCircle, color: 'text-muted-foreground' },
+            { title: 'Target Bulan Ini', value: `${stats.targetsPercent}%`, icon: Target, color: 'text-success' },
+          ].map((stat) => {
+            const Icon = stat.icon;
+            return (
+              <Card key={stat.title}>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
+                  <Icon className={`h-4 w-4 ${stat.color}`} />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{stat.value}</div>
+                </CardContent>
+              </Card>
+            );
+          })
+        ) : null}
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">

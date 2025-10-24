@@ -14,13 +14,41 @@ import {
 import { Upload, FileSpreadsheet } from 'lucide-react';
 import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useAuth } from '@/contexts/AuthContext';
+import { api } from '@/lib/api';
 
 const InputReport = () => {
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [division, setDivision] = useState<string | undefined>(undefined);
+  const [jobType, setJobType] = useState<string | undefined>(undefined);
+  const [hk, setHk] = useState<string>('1.0');
+  const [notes, setNotes] = useState<string>('');
+  const { user } = useAuth();
 
-  const handleManualSubmit = (e: React.FormEvent) => {
+  const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    toast.success('Laporan berhasil disubmit');
+    if (!division || !jobType || !hk) {
+      toast.error('Mohon lengkapi form');
+      return;
+    }
+    try {
+      await api.createReport({
+        employeeId: user?.id,
+        employeeName: user?.name || 'Unknown',
+        date,
+        division,
+        jobType,
+        hk: parseFloat(hk),
+        notes,
+        status: 'pending',
+      });
+      toast.success('Laporan berhasil disubmit');
+      // reset minimal
+      setNotes('');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Gagal submit laporan';
+      toast.error(message);
+    }
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -63,7 +91,7 @@ const InputReport = () => {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="division">Divisi</Label>
-                    <Select>
+                    <Select value={division} onValueChange={setDivision}>
                       <SelectTrigger>
                         <SelectValue placeholder="Pilih divisi" />
                       </SelectTrigger>
@@ -79,7 +107,7 @@ const InputReport = () => {
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="jobType">Jenis Pekerjaan</Label>
-                    <Select>
+                    <Select value={jobType} onValueChange={setJobType}>
                       <SelectTrigger>
                         <SelectValue placeholder="Pilih jenis" />
                       </SelectTrigger>
@@ -98,6 +126,8 @@ const InputReport = () => {
                       type="number"
                       step="0.1"
                       placeholder="1.0"
+                      value={hk}
+                      onChange={(e) => setHk(e.target.value)}
                       required
                     />
                   </div>
@@ -108,6 +138,8 @@ const InputReport = () => {
                   <Textarea
                     id="notes"
                     placeholder="Catatan tambahan..."
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
                     rows={4}
                   />
                 </div>

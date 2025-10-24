@@ -1,0 +1,174 @@
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Upload, FileSpreadsheet } from 'lucide-react';
+import { toast } from 'sonner';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+
+const InputReport = () => {
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+
+  const handleManualSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    toast.success('Laporan berhasil disubmit');
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      toast.success(`File ${file.name} berhasil diupload`);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold">Input Laporan Harian</h1>
+        <p className="text-muted-foreground">Input aktivitas harian kebun</p>
+      </div>
+
+      <Tabs defaultValue="manual" className="w-full">
+        <TabsList className="grid w-full grid-cols-2 max-w-md">
+          <TabsTrigger value="manual">Form Manual</TabsTrigger>
+          <TabsTrigger value="upload">Upload Excel</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="manual" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Form Input Manual</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleManualSubmit} className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="date">Tanggal</Label>
+                    <Input
+                      id="date"
+                      type="date"
+                      value={date}
+                      onChange={(e) => setDate(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="division">Divisi</Label>
+                    <Select>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Pilih divisi" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="apk">APK</SelectItem>
+                        <SelectItem value="tpn">TPN</SelectItem>
+                        <SelectItem value="divisi">Divisi</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="jobType">Jenis Pekerjaan</Label>
+                    <Select>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Pilih jenis" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="panen">Panen</SelectItem>
+                        <SelectItem value="perawatan">Perawatan</SelectItem>
+                        <SelectItem value="penanaman">Penanaman</SelectItem>
+                        <SelectItem value="transport">Transport</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="hk">HK (Hari Kerja)</Label>
+                    <Input
+                      id="hk"
+                      type="number"
+                      step="0.1"
+                      placeholder="1.0"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="notes">Catatan</Label>
+                  <Textarea
+                    id="notes"
+                    placeholder="Catatan tambahan..."
+                    rows={4}
+                  />
+                </div>
+
+                <Button type="submit" className="w-full">
+                  Submit Laporan
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="upload" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Upload File Excel</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
+                <FileSpreadsheet className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                <h3 className="font-semibold mb-2">Upload File Excel</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Format: APK, TPN, atau Divisi (.xlsx, .xls)
+                </p>
+                <label htmlFor="file-upload">
+                  <Button type="button" variant="outline" asChild>
+                    <span>
+                      <Upload className="h-4 w-4 mr-2" />
+                      Pilih File
+                    </span>
+                  </Button>
+                </label>
+                <input
+                  id="file-upload"
+                  type="file"
+                  accept=".xlsx,.xls"
+                  className="hidden"
+                  onChange={handleFileUpload}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <h4 className="font-medium">Petunjuk Upload:</h4>
+                <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
+                  <li>File harus dalam format Excel (.xlsx atau .xls)</li>
+                  <li>Gunakan template yang telah disediakan</li>
+                  <li>Pastikan semua kolom wajib terisi</li>
+                  <li>Maksimal 1000 baris per file</li>
+                </ul>
+              </div>
+
+              <Button variant="outline" className="w-full">
+                <FileSpreadsheet className="h-4 w-4 mr-2" />
+                Download Template Excel
+              </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+};
+
+export default InputReport;

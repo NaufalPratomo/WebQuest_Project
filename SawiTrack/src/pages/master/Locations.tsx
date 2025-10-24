@@ -32,8 +32,8 @@ interface Location {
 const Locations = () => {
   const [search, setSearch] = useState('');
   const [locations] = useState<Location[]>([
-    { id: '1', code: 'APK-01', name: 'Afdeling APK 1', description: 'Area penanaman kelapa sawit bagian utara' },
-    { id: '2', code: 'TPN-01', name: 'Afdeling TPN 1', description: 'Area tanaman produktif bagian timur' },
+    { id: '1', code: 'APK-01', name: 'Divisi APK 1', description: 'Area penanaman kelapa sawit bagian utara' },
+    { id: '2', code: 'TPN-01', name: 'Divisi TPN 1', description: 'Area tanaman produktif bagian timur' },
     { id: '3', code: 'DIV-01', name: 'Divisi 1', description: 'Divisi pemanenan utama' },
   ]);
 
@@ -47,7 +47,7 @@ const Locations = () => {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold">Lokasi</h1>
-          <p className="text-muted-foreground">Kelola data lokasi/afdeling</p>
+          <p className="text-muted-foreground">Kelola data lokasi/Divisi</p>
         </div>
         <Dialog>
           <DialogTrigger asChild>
@@ -67,7 +67,7 @@ const Locations = () => {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="name">Nama Lokasi</Label>
-                <Input id="name" placeholder="Afdeling APK 1" />
+                <Input id="name" placeholder="Divisi APK 1" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="description">Deskripsi</Label>

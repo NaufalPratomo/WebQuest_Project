@@ -12,23 +12,12 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Plus, Search, Edit, Trash2 } from 'lucide-react';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { api, Employee as EmployeeDoc } from '@/lib/api';
+import EmployeeEditDialog from './components/EmployeeEditDialog';
 
 interface EmployeeRow {
   id: string;
@@ -44,6 +33,13 @@ const Employees = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rows, setRows] = useState<EmployeeRow[]>([]);
+  const [openAdd, setOpenAdd] = useState(false);
+  type RoleOption = 'manager' | 'foreman' | 'employee' | '';
+  const [form, setForm] = useState<{ name: string; email: string; role: RoleOption; division: string | ''; password?: string }>(
+    { name: '', email: '', role: '', division: '', password: '' }
+  );
+  const [openEdit, setOpenEdit] = useState(false);
+  const [editTarget, setEditTarget] = useState<EmployeeRow | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -80,7 +76,7 @@ const Employees = () => {
           {error && <p className="text-sm text-red-600">{error}</p>}
           {loading && <p className="text-sm text-muted-foreground">Memuat data...</p>}
         </div>
-        <Dialog>
+        <Dialog open={openAdd} onOpenChange={setOpenAdd}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="h-4 w-4 mr-2" />
@@ -91,18 +87,18 @@ const Employees = () => {
             <DialogHeader>
               <DialogTitle>Tambah Karyawan Baru</DialogTitle>
             </DialogHeader>
-            <form className="space-y-4">
+            <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
               <div className="space-y-2">
                 <Label htmlFor="name">Nama</Label>
-                <Input id="name" placeholder="Nama lengkap" />
+                <Input id="name" placeholder="Nama lengkap" value={form.name} onChange={(e)=>setForm(f=>({...f,name:e.target.value}))} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
-                <Input id="email" type="email" placeholder="email@sawit.com" />
+                <Input id="email" type="email" placeholder="email@sawit.com" value={form.email} onChange={(e)=>setForm(f=>({...f,email:e.target.value}))} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="role">Role</Label>
-                <Select>
+                <Select value={form.role} onValueChange={(v)=>setForm(f=>({...f, role: v as RoleOption}))}>
                   <SelectTrigger>
                     <SelectValue placeholder="Pilih role" />
                   </SelectTrigger>
@@ -115,7 +111,7 @@ const Employees = () => {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="division">Divisi</Label>
-                <Select>
+                <Select value={form.division} onValueChange={(v)=>setForm(f=>({...f, division: v}))}>
                   <SelectTrigger>
                     <SelectValue placeholder="Pilih divisi" />
                   </SelectTrigger>
@@ -126,12 +122,50 @@ const Employees = () => {
                   </SelectContent>
                 </Select>
               </div>
-              <Button type="button" className="w-full" onClick={() => toast.success('Karyawan berhasil ditambahkan')}>
+              <div className="space-y-2">
+                <Label htmlFor="password">Password (opsional)</Label>
+                <Input id="password" type="password" placeholder="Kosongkan jika tidak diisi" value={form.password || ''} onChange={(e)=>setForm(f=>({...f, password: e.target.value}))} />
+              </div>
+              <Button type="button" className="w-full" onClick={async ()=>{
+                try{
+                  if(!form.name || !form.email || !form.role){
+                    toast.error('Nama, email, dan role wajib diisi');
+                    return;
+                  }
+                  const pwd = (form.password || '').trim();
+                  const created = await api.createEmployee({
+                    name: form.name,
+                    email: form.email,
+                    role: (form.role || 'employee') as 'manager' | 'foreman' | 'employee',
+                    division: form.division || null,
+                    ...(pwd ? { password: pwd } : {}),
+                  });
+                  setRows(prev=>[{ id: created._id, name: created.name, email: created.email, role: created.role, division: created.division || undefined, status: created.status }, ...prev]);
+                  setOpenAdd(false);
+                  setForm({ name:'', email:'', role:'', division:'', password: '' });
+                  toast.success('Karyawan berhasil ditambahkan');
+                }catch(e){
+                  const msg = e instanceof Error ? e.message : 'Gagal menyimpan';
+                  toast.error(msg);
+                }
+              }}>
                 Simpan
               </Button>
             </form>
           </DialogContent>
         </Dialog>
+        {/* Edit dialog moved to its own component */}
+        <EmployeeEditDialog
+          open={openEdit}
+          onOpenChange={(v) => {
+            setOpenEdit(v);
+            if (!v) setEditTarget(null);
+          }}
+          employee={editTarget ? { id: editTarget.id, name: editTarget.name, email: editTarget.email, role: (editTarget.role as 'manager'|'foreman'|'employee'), division: editTarget.division } : null}
+          onUpdated={(updated) => {
+            setRows((prev) => prev.map((r) => r.id === updated._id ? ({ id: updated._id, name: updated.name, email: updated.email, role: updated.role, division: updated.division || undefined, status: updated.status }) : r));
+          }}
+        />
       </div>
 
       <Card>
@@ -178,10 +212,26 @@ const Employees = () => {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
-                      <Button variant="ghost" size="icon">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                          setEditTarget(employee);
+                          setOpenEdit(true);
+                        }}
+                      >
                         <Edit className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="icon">
+                      <Button variant="ghost" size="icon" onClick={async ()=>{
+                        try{
+                          await api.deleteEmployee(employee.id);
+                          setRows(prev=>prev.filter(r=>r.id!==employee.id));
+                          toast.success('Karyawan dihapus');
+                        }catch(e){
+                          const msg = e instanceof Error ? e.message : 'Gagal menghapus';
+                          toast.error(msg);
+                        }
+                      }}>
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>

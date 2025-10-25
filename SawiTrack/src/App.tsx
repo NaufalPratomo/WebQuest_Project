@@ -17,6 +17,7 @@ import Verification from "./pages/Verification";
 import Recap from "./pages/Recap";
 import Reports from "./pages/Reports";
 import NotFound from "./pages/NotFound";
+import TaksasiPanen from "./pages/manager/TaksasiPanen";
 
 const queryClient = new QueryClient();
 
@@ -82,6 +83,12 @@ const App = () => (
             <Route path="/reports" element={
               <ProtectedRoute allowedRoles={['manager', 'foreman']}>
                 <Layout><Reports /></Layout>
+              </ProtectedRoute>
+            } />
+
+            <Route path="/taksasi" element={
+              <ProtectedRoute allowedRoles={['manager']}>
+                <Layout><TaksasiPanen /></Layout>
               </ProtectedRoute>
             } />
             

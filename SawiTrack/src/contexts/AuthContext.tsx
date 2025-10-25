@@ -1,14 +1,9 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { api, Employee } from '@/lib/api';
 
 type Role = 'manager' | 'foreman' | 'employee';
 
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  role: Role;
-  division_id?: string;
-}
+type User = Employee & { _id: string; id: string };
 
 interface AuthContextType {
   user: User | null;
@@ -16,66 +11,68 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<User | null>;
   logout: () => void;
   isAuthenticated: boolean;
+  hydrated: boolean; // indicates auth state has been read from storage
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Mock users for demonstration
-const mockUsers: Record<string, { password: string; user: User }> = {
-  'manager@sawit.com': {
-    password: 'manager123',
-    user: {
-      id: '1',
-      name: 'Manager Utama',
-      email: 'manager@sawit.com',
-      role: 'manager',
-    },
-  },
-  'foreman@sawit.com': {
-    password: 'foreman123',
-    user: {
-      id: '2',
-      name: 'Mandor Kebun',
-      email: 'foreman@sawit.com',
-      role: 'foreman',
-      division_id: 'div1',
-    },
-  },
-  'employee@sawit.com': {
-    password: 'employee123',
-    user: {
-      id: '3',
-      name: 'Karyawan Kebun',
-      email: 'employee@sawit.com',
-      role: 'employee',
-      division_id: 'div1',
-    },
-  },
-};
+// No more mock users; use backend API
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
+    // Try to hydrate from token -> fetch /auth/me
+    const token = localStorage.getItem('token');
     const savedUser = localStorage.getItem('user');
-    if (savedUser) {
-      setUser(JSON.parse(savedUser));
+    if (!token && savedUser) {
+      // legacy path: if user exists but no token, just use it
+      try {
+        const parsed = JSON.parse(savedUser);
+        // normalize to include both _id and id
+        const normalized = parsed.id ? parsed : { ...parsed, id: parsed._id };
+        setUser(normalized);
+      } catch {
+        setUser(null);
+      }
+      setHydrated(true);
+      return;
     }
+    if (!token) {
+      setHydrated(true);
+      return;
+    }
+    api.me()
+      .then((u) => {
+        const eu = u as Employee;
+        const mapped = { ...eu, id: eu._id } as User;
+        setUser(mapped);
+        localStorage.setItem('user', JSON.stringify(mapped));
+      })
+      .catch(() => {
+        // token invalid
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        setUser(null);
+      })
+      .finally(() => setHydrated(true));
   }, []);
 
   const login = async (email: string, password: string): Promise<User | null> => {
-    const userRecord = mockUsers[email];
-    if (userRecord && userRecord.password === password) {
-      setUser(userRecord.user);
-      localStorage.setItem('user', JSON.stringify(userRecord.user));
-      return userRecord.user;
-    }
-    return null;
+  const { token, user } = await api.login({ email, password });
+  const eu = user as Employee;
+  const mapped = { ...eu, id: eu._id } as User;
+    localStorage.setItem('token', token);
+    localStorage.setItem('user', JSON.stringify(mapped));
+    setUser(mapped);
+    return mapped;
   };
 
   const logout = () => {
     setUser(null);
     localStorage.removeItem('user');
+    localStorage.removeItem('token');
   };
 
   return (
@@ -85,6 +82,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         login,
         logout,
         isAuthenticated: !!user,
+        hydrated,
       }}
     >
       {children}
@@ -92,6 +90,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   );
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {

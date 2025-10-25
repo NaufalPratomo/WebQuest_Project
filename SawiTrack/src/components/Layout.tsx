@@ -37,6 +37,7 @@ const Layout = ({ children }: LayoutProps) => {
     { path: '/master/employees', icon: Users, label: 'Karyawan', roles: ['manager'] },
     { path: '/master/locations', icon: MapPin, label: 'Lokasi', roles: ['manager'] },
     { path: '/master/targets', icon: Target, label: 'Target Penanaman', roles: ['manager'] },
+    { path: '/taksasi', icon: BarChart3, label: 'Taksasi Panen', roles: ['manager'] },
     { path: '/activities/input', icon: FileText, label: 'Input Laporan', roles: ['manager', 'foreman', 'employee'] },
     { path: '/activities/history', icon: FileText, label: 'Riwayat Laporan', roles: ['manager', 'foreman', 'employee'] },
     { path: '/verification', icon: CheckSquare, label: 'Verifikasi', roles: ['foreman'] },

@@ -8,7 +8,12 @@ interface ProtectedRouteProps {
 }
 
 const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) => {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, hydrated } = useAuth();
+
+  // Wait for auth to hydrate from storage before deciding
+  if (!hydrated) {
+    return null; // or a spinner/skeleton if preferred
+  }
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;

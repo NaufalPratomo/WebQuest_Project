@@ -35,7 +35,7 @@ const Layout = ({ children }: LayoutProps) => {
   const menuItems = [
     { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', roles: ['manager', 'foreman'] },
     { path: '/master/employees', icon: Users, label: 'Karyawan', roles: ['manager'] },
-    { path: '/master/locations', icon: MapPin, label: 'Lokasi', roles: ['manager'] },
+    { path: '/master/locations', icon: MapPin, label: 'Aresta', roles: ['manager'] },
     { path: '/taksasi', icon: BarChart3, label: 'Taksasi Panen', roles: ['manager'] },
     { path: '/master/targets', icon: Target, label: 'Realisasi Panen', roles: ['manager'] },
     { path: '/activities/input', icon: FileText, label: 'Input Laporan', roles: ['manager', 'foreman', 'employee'] },

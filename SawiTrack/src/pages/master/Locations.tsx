@@ -85,8 +85,8 @@ const Locations = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold">Lokasi</h1>
-          <p className="text-muted-foreground">Kelola data lokasi/Divisi</p>
+          <h1 className="text-3xl font-bold">Aresta</h1>
+          <p className="text-muted-foreground">Kelola data Aresta</p>
           {error && <p className="text-sm text-red-600">{error}</p>}
           {loading && <p className="text-sm text-muted-foreground">Memuat data...</p>}
         </div>

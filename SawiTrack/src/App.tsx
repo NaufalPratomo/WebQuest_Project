@@ -10,7 +10,7 @@ import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Employees from "./pages/master/Employees";
 import Locations from "./pages/master/Locations";
-import Targets from "./pages/master/Targets";
+import Targets from "./pages/master/RealHarvest";
 import InputReport from "./pages/activities/InputReport";
 import History from "./pages/activities/History";
 import Verification from "./pages/Verification";

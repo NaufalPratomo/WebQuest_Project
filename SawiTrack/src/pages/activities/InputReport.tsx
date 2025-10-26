@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,10 +20,53 @@ import { api } from '@/lib/api';
 const InputReport = () => {
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [division, setDivision] = useState<string | undefined>(undefined);
+  const [estates, setEstates] = useState<Array<{ _id: string; estate_name: string }>>([]);
+  const [estateId, setEstateId] = useState<string | undefined>(undefined);
+  const [divisions, setDivisions] = useState<Array<{ division_id: number }>>([]);
+  const [employees, setEmployees] = useState<Array<{ _id: string; name: string; division?: string }>>([]);
+  const [employeeId, setEmployeeId] = useState<string | undefined>(undefined);
   const [jobType, setJobType] = useState<string | undefined>(undefined);
   const [hk, setHk] = useState<string>('1.0');
   const [notes, setNotes] = useState<string>('');
   const { user } = useAuth();
+
+  useEffect(() => {
+    api.estates()
+      .then((rows) => setEstates(rows || []))
+      .catch((e) => toast.error(e instanceof Error ? e.message : 'Gagal memuat estate'));
+
+    // load employees list for optional selection/filtering
+    api.employees()
+      .then((rows) => setEmployees(rows || []))
+      .catch((e) => toast.error(e instanceof Error ? e.message : 'Gagal memuat karyawan'));
+  }, []);
+
+  useEffect(() => {
+    if (!estateId) {
+      setDivisions([]);
+      setDivision(undefined);
+      return;
+    }
+    api.divisions(estateId)
+      .then((rows) => setDivisions(rows || []))
+      .catch((e) => toast.error(e instanceof Error ? e.message : 'Gagal memuat divisi'));
+  }, [estateId]);
+
+  // when division changes, default employee selection to current user if they belong to that division
+  useEffect(() => {
+    if (division) {
+      // if current user matches division, set them; otherwise clear selection
+      if (user?.division && String(user.division) === String(division)) {
+        setEmployeeId(user.id);
+      } else {
+        // prefer first employee in this division if exists
+        const first = employees.find((emp) => String(emp.division) === String(division));
+        setEmployeeId(first?._id);
+      }
+    } else {
+      setEmployeeId(user?.id);
+    }
+  }, [division, employees, user]);
 
   const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,8 +76,8 @@ const InputReport = () => {
     }
     try {
       await api.createReport({
-        employeeId: user?.id,
-        employeeName: user?.name || 'Unknown',
+        employeeId: employeeId || user?.id,
+        employeeName: employees.find((emp) => emp._id === (employeeId || user?.id))?.name || user?.name || 'Unknown',
         date,
         division,
         jobType,
@@ -90,21 +133,59 @@ const InputReport = () => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="division">Divisi</Label>
-                    <Select value={division} onValueChange={setDivision}>
+                      <Label htmlFor="estate">Estate</Label>
+                      <Select value={estateId} onValueChange={(v) => setEstateId(v || undefined)}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Pilih estate" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {estates.map((es) => (
+                            <SelectItem key={es._id} value={es._id}>{es.estate_name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="division">Divisi</Label>
+                      <Select value={division} onValueChange={setDivision}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Pilih divisi" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {divisions.length === 0 ? (
+                            <SelectItem value="__none" disabled>-- Tidak ada divisi --</SelectItem>
+                          ) : (
+                            divisions.map((d) => (
+                              <SelectItem key={String(d.division_id)} value={String(d.division_id)}>
+                                {`Divisi ${d.division_id}`}
+                              </SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="employee">Karyawan</Label>
+                    <Select value={employeeId} onValueChange={(v) => setEmployeeId(v || undefined)}>
                       <SelectTrigger>
-                        <SelectValue placeholder="Pilih divisi" />
+                        <SelectValue placeholder="Pilih karyawan" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="apk">APK</SelectItem>
-                        <SelectItem value="tpn">TPN</SelectItem>
-                        <SelectItem value="divisi">Divisi</SelectItem>
+                        {(() => {
+                          const pool = division ? employees.filter((e) => String(e.division) === String(division)) : employees;
+                          if (pool.length === 0) return <SelectItem value="__none" disabled>-- Tidak ada karyawan --</SelectItem>;
+                          return pool.map((emp) => (
+                            <SelectItem key={emp._id} value={emp._id}>{emp.name}</SelectItem>
+                          ));
+                        })()}
                       </SelectContent>
                     </Select>
                   </div>
-                </div>
 
-                <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="jobType">Jenis Pekerjaan</Label>
                     <Select value={jobType} onValueChange={setJobType}>

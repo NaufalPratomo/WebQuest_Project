@@ -373,7 +373,6 @@ export default function TaksasiPanen() {
               <TableCaption>Data tersimpan di perangkat ini dan akan berbeda untuk setiap tanggal.</TableCaption>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Waktu</TableHead>
                   <TableHead>Estate</TableHead>
                   <TableHead>Divisi</TableHead>
                   <TableHead>Blok</TableHead>
@@ -392,7 +391,6 @@ export default function TaksasiPanen() {
               <TableBody>
                 {rows.map((r, i) => (
                   <TableRow key={r.timestamp + i}>
-                    <TableCell>{new Date(r.timestamp).toLocaleTimeString()}</TableCell>
                     <TableCell>{r.estateName}</TableCell>
                     <TableCell>Divisi {r.divisionId}</TableCell>
                     <TableCell>{r.blockLabel}</TableCell>

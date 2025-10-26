@@ -21,6 +21,8 @@ export default function EmployeeEditDialog({ open, onOpenChange, employee, onUpd
   const [form, setForm] = useState<{ name: string; email: string; role: RoleOption; division: string | ''; password?: string }>(
     { name: '', email: '', role: '', division: '', password: '' }
   );
+  const [divisions, setDivisions] = useState<string[]>([]);
+  const [loadingDivisions, setLoadingDivisions] = useState(false);
 
   useEffect(() => {
     if (open && employee) {
@@ -33,6 +35,37 @@ export default function EmployeeEditDialog({ open, onOpenChange, employee, onUpd
       });
     }
   }, [open, employee]);
+
+  // Load divisions from all estates (union) when dialog opens
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    async function loadDivisions() {
+      try {
+        setLoadingDivisions(true);
+        const estates = await api.estates();
+        const ids = estates.map((e) => e._id);
+        const all: number[] = [];
+        for (const id of ids) {
+          try {
+            const rows = await api.divisions(id);
+            rows?.forEach((d) => all.push(Number(d.division_id)));
+          } catch (e) {
+            // ignore individual estate failure, continue
+          }
+        }
+        if (cancelled) return;
+        const uniq = Array.from(new Set(all.filter((n) => !Number.isNaN(n)))).sort((a, b) => a - b);
+        setDivisions(uniq.map((n) => String(n)));
+      } catch (e) {
+        if (!cancelled) toast.error('Gagal memuat daftar divisi');
+      } finally {
+        if (!cancelled) setLoadingDivisions(false);
+      }
+    }
+    loadDivisions();
+    return () => { cancelled = true; };
+  }, [open]);
 
   async function onSave() {
     try {
@@ -92,12 +125,16 @@ export default function EmployeeEditDialog({ open, onOpenChange, employee, onUpd
             <Label htmlFor="edivision">Divisi</Label>
             <Select value={form.division} onValueChange={(v) => setForm((f) => ({ ...f, division: v }))}>
               <SelectTrigger>
-                <SelectValue placeholder="Pilih divisi" />
+                <SelectValue placeholder={loadingDivisions ? 'Memuat divisi...' : 'Pilih divisi'} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="apk">APK</SelectItem>
-                <SelectItem value="tpn">TPN</SelectItem>
-                <SelectItem value="divisi">Divisi</SelectItem>
+                {divisions.length === 0 ? (
+                  <SelectItem value="__none" disabled>-- Tidak ada divisi --</SelectItem>
+                ) : (
+                  divisions.map((d) => (
+                    <SelectItem key={d} value={d}>Divisi {d}</SelectItem>
+                  ))
+                )}
               </SelectContent>
             </Select>
           </div>

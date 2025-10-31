@@ -1,17 +1,98 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { api } from '@/lib/api';
+import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
+
+type Row = { estateId: string; division_id: number; totalKg: number; blockCount: number };
 
 export default function Statement() {
   const [startDate, setStartDate] = useState<string>(new Date().toISOString().slice(0,10));
   const [endDate, setEndDate] = useState<string>(new Date().toISOString().slice(0,10));
-  const [rows, setRows] = useState<Array<{ estateId: string; division_id: number; totalKg: number; blockCount: number }>>([]);
+  const [rows, setRows] = useState<Row[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const enumerateDates = useMemo(() => (start: string, end: string): string[] => {
+    try {
+      const dates: string[] = [];
+      const s = new Date(start);
+      const e = new Date(end);
+      if (isNaN(s.getTime()) || isNaN(e.getTime())) return dates;
+      if (s > e) return dates;
+      const cur = new Date(s);
+      while (cur <= e) {
+        dates.push(cur.toISOString().slice(0,10));
+        cur.setDate(cur.getDate() + 1);
+      }
+      return dates;
+    } catch {
+      return [];
+    }
+  }, []);
+
+  async function load() {
+    setLoading(true);
+    setError(null);
+    try {
+      const days = enumerateDates(startDate, endDate);
+  type RealRow = { estateId?: string; division?: string; block?: string; kgAngkut?: number };
+  const all: RealRow[] = [];
+      for (const d of days) {
+        const key = `realharvest_rows_${d}`;
+        try {
+          const raw = localStorage.getItem(key);
+          if (raw) {
+            const arr = JSON.parse(raw);
+            if (Array.isArray(arr)) all.push(...(arr as RealRow[]));
+          }
+        } catch {
+          // ignore per-day parse errors
+        }
+      }
+      if (all.length === 0) {
+        setRows([]);
+        toast.info('Tidak ada data realisasi pada rentang tanggal ini.');
+        return;
+      }
+
+      type Acc = { estateId: string; division_id: number; totalKg: number; blocks: Set<string> };
+      const map = new Map<string, Acc>();
+      for (const r of all) {
+        const estateId: string = r.estateId || '-';
+        const division_id: number = Number(r.division || 0);
+        const blockLabel: string = r.block || '-';
+        const kg: number = Number(r.kgAngkut || 0);
+        const key = `${estateId}|${division_id}`;
+        const prev = map.get(key) ?? { estateId, division_id, totalKg: 0, blocks: new Set<string>() };
+        prev.totalKg += kg;
+        if (blockLabel && blockLabel !== '-') prev.blocks.add(blockLabel);
+        map.set(key, prev);
+      }
+      const aggregated: Row[] = Array.from(map.values()).map((v) => ({
+        estateId: v.estateId,
+        division_id: v.division_id,
+        totalKg: Math.round(v.totalKg),
+        blockCount: v.blocks.size,
+      }));
+      // Optional: sort by estate then division
+      aggregated.sort((a, b) => a.estateId.localeCompare(b.estateId) || a.division_id - b.division_id);
+      setRows(aggregated);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Gagal memuat statement realisasi';
+      setError(msg);
+      setRows([]);
+      toast.error(msg);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
-    api.reportStatement({ startDate, endDate }).then(setRows).catch(()=> setRows([]));
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startDate, endDate]);
 
   const grandTotal = rows.reduce((s, r) => s + (r.totalKg || 0), 0);
@@ -20,7 +101,10 @@ export default function Statement() {
     <div className="space-y-4">
       <Card>
         <CardHeader>
-          <h3 className="text-lg font-semibold">Data Statement</h3>
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-lg font-semibold">Data Statement (Realisasi per Divisi)</h3>
+            <Button variant="outline" size="sm" onClick={load} disabled={loading}>Refresh</Button>
+          </div>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
           <div>
@@ -48,7 +132,10 @@ export default function Statement() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rows.map((r, i) => (
+                {loading && (
+                  <TableRow><TableCell colSpan={4} className="text-center text-sm">Memuat…</TableCell></TableRow>
+                )}
+                {!loading && rows.map((r, i) => (
                   <TableRow key={i}>
                     <TableCell>{r.estateId}</TableCell>
                     <TableCell>{r.division_id}</TableCell>
@@ -56,8 +143,11 @@ export default function Statement() {
                     <TableCell className="text-right">{r.blockCount}</TableCell>
                   </TableRow>
                 ))}
-                {rows.length === 0 && (
+                {!loading && rows.length === 0 && !error && (
                   <TableRow><TableCell colSpan={4} className="text-center text-sm text-muted-foreground">Tidak ada data</TableCell></TableRow>
+                )}
+                {!loading && error && (
+                  <TableRow><TableCell colSpan={4} className="text-center text-sm text-destructive">{error}</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>

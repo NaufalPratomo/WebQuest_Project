@@ -24,6 +24,7 @@ type RealRow = {
   estateId?: string;
   estateName?: string;
   division: string;
+  block?: string;
   mandor: string;
   pemanen: string;
   janjangTBS: number;
@@ -39,12 +40,14 @@ const RealHarvest = () => {
   const [estates, setEstates] = useState<Array<{ _id: string; estate_name: string }>>([]);
   const [estateId, setEstateId] = useState<string | undefined>(undefined);
   const [divisions, setDivisions] = useState<Array<{ division_id: number }>>([]);
+  const [blocks, setBlocks] = useState<Array<{ id_blok?: string; no_blok?: string }>>([]);
   const storageKey = useMemo(() => `realharvest_rows_${date}`, [date]);
 
   // dialog form state
   const [form, setForm] = useState({
     estateId: '',
     division: '',
+    blockNo: '',
     mandor: '',
     pemanen: '',
     janjangTBS: '0',
@@ -72,6 +75,14 @@ const RealHarvest = () => {
     if (!estateId) { setDivisions([]); return; }
     api.divisions(estateId).then(setDivisions).catch(() => toast.error('Gagal memuat divisi'));
   }, [estateId]);
+
+  // load blocks when estate and division are selected
+  useEffect(() => {
+    if (!estateId || !form.division) { setBlocks([]); return; }
+    api.blocks(estateId, form.division)
+      .then((rows: Array<{ id_blok?: string; no_blok?: string }>) => setBlocks(rows || []))
+      .catch(() => toast.error('Gagal memuat blok'));
+  }, [estateId, form.division]);
 
   const filteredRows = useMemo(() => rows.filter(r =>
     (r.division || '').toLowerCase().includes(search.toLowerCase()) ||
@@ -117,6 +128,10 @@ const RealHarvest = () => {
       toast.error('Mohon lengkapi mandor, pemanen, dan divisi');
       return;
     }
+    if (!form.blockNo) {
+      toast.error('Mohon pilih blok');
+      return;
+    }
     const estateName = estates.find(e => e._id === form.estateId)?.estate_name;
     const row: RealRow = {
       id: `${Date.now()}`,
@@ -125,6 +140,7 @@ const RealHarvest = () => {
       estateId: form.estateId || undefined,
       estateName,
       division: form.division,
+      block: form.blockNo,
       mandor: form.mandor,
       pemanen: form.pemanen,
       janjangTBS: Number(form.janjangTBS || 0),
@@ -135,7 +151,7 @@ const RealHarvest = () => {
     const next = [...rows, row];
     persist(next);
     toast.success('Data panen real ditambahkan');
-    setForm({ estateId: '', division: '', mandor: '', pemanen: '', janjangTBS: '0', janjangKosong: '0', janjangAngkut: '0', kgAngkut: '0' });
+    setForm({ estateId: '', division: '', blockNo: '', mandor: '', pemanen: '', janjangTBS: '0', janjangKosong: '0', janjangAngkut: '0', kgAngkut: '0' });
   }
 
   const janjangComparison = useMemo(() => {
@@ -206,6 +222,24 @@ const RealHarvest = () => {
                 </Select>
               </div>
               <div className="space-y-2">
+                <Label>Blok</Label>
+                <Select value={form.blockNo} onValueChange={(v) => setForm(prev => ({ ...prev, blockNo: v }))}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Pilih blok" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {blocks.length === 0 ? (
+                      <SelectItem value="__none" disabled>-- Tidak ada blok --</SelectItem>
+                    ) : (
+                      blocks.map((b, idx) => {
+                        const label = b.no_blok || b.id_blok || `Blok ${idx + 1}`;
+                        return <SelectItem key={label} value={label}>{label}</SelectItem>;
+                      })
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
                 <Label>Mandor</Label>
                 <Input placeholder="Nama mandor" value={form.mandor} onChange={(e) => setForm(prev => ({ ...prev, mandor: e.target.value }))} />
               </div>
@@ -264,6 +298,7 @@ const RealHarvest = () => {
                 <TableHead>Waktu</TableHead>
                 <TableHead>Estate</TableHead>
                 <TableHead>Divisi</TableHead>
+                <TableHead>Blok</TableHead>
                 <TableHead>Mandor</TableHead>
                 <TableHead>Pemanen</TableHead>
                 <TableHead className="text-right">Janjang TBS</TableHead>
@@ -278,6 +313,7 @@ const RealHarvest = () => {
                   <TableCell>{new Date(r.timestamp).toLocaleTimeString()}</TableCell>
                   <TableCell>{r.estateName || '-'}</TableCell>
                   <TableCell>{r.division}</TableCell>
+                  <TableCell>{r.block || '-'}</TableCell>
                   <TableCell>{r.mandor}</TableCell>
                   <TableCell>{r.pemanen}</TableCell>
                   <TableCell className="text-right">{r.janjangTBS}</TableCell>
@@ -288,6 +324,7 @@ const RealHarvest = () => {
               ))}
               <TableRow>
                 <TableCell className="font-medium">Total</TableCell>
+                <TableCell />
                 <TableCell />
                 <TableCell />
                 <TableCell />

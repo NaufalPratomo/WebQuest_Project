@@ -18,6 +18,12 @@ import Recap from "./pages/Recap";
 import Reports from "./pages/Reports";
 import NotFound from "./pages/NotFound";
 import TaksasiPanen from "./pages/manager/TaksasiPanen";
+import Harvest from "./pages/transactions/Harvest";
+import Transport from "./pages/transactions/Transport";
+import Attendance from "./pages/transactions/Attendance";
+import TaksasiPerBlock from "./pages/reports/TaksasiPerBlock";
+import Trend from "./pages/reports/Trend";
+import Statement from "./pages/reports/Statement";
 
 const queryClient = new QueryClient();
 
@@ -53,6 +59,38 @@ const App = () => (
             <Route path="/master/targets" element={
               <ProtectedRoute allowedRoles={['manager']}>
                 <Layout><Targets /></Layout>
+              </ProtectedRoute>
+            } />
+            <Route path="/transactions/panen" element={
+              <ProtectedRoute allowedRoles={['manager', 'foreman']}>
+                <Layout><Harvest /></Layout>
+              </ProtectedRoute>
+            } />
+            <Route path="/transactions/angkut" element={
+              <ProtectedRoute allowedRoles={['manager', 'foreman']}>
+                <Layout><Transport /></Layout>
+              </ProtectedRoute>
+            } />
+            <Route path="/transactions/attendance" element={
+              <ProtectedRoute allowedRoles={['manager', 'foreman']}>
+                <Layout><Attendance /></Layout>
+              </ProtectedRoute>
+            } />
+
+            {/* Reports */}
+            <Route path="/reports/taksasi" element={
+              <ProtectedRoute allowedRoles={['manager', 'foreman']}>
+                <Layout><TaksasiPerBlock /></Layout>
+              </ProtectedRoute>
+            } />
+            <Route path="/reports/trend" element={
+              <ProtectedRoute allowedRoles={['manager', 'foreman']}>
+                <Layout><Trend /></Layout>
+              </ProtectedRoute>
+            } />
+            <Route path="/reports/statement" element={
+              <ProtectedRoute allowedRoles={['manager', 'foreman']}>
+                <Layout><Statement /></Layout>
               </ProtectedRoute>
             } />
             

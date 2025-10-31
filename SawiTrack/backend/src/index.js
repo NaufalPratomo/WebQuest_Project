@@ -7,6 +7,11 @@ import Estate from './models/Estate.js';
 import Employee from './models/Employee.js';
 import Target from './models/Target.js';
 import Report from './models/Report.js';
+import Taksasi from './models/Taksasi.js';
+import Panen from './models/Panen.js';
+import Angkut from './models/Angkut.js';
+import Attendance from './models/Attendance.js';
+import JobCode from './models/JobCode.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import bcrypt from 'bcryptjs';
@@ -88,7 +93,7 @@ app.post(`${API_BASE_PATH}/auth/login`, async (req, res) => {
       ok = stored === password;
     }
     if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
-    const token = jwt.sign({ sub: String(doc._id), role: doc.role }, JWT_SECRET, { expiresIn: '7d' });
+  const token = jwt.sign({ sub: String(doc._id), role: doc.role, division: doc.division_id ?? null }, JWT_SECRET, { expiresIn: '7d' });
     const user = { _id: doc._id, name: doc.name, email: doc.email, role: doc.role, division: doc.division_id ?? null, status: doc.status };
     return res.json({ token, user });
   } catch (err) {
@@ -474,6 +479,244 @@ app.get(`${API_BASE_PATH}/stats`, async (_req, res) => {
       : 0;
 
     res.json({ totalEmployees, todayReports, pendingCount, targetsPercent: percent });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ====== New: Taksasi, Panen (Realisasi), Angkut (Transport) ======
+// Helper: role-based division filter for foreman
+function restrictByDivision(req, baseFilter = {}) {
+  const auth = req.headers.authorization || '';
+  const [, token] = auth.split(' ');
+  if (!token) return baseFilter;
+  try {
+    const payload = jwt.verify(token, JWT_SECRET);
+    if (payload && payload.role === 'foreman' && payload.division != null) {
+      return { ...baseFilter, division_id: Number(payload.division) };
+    }
+    return baseFilter;
+  } catch {
+    return baseFilter;
+  }
+}
+
+// Taksasi
+app.post(`${API_BASE_PATH}/taksasi`, async (req, res) => {
+  try {
+    const body = req.body;
+    if (Array.isArray(body)) {
+      const docs = await Taksasi.insertMany(body);
+      return res.status(201).json(docs);
+    }
+    const created = await Taksasi.create(body);
+    res.status(201).json(created);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+app.get(`${API_BASE_PATH}/taksasi`, async (req, res) => {
+  try {
+    const { date, estateId, division_id } = req.query;
+    const q = restrictByDivision(req, {});
+    if (date) q.date = new Date(String(date));
+    if (estateId) q.estateId = String(estateId);
+    if (division_id !== undefined) q.division_id = Number(division_id);
+    const rows = await Taksasi.find(q).lean();
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Panen (Realisasi)
+app.post(`${API_BASE_PATH}/panen`, async (req, res) => {
+  try {
+    const body = req.body;
+    if (Array.isArray(body)) {
+      const docs = await Panen.insertMany(body);
+      return res.status(201).json(docs);
+    }
+    const created = await Panen.create(body);
+    res.status(201).json(created);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+app.get(`${API_BASE_PATH}/panen`, async (req, res) => {
+  try {
+    const { date_panen, estateId, division_id } = req.query;
+    const q = restrictByDivision(req, {});
+    if (date_panen) q.date_panen = new Date(String(date_panen));
+    if (estateId) q.estateId = String(estateId);
+    if (division_id !== undefined) q.division_id = Number(division_id);
+    const rows = await Panen.find(q).lean();
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Angkut (Transport) locked to date_panen
+app.post(`${API_BASE_PATH}/angkut`, async (req, res) => {
+  try {
+    const body = req.body;
+    if (Array.isArray(body)) {
+      for (const r of body) if (!r.date_panen) return res.status(400).json({ error: 'date_panen required' });
+      const docs = await Angkut.insertMany(body);
+      return res.status(201).json(docs);
+    }
+    if (!body.date_panen) return res.status(400).json({ error: 'date_panen required' });
+    const created = await Angkut.create(body);
+    res.status(201).json(created);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+app.get(`${API_BASE_PATH}/angkut`, async (req, res) => {
+  try {
+    const { date_panen, date_angkut, estateId, division_id } = req.query;
+    const q = restrictByDivision(req, {});
+    if (date_panen) q.date_panen = new Date(String(date_panen));
+    if (date_angkut) q.date_angkut = new Date(String(date_angkut));
+    if (estateId) q.estateId = String(estateId);
+    if (division_id !== undefined) q.division_id = Number(division_id);
+    const rows = await Angkut.find(q).lean();
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Attendance
+app.post(`${API_BASE_PATH}/attendance`, async (req, res) => {
+  try {
+    // enforce division for foreman
+    const filter = restrictByDivision(req, {});
+    if (filter.division_id != null) req.body.division_id = filter.division_id;
+    const created = await Attendance.create(req.body);
+    res.status(201).json(created);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+app.get(`${API_BASE_PATH}/attendance`, async (req, res) => {
+  try {
+    const { date, employeeId } = req.query;
+    const q = restrictByDivision(req, {});
+    if (date) q.date = new Date(String(date));
+    if (employeeId) q.employeeId = String(employeeId);
+    const rows = await Attendance.find(q).lean();
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Job Codes
+app.get(`${API_BASE_PATH}/jobcodes`, async (_req, res) => {
+  try {
+    const rows = await JobCode.find().lean();
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+app.post(`${API_BASE_PATH}/jobcodes`, async (req, res) => {
+  try {
+    const created = await JobCode.create(req.body);
+    res.status(201).json(created);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+app.put(`${API_BASE_PATH}/jobcodes/:code`, async (req, res) => {
+  try {
+    const updated = await JobCode.findOneAndUpdate({ code: req.params.code }, req.body, { new: true }).lean();
+    if (!updated) return res.status(404).json({ error: 'Not found' });
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+app.delete(`${API_BASE_PATH}/jobcodes/:code`, async (req, res) => {
+  try {
+    await JobCode.deleteOne({ code: req.params.code });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Reports: taksasi per block (tons/kg)
+app.get(`${API_BASE_PATH}/reports/taksasi-per-block`, async (req, res) => {
+  try {
+    const { date } = req.query;
+    const match = {};
+    if (date) match.date = new Date(String(date));
+    const rows = await Taksasi.aggregate([
+      { $match: match },
+      {
+        $group: {
+          _id: { estateId: '$estateId', division_id: '$division_id', block_no: '$block_no' },
+          totalKg: { $sum: '$weightKg' },
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          estateId: '$_id.estateId',
+          division_id: '$_id.division_id',
+          block_no: '$_id.block_no',
+          totalKg: 1,
+        },
+      },
+      { $sort: { estateId: 1, division_id: 1, block_no: 1 } },
+    ]);
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Reports: trend (top yields) - from Panen by default
+app.get(`${API_BASE_PATH}/reports/trend`, async (req, res) => {
+  try {
+    const { type = 'panen', limit = 50, sort = 'desc' } = req.query;
+    const col = String(type) === 'taksasi' ? Taksasi : String(type) === 'angkut' ? Angkut : Panen;
+    const key = String(type) === 'angkut' ? 'weightKg' : 'weightKg';
+    const order = String(sort) === 'asc' ? 1 : -1;
+    const rows = await col
+      .aggregate([
+        { $group: { _id: { estateId: '$estateId', division_id: '$division_id', block_no: '$block_no' }, totalKg: { $sum: `$${key}` } } },
+        { $project: { _id: 0, estateId: '$_id.estateId', division_id: '$_id.division_id', block_no: '$_id.block_no', totalKg: 1 } },
+        { $sort: { totalKg: order } },
+        { $limit: Number(limit) },
+      ])
+      .exec();
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Reports: statement summary for a period from Panen
+app.get(`${API_BASE_PATH}/reports/statement`, async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    const match = {};
+    if (startDate || endDate) {
+      match.date_panen = {};
+      if (startDate) match.date_panen.$gte = new Date(String(startDate));
+      if (endDate) match.date_panen.$lte = new Date(String(endDate));
+    }
+    const rows = await Panen.aggregate([
+      { $match: match },
+      { $group: { _id: { estateId: '$estateId', division_id: '$division_id' }, totalKg: { $sum: '$weightKg' }, blocks: { $addToSet: '$block_no' } } },
+      { $project: { _id: 0, estateId: '$_id.estateId', division_id: '$_id.division_id', totalKg: 1, blockCount: { $size: '$blocks' } } },
+      { $sort: { estateId: 1, division_id: 1 } },
+    ]);
+    res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

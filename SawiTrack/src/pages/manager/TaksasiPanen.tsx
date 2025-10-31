@@ -164,10 +164,21 @@ export default function TaksasiPanen() {
     setRows(newRows);
     try {
       localStorage.setItem(storageKey, JSON.stringify(newRows));
-      toast.success('Taksasi disimpan ke tabel hari ini');
     } catch {
-      toast.error('Gagal menyimpan ke penyimpanan lokal');
+      // ignore localStorage failure
     }
+    // Simpan ke server sebagai taksasi per blok (fokus ke tonase/kg)
+    api
+      .taksasiCreate({
+        date,
+        estateId,
+        division_id: Number(divisionId),
+        block_no: blockLabel,
+        weightKg: Math.round(taksasiTon * 1000),
+        notes: `AKP=${row.akpPercent}%; BM=${bm}; PTB=${ptb}`,
+      })
+      .then(() => toast.success('Taksasi tersimpan ke server'))
+      .catch((e) => toast.error(e instanceof Error ? e.message : 'Gagal simpan taksasi ke server'));
     // reset for next input but keep date and selections so user can continue quickly
     setStep(1);
     // preserve date; clear lower selections and inputs for safety
@@ -383,8 +394,8 @@ export default function TaksasiPanen() {
                   <TableHead className="text-right">BMBB</TableHead>
                   <TableHead className="text-right">BMM</TableHead>
                   <TableHead className="text-right">AKP %</TableHead>
-                  <TableHead className="text-right">Janjang</TableHead>
                   <TableHead className="text-right">Ton</TableHead>
+                  <TableHead className="text-right">Perkiraan Kg</TableHead>
                   <TableHead className="text-right">Pemanen</TableHead>
                 </TableRow>
               </TableHeader>
@@ -401,8 +412,8 @@ export default function TaksasiPanen() {
                     <TableCell className="text-right">{r.bmbb}</TableCell>
                     <TableCell className="text-right">{r.bmm}</TableCell>
                     <TableCell className="text-right">{r.akpPercent.toFixed(2)}</TableCell>
-                    <TableCell className="text-right">{r.taksasiJanjang}</TableCell>
                     <TableCell className="text-right">{r.taksasiTon.toFixed(2)}</TableCell>
+                    <TableCell className="text-right">{Math.round(r.taksasiTon * 1000)}</TableCell>
                     <TableCell className="text-right">{r.kebutuhanPemanen}</TableCell>
                   </TableRow>
                 ))}

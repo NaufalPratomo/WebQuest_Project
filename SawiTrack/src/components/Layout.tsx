@@ -1,19 +1,8 @@
-import { ReactNode } from 'react';
+import { ReactNode, useEffect, type ComponentType } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
-import {
-  LayoutDashboard,
-  Users,
-  MapPin,
-  Target,
-  FileText,
-  CheckSquare,
-  BarChart3,
-  Download,
-  LogOut,
-  Menu,
-} from 'lucide-react';
+import { LayoutDashboard, Users, MapPin, FileText, CheckSquare, BarChart3, Download, LogOut, Menu, Truck } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 
@@ -32,22 +21,54 @@ const Layout = ({ children }: LayoutProps) => {
     navigate('/login');
   };
 
-  const menuItems = [
+  type IconType = ComponentType<{ className?: string }>;
+  type MenuItem = { path: string; icon: IconType; label: string; roles: Array<'manager'|'foreman'|'employee'> };
+  type MenuGroup = { label: string; items: MenuItem[] };
+
+  const topLevel: MenuItem[] = [
     { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', roles: ['manager', 'foreman'] },
-    { path: '/master/employees', icon: Users, label: 'Karyawan', roles: ['manager'] },
-    { path: '/master/locations', icon: MapPin, label: 'Aresta', roles: ['manager'] },
-    { path: '/taksasi', icon: BarChart3, label: 'Taksasi Panen', roles: ['manager'] },
-    { path: '/master/targets', icon: Target, label: 'Realisasi Panen', roles: ['manager'] },
-    { path: '/activities/input', icon: FileText, label: 'Input Laporan', roles: ['manager', 'foreman', 'employee'] },
-    { path: '/activities/history', icon: FileText, label: 'Riwayat Laporan', roles: ['manager', 'foreman', 'employee'] },
-    { path: '/verification', icon: CheckSquare, label: 'Verifikasi', roles: ['foreman'] },
-    { path: '/recap', icon: BarChart3, label: 'Rekapitulasi', roles: ['manager'] },
-    { path: '/reports', icon: Download, label: 'Laporan & Export', roles: ['manager', 'foreman'] },
   ];
 
-  const visibleMenuItems = menuItems.filter(item => 
-    user && item.roles.includes(user.role)
-  );
+  const groups: MenuGroup[] = [
+    {
+      label: 'Master Data',
+      items: [
+        { path: '/master/employees', icon: Users, label: 'Data Karyawan', roles: ['manager'] },
+        { path: '/master/locations', icon: MapPin, label: 'Data Aresta', roles: ['manager'] },
+      ],
+    },
+    {
+      label: 'Transaksi',
+      items: [
+        { path: '/taksasi', icon: FileText, label: 'Taksasi', roles: ['manager'] },
+        { path: '/transactions/panen', icon: FileText, label: 'Transaksi Panen', roles: ['manager', 'foreman'] },
+        { path: '/transactions/angkut', icon: Truck, label: 'Transaksi Angkutan', roles: ['manager', 'foreman'] },
+        { path: '/transactions/attendance', icon: CheckSquare, label: 'Absensi Harian', roles: ['manager', 'foreman'] },
+      ],
+    },
+    {
+      label: 'Report Panen',
+      items: [
+        { path: '/reports/taksasi', icon: BarChart3, label: 'Report Taksasi', roles: ['manager', 'foreman'] },
+        { path: '/reports/statement', icon: Download, label: 'Data Statement', roles: ['manager', 'foreman'] },
+        { path: '/reports/trend', icon: BarChart3, label: 'Laporan Tren', roles: ['manager', 'foreman'] },
+      ],
+    },
+  ];
+
+  const others: MenuItem[] = [
+    { path: '/verification', icon: CheckSquare, label: 'Verifikasi', roles: ['foreman'] },
+    { path: '/recap', icon: BarChart3, label: 'Rekapitulasi', roles: ['manager'] },
+  ];
+
+  const canSee = (item: MenuItem) => user && item.roles.includes(user.role);
+  const visibleTop = topLevel.filter(canSee);
+  const visibleGroups = groups
+    .map(g => ({ label: g.label, items: g.items.filter(canSee) }))
+    .filter(g => g.items.length > 0);
+  const visibleOthers = others.filter(canSee);
+
+  // Sidebar now shows static section labels with items always visible (no dropdowns)
 
   return (
     <div className="flex h-screen bg-muted/30">
@@ -72,7 +93,8 @@ const Layout = ({ children }: LayoutProps) => {
         </div>
 
         <nav className="p-2 space-y-1">
-          {visibleMenuItems.map((item) => {
+          {/* Top level */}
+          {visibleTop.map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname.startsWith(item.path);
             return (
@@ -81,9 +103,58 @@ const Layout = ({ children }: LayoutProps) => {
                 to={item.path}
                 className={cn(
                   'flex items-center gap-3 px-3 py-2 rounded-md transition-colors',
-                  isActive
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:bg-secondary hover:text-secondary-foreground'
+                  isActive ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-secondary hover:text-secondary-foreground'
+                )}
+              >
+                <Icon className="h-5 w-5 shrink-0" />
+                {sidebarOpen && <span>{item.label}</span>}
+              </Link>
+            );
+          })}
+
+          {/* Groups (static headings, not collapsible) */}
+          {visibleGroups.map((group) => (
+            <div key={group.label} className="mt-3">
+              <div className={cn('px-3 py-2 text-muted-foreground')}> 
+                {sidebarOpen ? (
+                  <span className="text-xs font-semibold uppercase tracking-wide">{group.label}</span>
+                ) : (
+                  <div className="h-2 w-2 rounded-full bg-muted-foreground" />
+                )}
+              </div>
+              <div className="mt-1 space-y-1">
+                {group.items.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = location.pathname.startsWith(item.path);
+                  return (
+                    <Link
+                      key={item.path}
+                      to={item.path}
+                      className={cn(
+                        'ml-6 flex items-center gap-3 px-3 py-2 rounded-md transition-colors',
+                        isActive ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-secondary hover:text-secondary-foreground'
+                      )}
+                    >
+                      <Icon className="h-4 w-4 shrink-0" />
+                      {sidebarOpen && <span>{item.label}</span>}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+
+          {/* Others */}
+          {visibleOthers.map((item) => {
+            const Icon = item.icon;
+            const isActive = location.pathname.startsWith(item.path);
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                className={cn(
+                  'flex items-center gap-3 px-3 py-2 rounded-md transition-colors',
+                  isActive ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-secondary hover:text-secondary-foreground'
                 )}
               >
                 <Icon className="h-5 w-5 shrink-0" />

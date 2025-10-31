@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/contexts/AuthContext';
 import { api } from '@/lib/api';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 
 const InputReport = () => {
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -120,115 +121,123 @@ const InputReport = () => {
               <CardTitle>Form Input Manual</CardTitle>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleManualSubmit} className="space-y-4">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="date">Tanggal</Label>
-                    <Input
-                      id="date"
-                      type="date"
-                      value={date}
-                      onChange={(e) => setDate(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                      <Label htmlFor="estate">Estate</Label>
-                      <Select value={estateId} onValueChange={(v) => setEstateId(v || undefined)}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Pilih estate" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {estates.map((es) => (
-                            <SelectItem key={es._id} value={es._id}>{es.estate_name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button>Tambah Laporan</Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Input Laporan Harian</DialogTitle>
+                  </DialogHeader>
+                  <form onSubmit={handleManualSubmit} className="space-y-4">
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="date">Tanggal</Label>
+                        <Input
+                          id="date"
+                          type="date"
+                          value={date}
+                          onChange={(e) => setDate(e.target.value)}
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="estate">Estate</Label>
+                        <Select value={estateId} onValueChange={(v) => setEstateId(v || undefined)}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Pilih estate" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {estates.map((es) => (
+                              <SelectItem key={es._id} value={es._id}>{es.estate_name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="division">Divisi</Label>
+                        <Select value={division} onValueChange={setDivision}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Pilih divisi" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {divisions.length === 0 ? (
+                              <SelectItem value="__none" disabled>-- Tidak ada divisi --</SelectItem>
+                            ) : (
+                              divisions.map((d) => (
+                                <SelectItem key={String(d.division_id)} value={String(d.division_id)}>
+                                  {`Divisi ${d.division_id}`}
+                                </SelectItem>
+                              ))
+                            )}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-3">
+                      <div className="space-y-2">
+                        <Label htmlFor="employee">Karyawan</Label>
+                        <Select value={employeeId} onValueChange={(v) => setEmployeeId(v || undefined)}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Pilih karyawan" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {(() => {
+                              const pool = division ? employees.filter((e) => String(e.division) === String(division)) : employees;
+                              if (pool.length === 0) return <SelectItem value="__none" disabled>-- Tidak ada karyawan --</SelectItem>;
+                              return pool.map((emp) => (
+                                <SelectItem key={emp._id} value={emp._id}>{emp.name}</SelectItem>
+                              ));
+                            })()}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="jobType">Jenis Pekerjaan</Label>
+                        <Select value={jobType} onValueChange={setJobType}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Pilih jenis" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="panen">Panen</SelectItem>
+                            <SelectItem value="perawatan">Perawatan</SelectItem>
+                            <SelectItem value="penanaman">Penanaman</SelectItem>
+                            <SelectItem value="transport">Transport</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="hk">HK (Hari Kerja)</Label>
+                        <Input
+                          id="hk"
+                          type="number"
+                          step="0.1"
+                          placeholder="1.0"
+                          value={hk}
+                          onChange={(e) => setHk(e.target.value)}
+                          required
+                        />
+                      </div>
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="division">Divisi</Label>
-                      <Select value={division} onValueChange={setDivision}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Pilih divisi" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {divisions.length === 0 ? (
-                            <SelectItem value="__none" disabled>-- Tidak ada divisi --</SelectItem>
-                          ) : (
-                            divisions.map((d) => (
-                              <SelectItem key={String(d.division_id)} value={String(d.division_id)}>
-                                {`Divisi ${d.division_id}`}
-                              </SelectItem>
-                            ))
-                          )}
-                        </SelectContent>
-                      </Select>
+                      <Label htmlFor="notes">Catatan</Label>
+                      <Textarea
+                        id="notes"
+                        placeholder="Catatan tambahan..."
+                        value={notes}
+                        onChange={(e) => setNotes(e.target.value)}
+                        rows={4}
+                      />
                     </div>
-                </div>
 
-                <div className="grid gap-4 md:grid-cols-3">
-                  <div className="space-y-2">
-                    <Label htmlFor="employee">Karyawan</Label>
-                    <Select value={employeeId} onValueChange={(v) => setEmployeeId(v || undefined)}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Pilih karyawan" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(() => {
-                          const pool = division ? employees.filter((e) => String(e.division) === String(division)) : employees;
-                          if (pool.length === 0) return <SelectItem value="__none" disabled>-- Tidak ada karyawan --</SelectItem>;
-                          return pool.map((emp) => (
-                            <SelectItem key={emp._id} value={emp._id}>{emp.name}</SelectItem>
-                          ));
-                        })()}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="jobType">Jenis Pekerjaan</Label>
-                    <Select value={jobType} onValueChange={setJobType}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Pilih jenis" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="panen">Panen</SelectItem>
-                        <SelectItem value="perawatan">Perawatan</SelectItem>
-                        <SelectItem value="penanaman">Penanaman</SelectItem>
-                        <SelectItem value="transport">Transport</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="hk">HK (Hari Kerja)</Label>
-                    <Input
-                      id="hk"
-                      type="number"
-                      step="0.1"
-                      placeholder="1.0"
-                      value={hk}
-                      onChange={(e) => setHk(e.target.value)}
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="notes">Catatan</Label>
-                  <Textarea
-                    id="notes"
-                    placeholder="Catatan tambahan..."
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    rows={4}
-                  />
-                </div>
-
-                <Button type="submit" className="w-full">
-                  Submit Laporan
-                </Button>
-              </form>
+                    <Button type="submit" className="w-full">
+                      Submit Laporan
+                    </Button>
+                  </form>
+                </DialogContent>
+              </Dialog>
             </CardContent>
           </Card>
         </TabsContent>

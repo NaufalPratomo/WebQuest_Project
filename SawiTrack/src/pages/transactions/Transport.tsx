@@ -175,25 +175,33 @@ export default function Transport() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>Tgl_angkut</TableHead>
                   <TableHead>Estate</TableHead>
-                  <TableHead>Divisi</TableHead>
-                  <TableHead>No Blok</TableHead>
-                  <TableHead>Tgl Angkut</TableHead>
-                  <TableHead className="text-right">Berat (Kg)</TableHead>
+                  <TableHead>Div</TableHead>
+                  <TableHead>Blok</TableHead>
+                  <TableHead>NoTPH</TableHead>
+                  <TableHead className="text-right">jjg_angkut</TableHead>
+                  <TableHead className="text-right">kg_angkut</TableHead>
+                  <TableHead className="text-right">jjg_restan</TableHead>
+                  <TableHead className="text-right">kg_restan</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.map((r, idx) => (
                   <TableRow key={r._id || idx}>
+                    <TableCell>{String(r.date_angkut).slice(0,10)}</TableCell>
                     <TableCell>{r.estateId}</TableCell>
                     <TableCell>{r.division_id}</TableCell>
                     <TableCell>{r.block_no}</TableCell>
-                    <TableCell>{String(r.date_angkut).slice(0,10)}</TableCell>
+                    <TableCell>-</TableCell>
+                    <TableCell className="text-right">-</TableCell>
                     <TableCell className="text-right">{r.weightKg}</TableCell>
+                    <TableCell className="text-right">-</TableCell>
+                    <TableCell className="text-right">-</TableCell>
                   </TableRow>
                 ))}
                 {filtered.length === 0 && (
-                  <TableRow><TableCell colSpan={5} className="text-center text-sm text-muted-foreground">Tidak ada data</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={9} className="text-center text-sm text-muted-foreground">Tidak ada data</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>

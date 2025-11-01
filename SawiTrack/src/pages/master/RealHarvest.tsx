@@ -2,14 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Plus, Search } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
@@ -295,44 +288,35 @@ const RealHarvest = () => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Waktu</TableHead>
+                <TableHead>Tgl_Panen</TableHead>
                 <TableHead>Estate</TableHead>
-                <TableHead>Divisi</TableHead>
+                <TableHead>Div</TableHead>
                 <TableHead>Blok</TableHead>
-                <TableHead>Mandor</TableHead>
-                <TableHead>Pemanen</TableHead>
-                <TableHead className="text-right">Janjang TBS</TableHead>
-                <TableHead className="text-right">Janjang Kosong</TableHead>
-                <TableHead className="text-right">Janjang Angkut</TableHead>
-                <TableHead className="text-right">Kg Angkut</TableHead>
+                <TableHead>NoTPH</TableHead>
+                <TableHead>Idmandor</TableHead>
+                <TableHead>Idpemanen</TableHead>
+                <TableHead className="text-right">jjg_panen_TBS</TableHead>
+                <TableHead className="text-right">jjg_panen_kosong</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredRows.map((r) => (
                 <TableRow key={r.id}>
-                  <TableCell>{new Date(r.timestamp).toLocaleTimeString()}</TableCell>
+                  <TableCell>{r.date}</TableCell>
                   <TableCell>{r.estateName || '-'}</TableCell>
                   <TableCell>{r.division}</TableCell>
                   <TableCell>{r.block || '-'}</TableCell>
+                  <TableCell>-</TableCell>
                   <TableCell>{r.mandor}</TableCell>
                   <TableCell>{r.pemanen}</TableCell>
                   <TableCell className="text-right">{r.janjangTBS}</TableCell>
                   <TableCell className="text-right">{r.janjangKosong}</TableCell>
-                  <TableCell className="text-right">{r.janjangAngkut}</TableCell>
-                  <TableCell className="text-right">{r.kgAngkut}</TableCell>
                 </TableRow>
               ))}
               <TableRow>
-                <TableCell className="font-medium">Total</TableCell>
-                <TableCell />
-                <TableCell />
-                <TableCell />
-                <TableCell />
-                <TableCell />
+                <TableCell className="font-medium" colSpan={7}>Total</TableCell>
                 <TableCell className="text-right">{totals.janjangTBS}</TableCell>
                 <TableCell className="text-right">{totals.janjangKosong}</TableCell>
-                <TableCell className="text-right">{totals.janjangAngkut}</TableCell>
-                <TableCell className="text-right">{totals.kgAngkut}</TableCell>
               </TableRow>
             </TableBody>
           </Table>

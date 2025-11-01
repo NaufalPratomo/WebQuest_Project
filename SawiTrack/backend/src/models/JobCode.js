@@ -11,6 +11,8 @@ const JobCodeSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-JobCodeSchema.index({ code: 1 });
+// "code" already has a unique index via the schema path option above.
+// Avoid defining a duplicate index to silence Mongoose duplicate index warning.
+// JobCodeSchema.index({ code: 1 });
 
 export default mongoose.models.JobCode || mongoose.model('JobCode', JobCodeSchema);

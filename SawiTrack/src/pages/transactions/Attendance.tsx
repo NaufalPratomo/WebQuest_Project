@@ -8,7 +8,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { api, Employee } from '@/lib/api';
 import { toast } from 'sonner';
 
-type JobCode = { code: string; name: string; category: 'panen' | 'non-panen'; hkValue: number };
 type AttendanceRow = { _id?: string; date: string; employeeId: string; division_id?: number; status: 'present' | 'absent' | 'leave'; hk: number; notes?: string };
 
 export default function Attendance() {
@@ -16,15 +15,11 @@ export default function Attendance() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [employeeId, setEmployeeId] = useState<string>('');
   const [status, setStatus] = useState<'present' | 'absent' | 'leave'>('present');
-  const [hk, setHk] = useState<number | ''>(1);
-  const [jobcodes, setJobcodes] = useState<JobCode[]>([]);
-  const [jobCode, setJobCode] = useState<string>('');
-  const [notes, setNotes] = useState<string>('');
+  const [notes] = useState<string>('');
   const [rows, setRows] = useState<AttendanceRow[]>([]);
 
   useEffect(() => {
     api.employees().then(setEmployees).catch(() => toast.error('Gagal memuat karyawan'));
-    api.jobcodes().then(setJobcodes).catch(() => setJobcodes([]));
   }, []);
 
   useEffect(() => {
@@ -34,11 +29,7 @@ export default function Attendance() {
       .catch(() => setRows([]));
   }, [date]);
 
-  useEffect(() => {
-    if (!jobCode) return;
-    const jc = jobcodes.find(j => j.code === jobCode);
-    if (jc) setHk(jc.hkValue);
-  }, [jobCode, jobcodes]);
+  // Attendance now only records presence status; wages handled in Upah page
 
   const filtered = useMemo(() => rows.filter(r => r.date.startsWith(date)), [rows, date]);
 
@@ -48,7 +39,7 @@ export default function Attendance() {
         toast.error('Lengkapi input');
         return;
       }
-      const body = { date, employeeId, status, hk: Number(hk || 0), notes } as const;
+      const body = { date, employeeId, status } as const;
       await api.attendanceCreate(body);
       toast.success('Absensi tersimpan');
       // reload list
@@ -57,9 +48,6 @@ export default function Attendance() {
       // reset some inputs
       setEmployeeId('');
       setStatus('present');
-      setJobCode('');
-      setHk(1);
-      setNotes('');
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Gagal menyimpan';
       toast.error(msg);
@@ -105,23 +93,7 @@ export default function Attendance() {
                       <option value="leave">Cuti/Izin</option>
                     </select>
                   </div>
-                  <div>
-                    <Label>Kode Pekerjaan</Label>
-                    <select className="w-full h-10 border rounded px-2" value={jobCode} onChange={(e)=> setJobCode(e.target.value)}>
-                      <option value="">Pilih (opsional)</option>
-                      {jobcodes.map(j => (
-                        <option key={j.code} value={j.code}>{j.code} - {j.name} ({j.hkValue} HK)</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <Label>HK</Label>
-                    <Input type="number" value={hk} onChange={(e)=> setHk(e.target.value ? Number(e.target.value) : '')} />
-                  </div>
-                  <div>
-                    <Label>Catatan</Label>
-                    <Input type="text" placeholder="Opsional" value={notes} onChange={(e)=> setNotes(e.target.value)} />
-                  </div>
+                  {/* Job Code, HK, and Notes moved to Upah page */}
                   <div className="flex gap-2">
                     <Button onClick={addRow}>Simpan</Button>
                   </div>
@@ -141,9 +113,13 @@ export default function Attendance() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Karyawan</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">HK</TableHead>
+                  <TableHead>Tgl_Panen</TableHead>
+                  <TableHead>Estate</TableHead>
+                  <TableHead>Div</TableHead>
+                  <TableHead>Blok</TableHead>
+                  <TableHead>Idmandor</TableHead>
+                  <TableHead>Idpemanen</TableHead>
+                  <TableHead>sts_hadir</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -151,14 +127,18 @@ export default function Attendance() {
                   const emp = employees.find(e => e._id === r.employeeId);
                   return (
                     <TableRow key={r._id || idx}>
+                      <TableCell>{r.date}</TableCell>
+                      <TableCell>-</TableCell>
+                      <TableCell>-</TableCell>
+                      <TableCell>-</TableCell>
+                      <TableCell>-</TableCell>
                       <TableCell>{emp?.name || r.employeeId}</TableCell>
                       <TableCell className="capitalize">{r.status}</TableCell>
-                      <TableCell className="text-right">{r.hk}</TableCell>
                     </TableRow>
                   );
                 })}
                 {filtered.length === 0 && (
-                  <TableRow><TableCell colSpan={3} className="text-center text-sm text-muted-foreground">Tidak ada data</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={7} className="text-center text-sm text-muted-foreground">Tidak ada data</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>

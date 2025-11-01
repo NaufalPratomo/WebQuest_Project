@@ -41,19 +41,20 @@ const Layout = ({ children }: LayoutProps) => {
       label: 'Transaksi',
       items: [
         { path: '/taksasi', icon: FileText, label: 'Taksasi', roles: ['manager'] },
+        { path: '/transactions/attendance', icon: CheckSquare, label: 'Absensi Harian', roles: ['manager', 'foreman'] },
         // Realisasi diletakkan tepat di bawah Taksasi
         { path: '/master/targets', icon: FileText, label: 'Realisasi', roles: ['manager'] },
         // Transaksi Panen dihilangkan sesuai permintaan
         // { path: '/transactions/panen', icon: FileText, label: 'Transaksi Panen', roles: ['manager', 'foreman'] },
-        { path: '/transactions/angkut', icon: Truck, label: 'Transaksi Angkutan', roles: ['manager', 'foreman'] },
-        { path: '/transactions/attendance', icon: CheckSquare, label: 'Absensi Harian', roles: ['manager', 'foreman'] },
+        { path: '/transactions/angkut', icon: Truck, label: 'Angkutan', roles: ['manager', 'foreman'] },
+        { path: '/transactions/upah', icon: FileText, label: 'Upah', roles: ['manager', 'foreman'] },
       ],
     },
     {
       label: 'Report Panen',
       items: [
         { path: '/reports/taksasi', icon: BarChart3, label: 'Report Taksasi', roles: ['manager', 'foreman'] },
-        { path: '/reports/statement', icon: Download, label: 'Data Statement', roles: ['manager', 'foreman'] },
+        { path: '/reports/statement', icon: Download, label: 'Report Realisasi', roles: ['manager', 'foreman'] },
         { path: '/reports/trend', icon: BarChart3, label: 'Laporan Tren', roles: ['manager', 'foreman'] },
       ],
     },

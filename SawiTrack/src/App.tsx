@@ -21,6 +21,7 @@ import TaksasiPanen from "./pages/manager/TaksasiPanen";
 import Harvest from "./pages/transactions/Harvest";
 import Transport from "./pages/transactions/Transport";
 import Attendance from "./pages/transactions/Attendance";
+import Upah from "./pages/transactions/Upah";
 import TaksasiPerBlock from "./pages/reports/TaksasiPerBlock";
 import Trend from "./pages/reports/Trend";
 import Statement from "./pages/reports/Statement";
@@ -74,6 +75,11 @@ const App = () => (
             <Route path="/transactions/attendance" element={
               <ProtectedRoute allowedRoles={['manager', 'foreman']}>
                 <Layout><Attendance /></Layout>
+              </ProtectedRoute>
+            } />
+            <Route path="/transactions/upah" element={
+              <ProtectedRoute allowedRoles={['manager', 'foreman']}>
+                <Layout><Upah /></Layout>
               </ProtectedRoute>
             } />
 

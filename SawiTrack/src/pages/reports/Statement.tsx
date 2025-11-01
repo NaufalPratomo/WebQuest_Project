@@ -102,7 +102,7 @@ export default function Statement() {
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between gap-2">
-            <h3 className="text-lg font-semibold">Data Statement (Realisasi per Divisi)</h3>
+            <h3 className="text-lg font-semibold">Report Realisasi Panen (Realisasi per Divisi)</h3>
             <Button variant="outline" size="sm" onClick={load} disabled={loading}>Refresh</Button>
           </div>
         </CardHeader>

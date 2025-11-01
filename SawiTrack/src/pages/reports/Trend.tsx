@@ -163,9 +163,10 @@ export default function Trend() {
                   <TableHead>Estate</TableHead>
                   <TableHead>Divisi</TableHead>
                   <TableHead>Blok</TableHead>
-                  <TableHead className="text-right">Realisasi (Kg)</TableHead>
                   <TableHead className="text-right">Taksasi (Kg)</TableHead>
+                  <TableHead className="text-right">Realisasi (Kg)</TableHead>
                   <TableHead className="text-right">Selisih (Kg)</TableHead>
+                  <TableHead className="text-right">Persen</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -177,9 +178,10 @@ export default function Trend() {
                     <TableCell>{r.estateId}</TableCell>
                     <TableCell>{r.division_id}</TableCell>
                     <TableCell>{r.block}</TableCell>
-                    <TableCell className="text-right">{r.realKg}</TableCell>
                     <TableCell className="text-right">{r.taksasiKg}</TableCell>
+                    <TableCell className="text-right">{r.realKg}</TableCell>
                     <TableCell className="text-right">{r.diffKg >= 0 ? `+${r.diffKg}` : r.diffKg}</TableCell>
+                    <TableCell className="text-right">{((r.realKg / r.taksasiKg) * 100).toFixed(2) || 0}%</TableCell>
                   </TableRow>
                 ))}
                 {!loading && rows.length === 0 && !error && (

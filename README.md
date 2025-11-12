@@ -71,9 +71,9 @@ Gunakan kredensial berikut untuk mencoba aplikasi:
 
 | Role | Email | Password |
 |------|-------|----------|
-| 👔 Manager | `manager@sawit.com` | `manager123` |
-| 👷 Foreman | `foreman@sawit.com` | `foreman123` |
-| 👤 Employee | `employee@sawit.com` | `employee123` |
+| 👔 Manager | `manager@aresta.com` | `manager123` |
+| 👷 Foreman | `foreman@aresta.com` | `foreman123` |
+| 👤 Employee | `employee@aresta.com` | `employee123` |
 
 > ⚠️ **Note**: Kredensial ini hanya untuk demo dan disimpan di `src/contexts/AuthContext.tsx`
 

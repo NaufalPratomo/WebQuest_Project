@@ -22,6 +22,34 @@ export default function Transport() {
   const [rows, setRows] = useState<AngkutRow[]>([]);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const exportCsv = () => {
+    const header = ['date_panen','date_angkut','estateId','division_id','block_no','weightKg'];
+    const escape = (v: unknown) => {
+      const s = v === undefined || v === null ? '' : String(v);
+      if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+      return s;
+    };
+    const lines = [header.join(',')].concat(
+      filtered.map(r => [
+        r.date_panen,
+        r.date_angkut,
+        r.estateId,
+        r.division_id,
+        r.block_no,
+        r.weightKg,
+      ].map(escape).join(','))
+    );
+    const csv = '\ufeff' + lines.join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `angkut_${datePanen}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   useEffect(() => {
     api.estates().then(setEstates).catch(() => toast.error('Gagal memuat estate'));
@@ -153,6 +181,13 @@ export default function Transport() {
               onClick={() => { if (!uploading) fileInputRef.current?.click(); }}
             >
               Import
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={exportCsv}
+            >
+              Export
             </Button>
             <input
               ref={fileInputRef}

@@ -94,7 +94,7 @@ export default function Transport() {
       const idx = (k: string) => header.indexOf(k);
       const requireIdx = (...keys: string[]) => { for (const k of keys) if (idx(k) === -1) throw new Error(`Kolom '${k}' tidak ditemukan`); };
       requireIdx('date_panen','date_angkut','estateid','division_id','block_no','weightkg');
-      const bulk: AngkutRow[] = lines.slice(1).map((line) => {
+      const parsed: AngkutRow[] = lines.slice(1).map((line) => {
         const cols = line.split(',');
         return {
           date_panen: cols[idx('date_panen')],
@@ -105,9 +105,29 @@ export default function Transport() {
           weightKg: Number(cols[idx('weightkg')]),
         } as AngkutRow;
       }).filter(r => r.date_panen && r.date_angkut && r.estateId && r.division_id && r.block_no && !Number.isNaN(r.weightKg));
-      if (bulk.length === 0) throw new Error('Tidak ada baris valid');
-      await api.angkutCreate(bulk);
-      toast.success(`Import ${bulk.length} baris berhasil`);
+      const key = (r: AngkutRow) => `${String(r.date_panen).slice(0,10)}|${String(r.date_angkut).slice(0,10)}|${r.estateId}|${r.division_id}|${r.block_no}`;
+      const dates = Array.from(new Set(parsed.map(r => String(r.date_panen).slice(0,10))));
+      let existing: AngkutRow[] = [];
+      for (const d of dates) {
+        try {
+          const list = await api.angkutList({ date_panen: d });
+          existing = existing.concat(list);
+        } catch { /* ignore per-date error */ }
+      }
+      const existingKeys = new Set(existing.map(key));
+      const seen = new Set<string>();
+      const bulk = parsed.filter(r => {
+        const k = key(r);
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return !existingKeys.has(k);
+      });
+      if (bulk.length === 0) {
+        toast.info('Semua baris sudah ada, tidak ada data baru');
+      } else {
+        await api.angkutCreate(bulk);
+        toast.success(`Import ${bulk.length} baris berhasil`);
+      }
       const latest = await api.angkutList({ date_panen: datePanen });
       setRows(latest);
     } catch (e: unknown) {

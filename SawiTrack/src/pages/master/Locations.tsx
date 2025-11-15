@@ -79,6 +79,16 @@ const Locations = () => {
     >
   >({});
 
+  // Helper function to format numbers: 0 stays as "0", whole numbers without decimals, decimals with 3 digits
+  const formatNumber = (value: number | null | undefined): string => {
+    if (value == null) return "-";
+    if (value === 0) return "0";
+    // Check if it's a whole number
+    if (Number.isInteger(value)) return value.toString();
+    // Has decimals, show with 3 decimal places
+    return value.toFixed(3);
+  };
+
   useEffect(() => {
     let mounted = true;
     setLoading(true);
@@ -602,15 +612,23 @@ const Locations = () => {
                                   {String(block.id_blok ?? "")}
                                 </TableCell>
                                 <TableCell className="text-right font-medium">
-                                  {block.luas_blok ?? "-"}
+                                  {typeof block.luas_blok === "number"
+                                    ? formatNumber(block.luas_blok)
+                                    : block.luas_blok ?? "-"}
                                 </TableCell>
                                 <TableCell className="text-right font-medium">
-                                  {block.jumlah_pokok ??
-                                    block.jumlak_pokok ??
-                                    "-"}
+                                  {(() => {
+                                    const val =
+                                      block.jumlah_pokok ?? block.jumlak_pokok;
+                                    return typeof val === "number"
+                                      ? formatNumber(val)
+                                      : "-";
+                                  })()}
                                 </TableCell>
                                 <TableCell className="text-right font-medium">
-                                  {block.SPH ?? "-"}
+                                  {typeof block.SPH === "number"
+                                    ? formatNumber(block.SPH)
+                                    : block.SPH ?? "-"}
                                 </TableCell>
                                 <TableCell>
                                   {String(block.jenis_tanah ?? "")}
@@ -625,24 +643,40 @@ const Locations = () => {
                                   {String(block.jenis_bibit ?? "-")}
                                 </TableCell>
                                 <TableCell className="text-right">
-                                  {block.luas_nursery ?? "-"}
+                                  {typeof block.luas_nursery === "number"
+                                    ? formatNumber(block.luas_nursery)
+                                    : block.luas_nursery ?? "-"}
                                 </TableCell>
                                 <TableCell className="text-right">
-                                  {block.luas_lain___lain ??
-                                    block.luas_lain__lain ??
-                                    "-"}
+                                  {(() => {
+                                    const val =
+                                      block.luas_lain___lain ??
+                                      block.luas_lain__lain;
+                                    return typeof val === "number"
+                                      ? formatNumber(val)
+                                      : "-";
+                                  })()}
                                 </TableCell>
                                 <TableCell className="text-right">
-                                  {block.luas_garapan ?? "-"}
+                                  {typeof block.luas_garapan === "number"
+                                    ? formatNumber(block.luas_garapan)
+                                    : block.luas_garapan ?? "-"}
                                 </TableCell>
                                 <TableCell className="text-right">
-                                  {block.luas_rawa ?? "-"}
+                                  {typeof block.luas_rawa === "number"
+                                    ? formatNumber(block.luas_rawa)
+                                    : block.luas_rawa ?? "-"}
                                 </TableCell>
                                 <TableCell className="text-right">
-                                  {block.luas_area_non_efektif ?? "-"}
+                                  {typeof block.luas_area_non_efektif ===
+                                  "number"
+                                    ? formatNumber(block.luas_area_non_efektif)
+                                    : block.luas_area_non_efektif ?? "-"}
                                 </TableCell>
                                 <TableCell className="text-right">
-                                  {block.luas_konservasi ?? "-"}
+                                  {typeof block.luas_konservasi === "number"
+                                    ? formatNumber(block.luas_konservasi)
+                                    : block.luas_konservasi ?? "-"}
                                 </TableCell>
                                 <TableCell>
                                   {block.location?.type ?? "—"}

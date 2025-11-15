@@ -11,7 +11,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Search, Edit, Trash2 } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Upload, Download } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -154,9 +154,9 @@ const Employees = () => {
           {error && <p className="text-sm text-red-600">{error}</p>}
           {loading && <p className="text-sm text-muted-foreground">Memuat data...</p>}
         </div>
-        <Dialog open={openAdd} onOpenChange={setOpenAdd}>
+          <Dialog open={openAdd} onOpenChange={setOpenAdd}>
           <DialogTrigger asChild>
-            <Button>
+            <Button className="bg-orange-500 hover:bg-orange-600">
               <Plus className="h-4 w-4 mr-2" />
               Tambah Karyawan
             </Button>
@@ -259,8 +259,14 @@ const Employees = () => {
               />
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="outline" onClick={exportCsv} disabled={filteredEmployees.length === 0}>Export</Button>
-              <Button variant="outline" disabled={uploading} onClick={() => { if (!uploading) fileInputRef.current?.click(); }}>Import</Button>
+              <Button size="sm" variant="outline" className="border-green-500 text-green-600 hover:bg-green-50 hover:text-green-700" disabled={uploading} onClick={() => { if (!uploading) fileInputRef.current?.click(); }}>
+                <Upload className="mr-2 h-4 w-4" />
+                Import
+              </Button>
+              <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={exportCsv} disabled={filteredEmployees.length === 0}>
+                <Download className="mr-2 h-4 w-4" />
+                Export
+              </Button>
               <input ref={fileInputRef} type="file" accept=".csv" className="hidden" disabled={uploading} onChange={(e)=> e.target.files && handleCsvUpload(e.target.files[0])} />
             </div>
           </div>

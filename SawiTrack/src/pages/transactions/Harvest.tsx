@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Upload } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -20,6 +21,7 @@ export default function Harvest() {
   const [weightKg, setWeightKg] = useState<number | ''>('');
   const [rows, setRows] = useState<PanenRow[]>([]);
   const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     api.estates().then(setEstates).catch(() => toast.error('Gagal memuat estate'));
@@ -166,9 +168,24 @@ export default function Harvest() {
                   </div>
                   <div className="flex gap-2">
                     <Button onClick={addRow}>Simpan</Button>
-                    <label className="inline-flex items-center gap-2 cursor-pointer">
-                      <Input type="file" accept=".csv" onChange={(e)=> e.target.files && handleCsvUpload(e.target.files[0])} disabled={uploading} />
-                    </label>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="bg-green-600 hover:bg-green-700"
+                      disabled={uploading}
+                      onClick={() => { if (!uploading) fileInputRef.current?.click(); }}
+                    >
+                      <Upload className="mr-2 h-4 w-4" />
+                      Import
+                    </Button>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".csv"
+                      className="hidden"
+                      onChange={(e)=> e.target.files && handleCsvUpload(e.target.files[0])}
+                      disabled={uploading}
+                    />
                   </div>
                 </div>
               </DialogContent>

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Upload, Download, Plus } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -142,7 +143,39 @@ export default function Transport() {
     <div className="space-y-4">
       <Card>
         <CardHeader>
-          <h3 className="text-lg font-semibold">Transaksi Angkutan</h3>
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-lg font-semibold">Transaksi Angkutan</h3>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="border-green-500 text-green-600 hover:bg-green-50 hover:text-green-700"
+                disabled={uploading}
+                onClick={() => { if (!uploading) fileInputRef.current?.click(); }}
+              >
+                <Upload className="mr-2 h-4 w-4" />
+                Import
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                className="bg-green-600 hover:bg-green-700"
+                onClick={exportCsv}
+              >
+                <Download className="mr-2 h-4 w-4" />
+                Export
+              </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv"
+                className="hidden"
+                onChange={(e)=> e.target.files && handleCsvUpload(e.target.files[0])}
+                disabled={uploading}
+              />
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
           <div>
@@ -152,7 +185,7 @@ export default function Transport() {
           <div className="flex gap-2">
             <Dialog>
               <DialogTrigger asChild>
-                <Button>Tambah Angkutan</Button>
+                <Button className="bg-orange-500 hover:bg-orange-600"><Plus className="mr-2 h-4 w-4" />Tambah Angkutan</Button>
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
@@ -194,29 +227,7 @@ export default function Transport() {
                 </div>
               </DialogContent>
             </Dialog>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={uploading}
-              onClick={() => { if (!uploading) fileInputRef.current?.click(); }}
-            >
-              Import
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={exportCsv}
-            >
-              Export
-            </Button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".csv"
-              className="hidden"
-              onChange={(e)=> e.target.files && handleCsvUpload(e.target.files[0])}
-              disabled={uploading}
-            />
+            
           </div>
         </CardContent>
       </Card>

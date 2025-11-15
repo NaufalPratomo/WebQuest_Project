@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Upload, FileSpreadsheet } from 'lucide-react';
+import { Upload, FileSpreadsheet, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/contexts/AuthContext';
@@ -123,7 +123,7 @@ const InputReport = () => {
             <CardContent>
               <Dialog>
                 <DialogTrigger asChild>
-                  <Button>Tambah Laporan</Button>
+                  <Button className="bg-orange-500 hover:bg-orange-600"><Plus className="mr-2 h-4 w-4" />Tambah Laporan</Button>
                 </DialogTrigger>
                 <DialogContent>
                   <DialogHeader>

@@ -170,7 +170,7 @@ const RealHarvest = () => {
         </div>
         <Dialog>
           <DialogTrigger asChild>
-            <Button>
+            <Button className="bg-orange-500 hover:bg-orange-600">
               <Plus className="h-4 w-4 mr-2" />
               Tambah Real Panen
             </Button>

@@ -4,6 +4,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
+import { Download } from 'lucide-react';
 import { toast } from 'sonner';
 
 type Row = { estateId: string; division_id: number; totalKg: number; blockCount: number };
@@ -126,7 +127,10 @@ export default function Statement() {
             <h3 className="text-lg font-semibold">Report Realisasi Panen (Realisasi per Divisi)</h3>
             <div className="flex items-center gap-2">
               <Button variant="outline" size="sm" onClick={load} disabled={loading}>Refresh</Button>
-              <Button variant="outline" size="sm" onClick={exportCsv} disabled={rows.length === 0}>Export</Button>
+              <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={exportCsv} disabled={rows.length === 0}>
+                <Download className="mr-2 h-4 w-4" />
+                Export
+              </Button>
             </div>
           </div>
         </CardHeader>

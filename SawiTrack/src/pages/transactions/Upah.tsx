@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Plus } from 'lucide-react';
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api, Employee } from '@/lib/api';
@@ -104,7 +105,7 @@ export default function Upah() {
             {/* Add wage via dialog */}
             <Dialog>
               <DialogTrigger asChild>
-                <Button>Tambah Upah</Button>
+                <Button className="bg-orange-500 hover:bg-orange-600"><Plus className="mr-2 h-4 w-4" />Tambah Upah</Button>
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>

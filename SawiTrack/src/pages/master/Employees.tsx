@@ -18,6 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from 'sonner';
 import { api, Employee as EmployeeDoc } from '@/lib/api';
 import EmployeeEditDialog from './components/EmployeeEditDialog';
+import { useRef } from 'react';
 
 interface EmployeeRow {
   id: string;
@@ -40,6 +41,80 @@ const Employees = () => {
   );
   const [openEdit, setOpenEdit] = useState(false);
   const [editTarget, setEditTarget] = useState<EmployeeRow | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const exportCsv = () => {
+    const header = ['id','name','email','role','division','status'];
+    const escape = (v: unknown) => {
+      const s = v === undefined || v === null ? '' : String(v);
+      if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+      return s;
+    };
+    const lines = [header.join(',')].concat(
+      filteredEmployees.map(r => [r.id, r.name, r.email, r.role, r.division ?? '', r.status].map(escape).join(','))
+    );
+    const csv = '\ufeff' + lines.join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `employees.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+  const handleCsvUpload = async (file: File) => {
+    setUploading(true);
+    try {
+      const text = await file.text();
+      const lines = text.split(/\r?\n/).filter(Boolean);
+      if (lines.length < 2) throw new Error('CSV kosong');
+      const header = lines[0].split(',').map((s)=>s.trim().toLowerCase());
+      const idx = (k: string) => header.indexOf(k);
+      const requireIdx = (...keys: string[]) => { for (const k of keys) if (idx(k) === -1) throw new Error(`Kolom '${k}' tidak ditemukan`); };
+      requireIdx('name','email','role');
+      const toBody = (cols: string[]) => {
+        const name = cols[idx('name')];
+        const email = cols[idx('email')];
+        const role = (cols[idx('role')] || 'employee').toLowerCase() as 'manager'|'foreman'|'employee';
+        const division = idx('division') !== -1 ? (cols[idx('division')] || '') : '';
+        const status = idx('status') !== -1 ? (cols[idx('status')] || 'active') : 'active';
+        const password = idx('password') !== -1 ? (cols[idx('password')] || '') : '';
+        return { name, email, role, division: division || null, status: (status === 'inactive' ? 'inactive' : 'active'), ...(password ? { password } : {}) };
+      };
+      const existingEmails = new Set(rows.map(r => r.email.toLowerCase()));
+      const seen = new Set<string>();
+      const bodies = lines.slice(1)
+        .map((line)=> line.split(','))
+        .map(toBody)
+        .filter(b => b.name && b.email && b.role)
+        .filter(b => {
+          const em = String(b.email).toLowerCase();
+          if (seen.has(em)) return false; // duplicate inside CSV
+          seen.add(em);
+          return !existingEmails.has(em); // skip if already exists
+        });
+      if (bodies.length === 0) throw new Error('Tidak ada baris valid');
+      const results = await Promise.allSettled(bodies.map((b)=> api.createEmployee(b)));
+      const successes = results.filter((r): r is PromiseFulfilledResult<EmployeeDoc> => r.status === 'fulfilled').map(r=>r.value);
+      const failures = results.filter((r)=> r.status === 'rejected');
+      const mapped: EmployeeRow[] = successes.map((e)=> ({ id: e._id, name: e.name, email: e.email, role: e.role, division: e.division || undefined, status: e.status }));
+      if (mapped.length) setRows(prev => [...mapped, ...prev]);
+      if (failures.length === 0) {
+        toast.success(`Import ${mapped.length} karyawan berhasil`);
+      } else if (mapped.length > 0) {
+        toast.info(`Berhasil ${mapped.length} baris, gagal ${failures.length} baris`);
+      } else {
+        throw new Error('Semua baris gagal diimport');
+      }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Gagal import CSV';
+      toast.error(msg);
+    } finally {
+      setUploading(false);
+    }
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -170,7 +245,7 @@ const Employees = () => {
 
       <Card>
         <CardHeader>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center justify-between gap-4">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -179,6 +254,11 @@ const Employees = () => {
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-10"
               />
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={exportCsv} disabled={filteredEmployees.length === 0}>Export</Button>
+              <Button variant="outline" disabled={uploading} onClick={() => { if (!uploading) fileInputRef.current?.click(); }}>Import</Button>
+              <input ref={fileInputRef} type="file" accept=".csv" className="hidden" disabled={uploading} onChange={(e)=> e.target.files && handleCsvUpload(e.target.files[0])} />
             </div>
           </div>
         </CardHeader>

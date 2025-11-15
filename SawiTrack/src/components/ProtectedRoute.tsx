@@ -9,12 +9,16 @@ interface ProtectedRouteProps {
 
 const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) => {
   const { user, isAuthenticated, hydrated } = useAuth();
+  const disableAuth = String(import.meta.env.VITE_DISABLE_AUTH || '').toLowerCase() === '1' || String(import.meta.env.VITE_DISABLE_AUTH || '').toLowerCase() === 'true';
 
   // Wait for auth to hydrate from storage before deciding
   if (!hydrated) {
     return null; // or a spinner/skeleton if preferred
   }
 
+  if (disableAuth) {
+    return <>{children}</>;
+  }
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }

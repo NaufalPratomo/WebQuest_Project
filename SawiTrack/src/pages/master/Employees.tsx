@@ -80,8 +80,11 @@ const Employees = () => {
         const role = (cols[idx('role')] || 'employee').toLowerCase() as 'manager'|'foreman'|'employee';
         const division = idx('division') !== -1 ? (cols[idx('division')] || '') : '';
         const status = idx('status') !== -1 ? (cols[idx('status')] || 'active') : 'active';
-        const password = idx('password') !== -1 ? (cols[idx('password')] || '') : '';
-        return { name, email, role, division: division || null, status: (status === 'inactive' ? 'inactive' : 'active'), ...(password ? { password } : {}) };
+        const providedPwd = idx('password') !== -1 ? (cols[idx('password')] || '') : '';
+        const base = (name || (email?.split('@')[0] ?? '')).toString();
+        const defaultPwd = base.trim().replace(/\s+/g,'') + '123';
+        const finalPwd = providedPwd || defaultPwd;
+        return { name, email, role, division: division || null, status: (status === 'inactive' ? 'inactive' : 'active'), ...(finalPwd ? { password: finalPwd } : {}) };
       };
       const existingEmails = new Set(rows.map(r => r.email.toLowerCase()));
       const seen = new Set<string>();

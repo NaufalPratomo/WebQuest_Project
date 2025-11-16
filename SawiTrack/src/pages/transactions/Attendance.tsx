@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus } from 'lucide-react';
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -14,13 +15,22 @@ type AttendanceRow = { _id?: string; date: string; employeeId: string; division_
 export default function Attendance() {
   const [date, setDate] = useState<string>(new Date().toISOString().slice(0,10));
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [employeeId, setEmployeeId] = useState<string>('');
-  const [status, setStatus] = useState<'present' | 'absent' | 'leave'>('present');
+  const [estates, setEstates] = useState<Array<{ _id: string; estate_name: string }>>([]);
+  const [estateId, setEstateId] = useState<string>('');
+  const [divisions, setDivisions] = useState<Array<{ division_id: number }>>([]);
+  const [divisionId, setDivisionId] = useState<number | ''>('');
+  type BlockOption = { no_blok?: string; id_blok?: string };
+  const [blocks, setBlocks] = useState<BlockOption[]>([]);
+  const [blockNo, setBlockNo] = useState<string>('');
+  const [mandorId, setMandorId] = useState<string>('');
+  const [pemanenId, setPemanenId] = useState<string>('');
+  const [statusLabel, setStatusLabel] = useState<'hadir' | 'sakit' | 'alpha' | 'izin_dibayar'>('hadir');
   const [notes] = useState<string>('');
   const [rows, setRows] = useState<AttendanceRow[]>([]);
 
   useEffect(() => {
     api.employees().then(setEmployees).catch(() => toast.error('Gagal memuat karyawan'));
+    api.estates().then(setEstates).catch(() => setEstates([]));
   }, []);
 
   useEffect(() => {
@@ -30,25 +40,56 @@ export default function Attendance() {
       .catch(() => setRows([]));
   }, [date]);
 
+  useEffect(() => {
+    if (!estateId) { setDivisions([]); setDivisionId(''); return; }
+    api.divisions(estateId).then(setDivisions).catch(() => setDivisions([]));
+  }, [estateId]);
+
+  useEffect(() => {
+    if (!estateId || !divisionId) { setBlocks([]); setBlockNo(''); return; }
+    api.blocks(estateId, Number(divisionId))
+      .then((b) => setBlocks(Array.isArray(b) ? (b as BlockOption[]) : []))
+      .catch(() => setBlocks([]));
+  }, [estateId, divisionId]);
+
   // Attendance now only records presence status; wages handled in Upah page
 
   const filtered = useMemo(() => rows.filter(r => r.date.startsWith(date)), [rows, date]);
 
   const addRow = async () => {
     try {
-      if (!date || !employeeId || !status) {
+      if (!date || !pemanenId || !statusLabel) {
         toast.error('Lengkapi input');
         return;
       }
-      const body = { date, employeeId, status } as const;
+      let mappedStatus: 'present' | 'absent' | 'leave' = 'leave';
+      if (statusLabel === 'hadir') mappedStatus = 'present';
+      else if (statusLabel === 'alpha') mappedStatus = 'absent';
+      else mappedStatus = 'leave';
+      const mandorName = employees.find(e => e._id === mandorId)?.name || '';
+      const foundEmp = employees.find(e => e.name.toLowerCase() === pemanenId.toLowerCase());
+      const employeeIdToSend = foundEmp?._id || pemanenId;
+      const notesStr = [
+        statusLabel,
+        estateId ? `estate=${estateId}` : '',
+        divisionId ? `div=${divisionId}` : '',
+        blockNo ? `blok=${blockNo}` : '',
+        mandorName ? `mandor=${mandorName}` : '',
+        pemanenId ? `pemanen=${pemanenId}` : ''
+      ].filter(Boolean).join('; ');
+      const body = { date, employeeId: employeeIdToSend, division_id: divisionId ? Number(divisionId) : undefined, status: mappedStatus, notes: notesStr } as const;
       await api.attendanceCreate(body);
       toast.success('Absensi tersimpan');
       // reload list
   const latest = await api.attendanceList({ date });
   setRows(latest.map(r => ({ ...r, status: r.status as 'present'|'absent'|'leave' })) as AttendanceRow[]);
       // reset some inputs
-      setEmployeeId('');
-      setStatus('present');
+      setEstateId('');
+      setDivisionId('');
+      setBlockNo('');
+      setMandorId('');
+      setPemanenId('');
+      setStatusLabel('hadir');
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Gagal menyimpan';
       toast.error(msg);
@@ -76,28 +117,87 @@ export default function Attendance() {
                 <DialogHeader>
                   <DialogTitle>Tambah Absensi Harian</DialogTitle>
                 </DialogHeader>
-                <div className="grid grid-cols-1 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <Label>Karyawan</Label>
-                    <select className="w-full h-10 border rounded px-2" value={employeeId} onChange={(e)=> setEmployeeId(e.target.value)}>
-                      <option value="">Pilih</option>
-                      {employees.map(emp => (
-                        <option key={emp._id} value={emp._id}>{emp.name}</option>
-                      ))}
-                    </select>
+                    <Label>Tgl_Panen</Label>
+                    <Input type="date" value={date} onChange={(e)=> setDate(e.target.value)} />
                   </div>
                   <div>
-                    <Label>Status</Label>
-                    <select className="w-full h-10 border rounded px-2" value={status} onChange={(e)=> setStatus(e.target.value as 'present'|'absent'|'leave')}>
-                      <option value="present">Hadir</option>
-                      <option value="absent">Tidak Hadir</option>
-                      <option value="leave">Cuti/Izin</option>
-                    </select>
+                    <Label>Estate</Label>
+                    <Select value={estateId} onValueChange={(v)=> setEstateId(v)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Pilih estate" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {estates.map(es => (
+                          <SelectItem key={es._id} value={es._id}>{es.estate_name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
-                  {/* Job Code, HK, and Notes moved to Upah page */}
-                  <div className="flex gap-2">
-                    <Button onClick={addRow}>Simpan</Button>
+                  <div>
+                    <Label>Div</Label>
+                    <Select value={divisionId ? String(divisionId) : ''} onValueChange={(v)=> setDivisionId(v ? Number(v) : '')}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Pilih divisi" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {divisions.map(d => (
+                          <SelectItem key={d.division_id} value={String(d.division_id)}>
+                            {`Divisi ${d.division_id}`}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
+                  <div>
+                    <Label>Blok</Label>
+                    <Select value={blockNo} onValueChange={(v)=> setBlockNo(v)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Pilih blok" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {blocks.map((b, i) => {
+                          const label = String(b.no_blok || b.id_blok || '');
+                          return <SelectItem key={`${label}-${i}`} value={label}>{label || `Blok ${i+1}`}</SelectItem>;
+                        })}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>mandor</Label>
+                    <Select value={mandorId} onValueChange={(v)=> setMandorId(v)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Pilih mandor" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {employees.map(emp => (
+                          <SelectItem key={emp._id} value={emp._id}>{emp.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>pemanen</Label>
+                    <Input type="text" placeholder="Nama pemanen" value={pemanenId} onChange={(e)=> setPemanenId(e.target.value)} />
+                  </div>
+                  <div>
+                    <Label>sts_hadir</Label>
+                    <Select value={statusLabel} onValueChange={(v)=> setStatusLabel(v as 'hadir'|'sakit'|'alpha'|'izin_dibayar')}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Pilih status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="hadir">hadir</SelectItem>
+                        <SelectItem value="sakit">sakit</SelectItem>
+                        <SelectItem value="alpha">tidak hadir diganti mangkir/alpha</SelectItem>
+                        <SelectItem value="izin_dibayar">izin dibayar</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="flex gap-2 mt-2">
+                  <Button onClick={addRow}>Simpan</Button>
                 </div>
               </DialogContent>
             </Dialog>

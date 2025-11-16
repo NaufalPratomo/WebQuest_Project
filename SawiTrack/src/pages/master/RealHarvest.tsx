@@ -13,16 +13,18 @@ import { api } from '@/lib/api';
 type RealRow = {
   id: string;
   timestamp: string;
-  date: string; // YYYY-MM-DD
+  date: string;
   estateId?: string;
   estateName?: string;
   division: string;
   block?: string;
+  noTPH?: string;
   mandor: string;
   pemanen: string;
-  janjangTBS: number;
-  janjangKosong: number;
-  janjangAngkut: number;
+  jobType: string;
+  hasilJjg: number;
+  upahBasis: number;
+  premi: number;
   kgAngkut: number;
 };
 
@@ -41,12 +43,13 @@ const RealHarvest = () => {
     estateId: '',
     division: '',
     blockNo: '',
+    noTPH: '',
     mandor: '',
     pemanen: '',
-    janjangTBS: '0',
-    janjangKosong: '0',
-    janjangAngkut: '0',
-    kgAngkut: '0',
+    jobType: '',
+    hasilJjg: '0',
+    upahBasis: 0,
+    premi: '0',
   });
 
   useEffect(() => {
@@ -84,11 +87,12 @@ const RealHarvest = () => {
   ), [rows, search]);
 
   const totals = useMemo(() => {
-    const janjangTBS = filteredRows.reduce((s, r) => s + (r.janjangTBS || 0), 0);
-    const janjangKosong = filteredRows.reduce((s, r) => s + (r.janjangKosong || 0), 0);
-    const janjangAngkut = filteredRows.reduce((s, r) => s + (r.janjangAngkut || 0), 0);
+    const hasilJjg = filteredRows.reduce((s, r) => s + (r.hasilJjg || 0), 0);
+    const upahBasis = filteredRows.reduce((s, r) => s + (r.upahBasis || 0), 0);
+    const premi = filteredRows.reduce((s, r) => s + (r.premi || 0), 0);
     const kgAngkut = filteredRows.reduce((s, r) => s + (r.kgAngkut || 0), 0);
-    return { janjangTBS, janjangKosong, janjangAngkut, kgAngkut };
+    const janjangTBS = hasilJjg;
+    return { hasilJjg, upahBasis, premi, kgAngkut, janjangTBS };
   }, [filteredRows]);
 
   // Load taksasi rows from localStorage to compare
@@ -117,8 +121,8 @@ const RealHarvest = () => {
   }
 
   function handleAdd() {
-    if (!form.division || !form.mandor || !form.pemanen) {
-      toast.error('Mohon lengkapi mandor, pemanen, dan divisi');
+    if (!form.division || !form.mandor || !form.pemanen || !form.jobType) {
+      toast.error('Mohon lengkapi divisi, mandor, pemanen, dan pekerjaan');
       return;
     }
     if (!form.blockNo) {
@@ -126,6 +130,9 @@ const RealHarvest = () => {
       return;
     }
     const estateName = estates.find(e => e._id === form.estateId)?.estate_name;
+    const hasil = Number(form.hasilJjg || 0);
+    const upah = hasil * 400;
+    const premi = Number(form.premi || 0);
     const row: RealRow = {
       id: `${Date.now()}`,
       timestamp: new Date().toISOString(),
@@ -134,17 +141,19 @@ const RealHarvest = () => {
       estateName,
       division: form.division,
       block: form.blockNo,
+      noTPH: form.noTPH || '',
       mandor: form.mandor,
       pemanen: form.pemanen,
-      janjangTBS: Number(form.janjangTBS || 0),
-      janjangKosong: Number(form.janjangKosong || 0),
-      janjangAngkut: Number(form.janjangAngkut || 0),
-      kgAngkut: Number(form.kgAngkut || 0),
+      jobType: form.jobType,
+      hasilJjg: hasil,
+      upahBasis: upah,
+      premi,
+      kgAngkut: 0,
     };
     const next = [...rows, row];
     persist(next);
-    toast.success('Data panen real ditambahkan');
-    setForm({ estateId: '', division: '', blockNo: '', mandor: '', pemanen: '', janjangTBS: '0', janjangKosong: '0', janjangAngkut: '0', kgAngkut: '0' });
+    toast.success('Data realisasi panen ditambahkan');
+    setForm({ estateId: '', division: '', blockNo: '', noTPH: '', mandor: '', pemanen: '', jobType: '', hasilJjg: '0', upahBasis: 0, premi: '0' });
   }
 
   const janjangComparison = useMemo(() => {
@@ -181,7 +190,7 @@ const RealHarvest = () => {
             </DialogHeader>
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label>Tanggal</Label>
+                <Label>Tgl_Panen</Label>
                 <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
               </div>
               <div className="space-y-2">
@@ -198,7 +207,7 @@ const RealHarvest = () => {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Divisi</Label>
+                <Label>Div</Label>
                 <Select value={form.division} onValueChange={(v) => setForm(prev => ({ ...prev, division: v }))}>
                   <SelectTrigger>
                     <SelectValue placeholder="Pilih divisi" />
@@ -233,28 +242,50 @@ const RealHarvest = () => {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Mandor</Label>
-                <Input placeholder="Nama mandor" value={form.mandor} onChange={(e) => setForm(prev => ({ ...prev, mandor: e.target.value }))} />
+                <Label>NoTPH</Label>
+                <Input placeholder="Nomor TPH" value={form.noTPH} onChange={(e) => setForm(prev => ({ ...prev, noTPH: e.target.value }))} />
               </div>
               <div className="space-y-2">
-                <Label>Pemanen</Label>
-                <Input placeholder="Nama pemanen" value={form.pemanen} onChange={(e) => setForm(prev => ({ ...prev, pemanen: e.target.value }))} />
+                <Label>mandor</Label>
+                <Input placeholder="Nama Mandor" value={form.mandor} onChange={(e) => setForm(prev => ({ ...prev, mandor: e.target.value }))} />
               </div>
               <div className="space-y-2">
-                <Label>Janjang TBS</Label>
-                <Input type="number" min={0} value={form.janjangTBS} onChange={(e) => setForm(prev => ({ ...prev, janjangTBS: e.target.value }))} />
+                <Label>pemanen</Label>
+                <Input placeholder="Nama Pemanen" value={form.pemanen} onChange={(e) => setForm(prev => ({ ...prev, pemanen: e.target.value }))} />
               </div>
               <div className="space-y-2">
-                <Label>Janjang Kosong</Label>
-                <Input type="number" min={0} value={form.janjangKosong} onChange={(e) => setForm(prev => ({ ...prev, janjangKosong: e.target.value }))} />
+                <Label>pekerjaan</Label>
+                <Select value={form.jobType} onValueChange={(v) => setForm(prev => ({ ...prev, jobType: v }))}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Pilih pekerjaan" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="panen">panen</SelectItem>
+                    <SelectItem value="kutip brodolan">kutip brodolan</SelectItem>
+                    <SelectItem value="langsir manual">langsir manual</SelectItem>
+                    <SelectItem value="langsir kerbau">langsir kerbau</SelectItem>
+                    <SelectItem value="langsir motor">langsir motor</SelectItem>
+                    <SelectItem value="langsir pickup/tracktor">langsir pickup/tracktor</SelectItem>
+                    <SelectItem value="muat dt ke pks">muat dt ke pks</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
-                <Label>Janjang Angkut</Label>
-                <Input type="number" min={0} value={form.janjangAngkut} onChange={(e) => setForm(prev => ({ ...prev, janjangAngkut: e.target.value }))} />
+                <Label>hasil kerja (jjg)</Label>
+                <Input type="number" min={0} value={form.hasilJjg} onChange={(e) => {
+                  const val = e.target.value;
+                  const hasil = Number(val || 0);
+                  const upah = hasil * 400;
+                  setForm(prev => ({ ...prev, hasilJjg: val, upahBasis: upah }));
+                }} />
               </div>
               <div className="space-y-2">
-                <Label>Kg Angkut</Label>
-                <Input type="number" min={0} value={form.kgAngkut} onChange={(e) => setForm(prev => ({ ...prev, kgAngkut: e.target.value }))} />
+                <Label>upah basis</Label>
+                <Input type="number" value={form.upahBasis} onChange={()=>{}} disabled />
+              </div>
+              <div className="space-y-2">
+                <Label>premi</Label>
+                <Input type="number" min={0} value={form.premi} onChange={(e) => setForm(prev => ({ ...prev, premi: e.target.value }))} />
               </div>
             </div>
             <Button className="w-full mt-2" onClick={handleAdd}>Simpan</Button>
@@ -293,10 +324,12 @@ const RealHarvest = () => {
                 <TableHead>Div</TableHead>
                 <TableHead>Blok</TableHead>
                 <TableHead>NoTPH</TableHead>
-                <TableHead>Idmandor</TableHead>
-                <TableHead>Idpemanen</TableHead>
-                <TableHead className="text-right">jjg_panen_TBS</TableHead>
-                <TableHead className="text-right">jjg_panen_kosong</TableHead>
+                <TableHead>mandor</TableHead>
+                <TableHead>pemanen</TableHead>
+                <TableHead>pekerjaan</TableHead>
+                <TableHead className="text-right">hasil kerja (jjg)</TableHead>
+                <TableHead className="text-right">upah basis</TableHead>
+                <TableHead className="text-right">premi</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -306,17 +339,20 @@ const RealHarvest = () => {
                   <TableCell>{r.estateName || '-'}</TableCell>
                   <TableCell>{r.division}</TableCell>
                   <TableCell>{r.block || '-'}</TableCell>
-                  <TableCell>-</TableCell>
-                  <TableCell>{r.mandor}</TableCell>
-                  <TableCell>{r.pemanen}</TableCell>
-                  <TableCell className="text-right">{r.janjangTBS}</TableCell>
-                  <TableCell className="text-right">{r.janjangKosong}</TableCell>
+                  <TableCell>{r.noTPH || '-'}</TableCell>
+                  <TableCell>{r.mandor || '-'}</TableCell>
+                  <TableCell>{r.pemanen || '-'}</TableCell>
+                  <TableCell>{r.jobType}</TableCell>
+                  <TableCell className="text-right">{r.hasilJjg}</TableCell>
+                  <TableCell className="text-right">{r.upahBasis}</TableCell>
+                  <TableCell className="text-right">{r.premi}</TableCell>
                 </TableRow>
               ))}
               <TableRow>
-                <TableCell className="font-medium" colSpan={7}>Total</TableCell>
-                <TableCell className="text-right">{totals.janjangTBS}</TableCell>
-                <TableCell className="text-right">{totals.janjangKosong}</TableCell>
+                <TableCell className="font-medium" colSpan={8}>Total</TableCell>
+                <TableCell className="text-right">{totals.hasilJjg}</TableCell>
+                <TableCell className="text-right">{totals.upahBasis}</TableCell>
+                <TableCell className="text-right">{totals.premi}</TableCell>
               </TableRow>
             </TableBody>
           </Table>

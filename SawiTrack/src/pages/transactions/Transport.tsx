@@ -19,7 +19,10 @@ export default function Transport() {
   const [divisionId, setDivisionId] = useState<number | ''>('');
   const [blocks, setBlocks] = useState<BlockOption[]>([]);
   const [blockNo, setBlockNo] = useState('');
-  const [weightKg, setWeightKg] = useState<number | ''>('');
+  const [noTPH, setNoTPH] = useState('');
+  const [jjgAngkut, setJjgAngkut] = useState<number | ''>('');
+  const [noMobil, setNoMobil] = useState('');
+  const [namaSupir, setNamaSupir] = useState('');
   const [rows, setRows] = useState<AngkutRow[]>([]);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -70,15 +73,21 @@ export default function Transport() {
 
   const addRow = async () => {
     try {
-      if (!datePanen || !dateAngkut || !estateId || !divisionId || !blockNo || !weightKg) {
+      if (!datePanen || !dateAngkut || !estateId || !divisionId || !blockNo || !jjgAngkut) {
         toast.error('Lengkapi input');
         return;
       }
-      const body: AngkutRow = { date_panen: datePanen, date_angkut: dateAngkut, estateId, division_id: Number(divisionId), block_no: blockNo, weightKg: Number(weightKg) };
+      const notes = [
+        noTPH ? `notph=${noTPH}` : '',
+        `jjg_angkut=${jjgAngkut}`,
+        noMobil ? `no_mobil=${noMobil}` : '',
+        namaSupir ? `supir=${namaSupir}` : '',
+      ].filter(Boolean).join('; ');
+      const body: AngkutRow = { date_panen: datePanen, date_angkut: dateAngkut, estateId, division_id: Number(divisionId), block_no: blockNo, weightKg: 0, notes };
       const created = await api.angkutCreate(body);
       toast.success('Tersimpan');
       setRows(prev => Array.isArray(created) ? [...prev, ...created] : [...prev, created as AngkutRow]);
-      setBlockNo(''); setWeightKg('');
+      setBlockNo(''); setNoTPH(''); setJjgAngkut(''); setNoMobil(''); setNamaSupir('');
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Gagal menyimpan';
       toast.error(msg);
@@ -211,15 +220,30 @@ export default function Transport() {
                     </select>
                   </div>
                   <div>
-                    <Label>No Blok</Label>
-                    <input className="w-full h-10 border rounded px-2" list="blocks" value={blockNo} onChange={(e)=> setBlockNo(e.target.value)} />
-                    <datalist id="blocks">
-                      {blocks.map((b, i:number) => <option key={i} value={String(b.no_blok || b.id_blok || '')} />)}
-                    </datalist>
+                    <Label>Blok</Label>
+                    <select className="w-full h-10 border rounded px-2" value={blockNo} onChange={(e)=> setBlockNo(e.target.value)}>
+                      <option value="">Pilih</option>
+                      {blocks.map((b, i:number) => {
+                        const label = String(b.no_blok || b.id_blok || '');
+                        return <option key={i} value={label}>{label || `Blok ${i+1}`}</option>;
+                      })}
+                    </select>
                   </div>
                   <div>
-                    <Label>Berat (Kg)</Label>
-                    <Input type="number" value={weightKg} onChange={(e)=> setWeightKg(e.target.value ? Number(e.target.value) : '')} />
+                    <Label>NoTPH</Label>
+                    <Input type="text" value={noTPH} onChange={(e)=> setNoTPH(e.target.value)} />
+                  </div>
+                  <div>
+                    <Label>jjg_angkut</Label>
+                    <Input type="number" value={jjgAngkut} onChange={(e)=> setJjgAngkut(e.target.value ? Number(e.target.value) : '')} />
+                  </div>
+                  <div>
+                    <Label>No. Mobil</Label>
+                    <Input type="text" value={noMobil} onChange={(e)=> setNoMobil(e.target.value)} />
+                  </div>
+                  <div>
+                    <Label>Nama Supir</Label>
+                    <Input type="text" value={namaSupir} onChange={(e)=> setNamaSupir(e.target.value)} />
                   </div>
                 </div>
                 <div className="flex gap-2 mt-2">
@@ -259,8 +283,8 @@ export default function Transport() {
                     <TableCell>{r.estateId}</TableCell>
                     <TableCell>{r.division_id}</TableCell>
                     <TableCell>{r.block_no}</TableCell>
-                    <TableCell>-</TableCell>
-                    <TableCell className="text-right">-</TableCell>
+                    <TableCell>{noteVal(r.notes, 'notph') || '-'}</TableCell>
+                    <TableCell className="text-right">{noteVal(r.notes, 'jjg_angkut') || '-'}</TableCell>
                     <TableCell className="text-right">{r.weightKg}</TableCell>
                     <TableCell className="text-right">-</TableCell>
                     <TableCell className="text-right">-</TableCell>
@@ -277,3 +301,14 @@ export default function Transport() {
     </div>
   );
 }
+  const noteVal = (notes: string | undefined, key: string): string => {
+    if (!notes) return '';
+    try {
+      const parts = notes.split(/;\s*/);
+      for (const p of parts) {
+        const [k, v] = p.split('=');
+        if (k && k.trim() === key) return v ?? '';
+      }
+      return '';
+    } catch { return ''; }
+  };

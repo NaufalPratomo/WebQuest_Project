@@ -38,7 +38,30 @@ export default function Upah() {
 
   useEffect(() => {
     api.employees().then(setEmployees).catch(() => toast.error('Gagal memuat karyawan'));
-    api.jobcodes().then(setJobcodes).catch(() => setJobcodes([]));
+    // default job codes requested by user
+    const DEFAULT_JOBCODES: JobCode[] = [
+      { code: 'panen', name: 'Panen', category: 'panen', hkValue: 1 },
+      { code: 'kutip_brodolan', name: 'Kutip Brodolan', category: 'panen', hkValue: 1 },
+      { code: 'langsir_manual', name: 'Langsir Manual', category: 'panen', hkValue: 1 },
+      { code: 'langsir_kerbau', name: 'Langsir Kerbau', category: 'panen', hkValue: 1 },
+      { code: 'langsir_motor', name: 'Langsir Motor', category: 'panen', hkValue: 1 },
+      { code: 'langsir_pickup_tracktor', name: 'Langsir Pickup/Tracktor', category: 'panen', hkValue: 1 },
+      { code: 'muat_dt_ke_pks', name: 'Muat DT ke PKS', category: 'panen', hkValue: 1 },
+    ];
+
+    api.jobcodes()
+      .then((list) => {
+        if (!Array.isArray(list) || list.length === 0) {
+          // fallback to defaults when backend has none
+          setJobcodes(DEFAULT_JOBCODES);
+        } else {
+          setJobcodes(list as JobCode[]);
+        }
+      })
+      .catch(() => {
+        // On error, use local defaults so UI remains usable
+        setJobcodes(DEFAULT_JOBCODES);
+      });
   }, []);
 
   useEffect(() => {

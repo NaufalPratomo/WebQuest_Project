@@ -71,6 +71,12 @@ export type PanenRow = {
   employeeName?: string;
   jobCode?: string;
   notes?: string;
+  // extended real harvest fields
+  janjangTBS?: number;
+  janjangKosong?: number;
+  upahBasis?: number;
+  premi?: number;
+  totalUpah?: number;
 };
 
 export type AngkutRow = {

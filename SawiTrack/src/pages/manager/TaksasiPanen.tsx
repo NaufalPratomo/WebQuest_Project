@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import {
   Table,
   TableBody,
@@ -36,6 +37,8 @@ export default function TaksasiPanen() {
   const [divisionId, setDivisionId] = useState<string>('');
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [blockIndex, setBlockIndex] = useState<string>(''); // index of chosen block in blocks
+  const [editingKey, setEditingKey] = useState<string | null>(null); // composite key for editing
+  const [pendingEditBlockLabel, setPendingEditBlockLabel] = useState<string>('');
 
   type TaksasiRow = {
     timestamp: string; // ISO string when saved
@@ -67,6 +70,17 @@ export default function TaksasiPanen() {
   const [bmm, setBmm] = useState<number>(0); // Buah Merah Membrodol
   const [avgWeightKg, setAvgWeightKg] = useState<number>(15);
   const [basisJanjangPerPemanen, setBasisJanjangPerPemanen] = useState<number>(120);
+
+  // Employee selection for capacity
+  type Emp = { _id: string; name: string; division?: string };
+  const [employees, setEmployees] = useState<Emp[]>([]);
+  const selectionKey = useMemo(() => `taksasi_selection_${date}`, [date]);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  // Custom ("Other") employees added ad-hoc for the day
+  const customKey = useMemo(() => `taksasi_custom_${date}`, [date]);
+  const [customEmployees, setCustomEmployees] = useState<Emp[]>([]);
+  const [otherName, setOtherName] = useState<string>('');
+  const allEmployees = useMemo(() => [...employees, ...customEmployees], [employees, customEmployees]);
 
   // load estates once
   useEffect(() => {
@@ -103,6 +117,22 @@ export default function TaksasiPanen() {
     }
   }, [storageKey]);
 
+  // load employees and existing selection
+  useEffect(() => {
+    api.employees().then((list) => setEmployees(list || [])).catch(() => setEmployees([]));
+    try {
+      const raw = localStorage.getItem(selectionKey);
+      const arr = raw ? (JSON.parse(raw) as string[]) : [];
+      setSelectedIds(Array.isArray(arr) ? arr : []);
+    } catch { setSelectedIds([]); }
+    // load custom employees for date
+    try {
+      const rawC = localStorage.getItem(customKey);
+      const arrC = rawC ? (JSON.parse(rawC) as Emp[]) : [];
+      setCustomEmployees(Array.isArray(arrC) ? arrC : []);
+    } catch { setCustomEmployees([]); }
+  }, [selectionKey, customKey]);
+
   const selectedBlock: Block | undefined = useMemo(() => {
     const i = Number(blockIndex);
     if (Number.isNaN(i) || i < 0 || i >= blocks.length) return undefined;
@@ -128,6 +158,53 @@ export default function TaksasiPanen() {
   const taksasiJanjang = predictedBearingPalms;
   const taksasiTon = (taksasiJanjang * avgWeightKg) / 1000; // tons
   const kebutuhanPemanen = basisJanjangPerPemanen > 0 ? Math.ceil(taksasiJanjang / basisJanjangPerPemanen) : 0;
+
+  function toggleSelect(empId: string) {
+    setSelectedIds((prev) => {
+      const exists = prev.includes(empId);
+      if (exists) {
+        const next = prev.filter((id) => id !== empId);
+        try { localStorage.setItem(selectionKey, JSON.stringify(next)); } catch (e) { /* ignore */ }
+        return next;
+      }
+      // capacity guard
+      if (prev.length >= kebutuhanPemanen && kebutuhanPemanen > 0) {
+        toast.error(`Kapasitas penuh (${prev.length}/${kebutuhanPemanen})`);
+        return prev;
+      }
+      const next = [...prev, empId];
+      try { localStorage.setItem(selectionKey, JSON.stringify(next)); } catch (e) { /* ignore */ }
+      return next;
+    });
+  }
+
+  function addOtherEmployee() {
+    const name = otherName.trim();
+    if (!name) {
+      toast.error('Isi nama karyawan lainnya');
+      return;
+    }
+    if (kebutuhanPemanen > 0 && selectedIds.length >= kebutuhanPemanen) {
+      toast.error('Kapasitas penuh, tidak bisa menambah');
+      return;
+    }
+    const id = `other_${Date.now()}`;
+    const division = divisionId || (employees[0]?.division ?? undefined);
+    const newEmp: Emp = { _id: id, name, division };
+    setCustomEmployees(prev => {
+      const next = [...prev, newEmp];
+      try { localStorage.setItem(customKey, JSON.stringify(next)); } catch {/* ignore */}
+      return next;
+    });
+    // auto-select it
+    setSelectedIds(prev => {
+      const next = [...prev, id];
+      try { localStorage.setItem(selectionKey, JSON.stringify(next)); } catch {/* ignore */}
+      return next;
+    });
+    setOtherName('');
+    toast.success('Karyawan lainnya ditambahkan');
+  }
 
   function saveRow() {
     if (!date || !estateId || !divisionId || !selectedBlock) {
@@ -160,7 +237,24 @@ export default function TaksasiPanen() {
       taksasiTon: Number(taksasiTon.toFixed(2)),
       kebutuhanPemanen,
     };
-    const newRows = [...rows, row];
+    const composite = `${date}|${estateId}|${divisionId}|${blockLabel}`;
+    let newRows: TaksasiRow[];
+    const existingIndex = rows.findIndex(r => `${r.date}|${r.estateId}|${r.divisionId}|${r.blockLabel}` === composite);
+    if (existingIndex !== -1) {
+      // replace existing (edit or duplicate detected)
+      newRows = rows.slice();
+      newRows[existingIndex] = row;
+      toast.success('Taksasi diperbarui (blok sudah ada)');
+    } else if (editingKey) {
+      // editing but composite changed (treat as upsert)
+      newRows = rows.map(r => (
+        `${r.date}|${r.estateId}|${r.divisionId}|${r.blockLabel}` === editingKey ? row : r
+      ));
+      toast.success('Taksasi hasil edit tersimpan');
+    } else {
+      newRows = [...rows, row];
+      toast.success('Taksasi tersimpan');
+    }
     setRows(newRows);
     try {
       localStorage.setItem(storageKey, JSON.stringify(newRows));
@@ -187,6 +281,8 @@ export default function TaksasiPanen() {
     setBlockIndex('');
     setBm(0); setPtb(0); setBmbb(0); setBmm(0);
     setAvgWeightKg(15); setBasisJanjangPerPemanen(120);
+    setEditingKey(null);
+    setPendingEditBlockLabel('');
   }
 
   function nextStep() {
@@ -212,6 +308,29 @@ export default function TaksasiPanen() {
     setBlockIndex('');
     setBm(0); setPtb(0); setBmbb(0); setBmm(0);
     setAvgWeightKg(15); setBasisJanjangPerPemanen(120);
+  }
+
+  // When editing, after blocks load try to set blockIndex automatically
+  useEffect(() => {
+    if (editingKey && pendingEditBlockLabel && blocks.length > 0 && blockIndex === '') {
+      const idx = blocks.findIndex(b => (b.no_blok || b.id_blok || '-') === pendingEditBlockLabel);
+      if (idx !== -1) setBlockIndex(String(idx));
+    }
+  }, [editingKey, pendingEditBlockLabel, blocks, blockIndex]);
+
+  function startEdit(row: TaksasiRow) {
+    setDate(row.date); // ensure same date
+    setEstateId(row.estateId);
+    setDivisionId(row.divisionId);
+    setPendingEditBlockLabel(row.blockLabel);
+    setBm(row.bm);
+    setPtb(row.ptb);
+    setBmbb(row.bmbb);
+    setBmm(row.bmm);
+    setAvgWeightKg(row.avgWeightKg);
+    setBasisJanjangPerPemanen(row.basisJanjangPerPemanen);
+    setStep(2);
+    setEditingKey(`${row.date}|${row.estateId}|${row.divisionId}|${row.blockLabel}`);
   }
 
   return (
@@ -357,6 +476,59 @@ export default function TaksasiPanen() {
               </p>
             </div>
 
+            {/* Employee selection dialog */}
+            <div className="flex items-center justify-between rounded-md border p-3">
+              <div className="text-sm">
+                <div className="font-medium">Alokasi Pemanen</div>
+                <div className="text-muted-foreground">Pilih karyawan sesuai kebutuhan: <span className="font-mono">{selectedIds.length}/{kebutuhanPemanen}</span></div>
+              </div>
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button variant="outline">Pilih Karyawan</Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-3xl">
+                  <DialogHeader>
+                    <DialogTitle>Pilih Karyawan ({selectedIds.length}/{kebutuhanPemanen})</DialogTitle>
+                  </DialogHeader>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 max-h-[60vh] overflow-auto">
+                    {allEmployees.map((emp) => {
+                      const active = selectedIds.includes(emp._id);
+                      const atCapacity = !active && kebutuhanPemanen > 0 && selectedIds.length >= kebutuhanPemanen;
+                      return (
+                        <div
+                          key={emp._id}
+                          role="button"
+                          aria-pressed={active}
+                          onClick={() => !atCapacity && toggleSelect(emp._id)}
+                          className={`rounded-lg border p-3 transition ${active ? 'bg-emerald-50 border-emerald-300' : 'hover:bg-muted'} ${atCapacity ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                        >
+                          <div className="font-medium truncate">{emp.name}</div>
+                          <div className="text-xs text-muted-foreground">Divisi {emp.division ?? '-'}</div>
+                          {active && <div className="mt-2 inline-block text-xs px-2 py-0.5 rounded bg-emerald-100 text-emerald-700">Dipilih</div>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-4 space-y-2">
+                    <Label className="text-sm font-medium">Tambah Karyawan Lain (Other)</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="Nama karyawan baru"
+                        value={otherName}
+                        onChange={(e) => setOtherName(e.target.value)}
+                        className="flex-1"
+                      />
+                      <Button variant="secondary" onClick={addOtherEmployee}>Tambah</Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Hanya isi nama. Kolom divisi mengikuti konteks pilihan saat ini.
+                    </p>
+                  </div>
+                  <div className="text-xs text-muted-foreground">Tidak dapat memilih lebih dari kapasitas.</div>
+                </DialogContent>
+              </Dialog>
+            </div>
+
             <div className="flex justify-between gap-2">
               <Button variant="outline" onClick={() => setStep(1)}>Kembali</Button>
               <div className="flex gap-2">
@@ -396,6 +568,7 @@ export default function TaksasiPanen() {
                   <TableHead className="text-right">Ton</TableHead>
                   <TableHead className="text-right">Perkiraan Kg</TableHead>
                   <TableHead className="text-right">Pemanen</TableHead>
+                  <TableHead>Aksi</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -414,6 +587,9 @@ export default function TaksasiPanen() {
                     <TableCell className="text-right">{r.taksasiTon.toFixed(2)}</TableCell>
                     <TableCell className="text-right">{Math.round(r.taksasiTon * 1000)}</TableCell>
                     <TableCell className="text-right">{r.kebutuhanPemanen}</TableCell>
+                    <TableCell>
+                      <Button size="sm" variant="outline" onClick={() => startEdit(r)}>Edit</Button>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>

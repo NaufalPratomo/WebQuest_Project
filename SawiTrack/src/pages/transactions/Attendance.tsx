@@ -261,7 +261,7 @@ export default function Attendance() {
                   }
                   return (
                     <TableRow key={r._id || idx}>
-                      <TableCell className="text-center">{r.date}</TableCell>
+                      <TableCell className="text-center">{r.date ? r.date.split('T')[0] : r.date}</TableCell>
                       <TableCell className="text-center">{estateName}</TableCell>
                       <TableCell className="text-center">{divFromNotes || '-'}</TableCell>
                       <TableCell className="text-center">{blokFromNotes || '-'}</TableCell>

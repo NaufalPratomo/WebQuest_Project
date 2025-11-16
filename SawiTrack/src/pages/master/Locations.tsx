@@ -9,7 +9,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Download, Plus, Search, Upload } from "lucide-react";
+import { Download, Plus, Search, Upload, ChevronLeft, ChevronRight } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import {
   Dialog,
@@ -78,6 +78,7 @@ const Locations = () => {
       { divisions: Division[]; blocksByDivision: Record<number, Block[]> }
     >
   >({});
+  const [currentPages, setCurrentPages] = useState<Record<string, number>>({});
 
   // Helper function to format numbers: 0 stays as "0", whole numbers without decimals, decimals with 3 digits
   const formatNumber = (value: number | null | undefined): string => {
@@ -527,6 +528,26 @@ const Locations = () => {
                           }))
                       )
                     : [];
+                
+                const currentPage = currentPages[es._id] || 1;
+                const itemsPerPage = 10;
+                const totalPages = Math.ceil(blocksFlat.length / itemsPerPage);
+                const startIndex = (currentPage - 1) * itemsPerPage;
+                const endIndex = startIndex + itemsPerPage;
+                const paginatedBlocks = blocksFlat.slice(startIndex, endIndex);
+                
+                const handlePrevPage = () => {
+                  if (currentPage > 1) {
+                    setCurrentPages(prev => ({ ...prev, [es._id]: currentPage - 1 }));
+                  }
+                };
+                
+                const handleNextPage = () => {
+                  if (currentPage < totalPages) {
+                    setCurrentPages(prev => ({ ...prev, [es._id]: currentPage + 1 }));
+                  }
+                };
+                
                 return (
                   <AccordionItem key={es._id} value={es._id}>
                     <AccordionTrigger>
@@ -598,7 +619,7 @@ const Locations = () => {
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {blocksFlat.map(({ division_id, block }, idx) => (
+                            {paginatedBlocks.map(({ division_id, block }, idx) => (
                               <TableRow
                                 key={`${division_id}-${
                                   block.no_blok ?? block.id_blok ?? idx
@@ -720,6 +741,36 @@ const Locations = () => {
                           </TableBody>
                         </Table>
                       </div>
+                      {blocksFlat.length > itemsPerPage && (
+                        <div className="flex items-center justify-between mt-4">
+                          <div className="text-sm text-muted-foreground">
+                            Menampilkan {startIndex + 1} - {Math.min(endIndex, blocksFlat.length)} dari {blocksFlat.length} blok
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={handlePrevPage}
+                              disabled={currentPage === 1}
+                            >
+                              <ChevronLeft className="h-4 w-4" />
+                              Previous
+                            </Button>
+                            <span className="text-sm">
+                              Halaman {currentPage} dari {totalPages}
+                            </span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={handleNextPage}
+                              disabled={currentPage >= totalPages}
+                            >
+                              Next
+                              <ChevronRight className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      )}
                     </AccordionContent>
                   </AccordionItem>
                 );

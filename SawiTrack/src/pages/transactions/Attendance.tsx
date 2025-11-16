@@ -64,16 +64,6 @@ export default function Attendance() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [employeeId, setEmployeeId] = useState<string>('');
   const [status, setStatus] = useState<string>('hadir');
-  const [estates, setEstates] = useState<Array<{ _id: string; estate_name: string }>>([]);
-  const [estateId, setEstateId] = useState<string>('');
-  const [divisions, setDivisions] = useState<Array<{ division_id: number }>>([]);
-  const [divisionId, setDivisionId] = useState<number | ''>('');
-  type BlockOption = { no_blok?: string; id_blok?: string };
-  const [blocks, setBlocks] = useState<BlockOption[]>([]);
-  const [blockNo, setBlockNo] = useState<string>('');
-  const [mandorId, setMandorId] = useState<string>('');
-  const [pemanenId, setPemanenId] = useState<string>('');
-  const [statusLabel, setStatusLabel] = useState<'hadir' | 'sakit' | 'alpha' | 'izin_dibayar'>('hadir');
   const [notes] = useState<string>('');
   const [rows, setRows] = useState<AttendanceRow[]>([]);
   const selectionKey = `taksasi_selection_${date}`;
@@ -199,27 +189,12 @@ export default function Attendance() {
 
   const addRow = async () => {
     try {
-      if (!date || !pemanenId || !statusLabel) {
+      if (!date || !employeeId || !status) {
         toast.error('Lengkapi input');
         return;
       }
       const map = toBackendStatus(status);
-      let mappedStatus: 'present' | 'absent' | 'leave' = 'leave';
-      if (statusLabel === 'hadir') mappedStatus = 'present';
-      else if (statusLabel === 'alpha') mappedStatus = 'absent';
-      else mappedStatus = 'leave';
-      const mandorName = employees.find(e => e._id === mandorId)?.name || '';
-      const foundEmp = employees.find(e => e.name.toLowerCase() === pemanenId.toLowerCase());
-      const employeeIdToSend = foundEmp?._id || pemanenId;
-      const notesStr = [
-        statusLabel,
-        estateId ? `estate=${estateId}` : '',
-        divisionId ? `div=${divisionId}` : '',
-        blockNo ? `blok=${blockNo}` : '',
-        mandorName ? `mandor=${mandorName}` : '',
-        pemanenId ? `pemanen=${pemanenId}` : ''
-      ].filter(Boolean).join('; ');
-      const body = { date, employeeId: employeeIdToSend, division_id: divisionId ? Number(divisionId) : undefined, status: mappedStatus, notes: notesStr: map.backend, division_id: taksasiContext?.division_id, notes: map.note } as const;
+      const body = { date, employeeId, status: map.backend, division_id: taksasiContext?.division_id, notes: map.note } as const;
       await api.attendanceCreate(body);
       toast.success('Absensi tersimpan');
       // if present/hadir, auto-generate placeholder in Real Harvest storage
@@ -287,12 +262,6 @@ export default function Attendance() {
       // reset some inputs
       setEmployeeId('');
       setStatus('hadir');
-      setEstateId('');
-      setDivisionId('');
-      setBlockNo('');
-      setMandorId('');
-      setPemanenId('');
-      setStatusLabel('hadir');
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Gagal menyimpan';
       toast.error(msg);
@@ -401,52 +370,10 @@ export default function Attendance() {
                     <Input type="date" value={date} onChange={(e)=> setDate(e.target.value)} />
                   </div>
                   <div>
-                    <Label>Estate</Label>
-                    <Select value={estateId} onValueChange={(v)=> setEstateId(v)}>
+                    <Label>Pemanen</Label>
+                    <Select value={employeeId} onValueChange={(v)=> setEmployeeId(v)}>
                       <SelectTrigger>
-                        <SelectValue placeholder="Pilih estate" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {estates.map(es => (
-                          <SelectItem key={es._id} value={es._id}>{es.estate_name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Div</Label>
-                    <Select value={divisionId ? String(divisionId) : ''} onValueChange={(v)=> setDivisionId(v ? Number(v) : '')}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Pilih divisi" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {divisions.map(d => (
-                          <SelectItem key={d.division_id} value={String(d.division_id)}>
-                            {`Divisi ${d.division_id}`}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Blok</Label>
-                    <Select value={blockNo} onValueChange={(v)=> setBlockNo(v)}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Pilih blok" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {blocks.map((b, i) => {
-                          const label = String(b.no_blok || b.id_blok || '');
-                          return <SelectItem key={`${label}-${i}`} value={label}>{label || `Blok ${i+1}`}</SelectItem>;
-                        })}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>mandor</Label>
-                    <Select value={mandorId} onValueChange={(v)=> setMandorId(v)}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Pilih mandor" />
+                        <SelectValue placeholder="Pilih pemanen" />
                       </SelectTrigger>
                       <SelectContent>
                         {employees.map(emp => (
@@ -456,19 +383,16 @@ export default function Attendance() {
                     </Select>
                   </div>
                   <div>
-                    <Label>pemanen</Label>
-                    <Input type="text" placeholder="Nama pemanen" value={pemanenId} onChange={(e)=> setPemanenId(e.target.value)} />
-                  </div>
-                  <div>
                     <Label>sts_hadir</Label>
-                    <Select value={statusLabel} onValueChange={(v)=> setStatusLabel(v as 'hadir'|'sakit'|'alpha'|'izin_dibayar')}>
+                    <Select value={status} onValueChange={(v)=> setStatus(v)}>
                       <SelectTrigger>
                         <SelectValue placeholder="Pilih status" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="hadir">hadir</SelectItem>
                         <SelectItem value="sakit">sakit</SelectItem>
-                        <SelectItem value="alpha">tidak hadir diganti mangkir/alpha</SelectItem>
+                        <SelectItem value="tidak_hadir_diganti">tidak hadir diganti</SelectItem>
+                        <SelectItem value="mangkir">mangkir/alpha</SelectItem>
                         <SelectItem value="izin_dibayar">izin dibayar</SelectItem>
                       </SelectContent>
                     </Select>
@@ -500,20 +424,11 @@ export default function Attendance() {
                   <TableHead>Pemanen</TableHead>
                   <TableHead>sts_hadir</TableHead>
                   <TableHead>Aksi</TableHead>
-                  <TableHead className="text-center">Tgl_Panen</TableHead>
-                  <TableHead className="text-center">Estate</TableHead>
-                  <TableHead className="text-center">Div</TableHead>
-                  <TableHead className="text-center">Blok</TableHead>
-                  <TableHead className="text-center">mandor</TableHead>
-                  <TableHead className="text-center">pemanen</TableHead>
-                  <TableHead className="text-center">sts_hadir</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.map((r, idx) => {
                   const emp = employees.find(e => e._id === r.employeeId);
-                  const estateIdFromNotes = noteVal(r.notes, 'estate');
-                  const estateName = estates.find(e => e._id === estateIdFromNotes)?.estate_name || '-';
                   const divFromNotes = noteVal(r.notes, 'div');
                   const blokFromNotes = noteVal(r.notes, 'blok');
                   const mandorFromNotes = noteVal(r.notes, 'mandor');
@@ -561,13 +476,6 @@ export default function Attendance() {
                       <TableCell>
                         <Button size="sm" onClick={()=> saveInline(r)}>Simpan</Button>
                       </TableCell>
-                      <TableCell className="text-center">{r.date ? r.date.split('T')[0] : r.date}</TableCell>
-                      <TableCell className="text-center">{estateName}</TableCell>
-                      <TableCell className="text-center">{divFromNotes || '-'}</TableCell>
-                      <TableCell className="text-center">{blokFromNotes || '-'}</TableCell>
-                      <TableCell className="text-center">{mandorFromNotes || '-'}</TableCell>
-                      <TableCell className="text-center">{pemanenFromNotes || emp?.name || r.employeeId}</TableCell>
-                      <TableCell className="text-center">{statusLabel}</TableCell>
                     </TableRow>
                   );
                 })}

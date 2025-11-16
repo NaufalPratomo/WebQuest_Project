@@ -319,40 +319,40 @@ const RealHarvest = () => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Tgl_Panen</TableHead>
-                <TableHead>Estate</TableHead>
-                <TableHead>Div</TableHead>
-                <TableHead>Blok</TableHead>
-                <TableHead>NoTPH</TableHead>
-                <TableHead>mandor</TableHead>
-                <TableHead>pemanen</TableHead>
-                <TableHead>pekerjaan</TableHead>
-                <TableHead className="text-right">hasil kerja (jjg)</TableHead>
-                <TableHead className="text-right">upah basis</TableHead>
-                <TableHead className="text-right">premi</TableHead>
+                <TableHead className="text-center">Tgl_Panen</TableHead>
+                <TableHead className="text-center">Estate</TableHead>
+                <TableHead className="text-center">Div</TableHead>
+                <TableHead className="text-center">Blok</TableHead>
+                <TableHead className="text-center">NoTPH</TableHead>
+                <TableHead className="text-center">mandor</TableHead>
+                <TableHead className="text-center">pemanen</TableHead>
+                <TableHead className="text-center">pekerjaan</TableHead>
+                <TableHead className="text-center">hasil kerja (jjg)</TableHead>
+                <TableHead className="text-center">upah basis</TableHead>
+                <TableHead className="text-center">premi</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredRows.map((r) => (
                 <TableRow key={r.id}>
-                  <TableCell>{r.date}</TableCell>
-                  <TableCell>{r.estateName || '-'}</TableCell>
-                  <TableCell>{r.division}</TableCell>
-                  <TableCell>{r.block || '-'}</TableCell>
-                  <TableCell>{r.noTPH || '-'}</TableCell>
-                  <TableCell>{r.mandor || '-'}</TableCell>
-                  <TableCell>{r.pemanen || '-'}</TableCell>
-                  <TableCell>{r.jobType}</TableCell>
-                  <TableCell className="text-right">{r.hasilJjg}</TableCell>
-                  <TableCell className="text-right">{r.upahBasis}</TableCell>
-                  <TableCell className="text-right">{r.premi}</TableCell>
+                  <TableCell className="text-center">{r.date}</TableCell>
+                  <TableCell className="text-center">{r.estateName || '-'}</TableCell>
+                  <TableCell className="text-center">{r.division}</TableCell>
+                  <TableCell className="text-center">{r.block || '-'}</TableCell>
+                  <TableCell className="text-center">{r.noTPH || '-'}</TableCell>
+                  <TableCell className="text-center">{r.mandor || '-'}</TableCell>
+                  <TableCell className="text-center">{r.pemanen || '-'}</TableCell>
+                  <TableCell className="text-center">{r.jobType}</TableCell>
+                  <TableCell className="text-center">{r.hasilJjg}</TableCell>
+                  <TableCell className="text-center">{r.upahBasis}</TableCell>
+                  <TableCell className="text-center">{r.premi}</TableCell>
                 </TableRow>
               ))}
               <TableRow>
-                <TableCell className="font-medium" colSpan={8}>Total</TableCell>
-                <TableCell className="text-right">{totals.hasilJjg}</TableCell>
-                <TableCell className="text-right">{totals.upahBasis}</TableCell>
-                <TableCell className="text-right">{totals.premi}</TableCell>
+                <TableCell className="font-medium text-center" colSpan={8}>Total</TableCell>
+                <TableCell className="text-center">{totals.hasilJjg}</TableCell>
+                <TableCell className="text-center">{totals.upahBasis}</TableCell>
+                <TableCell className="text-center">{totals.premi}</TableCell>
               </TableRow>
             </TableBody>
           </Table>
@@ -365,20 +365,11 @@ const RealHarvest = () => {
           <h2 className="text-xl font-semibold">Perbandingan dengan Taksasi (Tanggal {date})</h2>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-1">
-              <div className="text-sm text-muted-foreground">Janjang (Real vs Taksasi)</div>
-              <div className="text-lg font-semibold">{totals.janjangTBS} vs {taksasiTotals.taksasiJanjang} janjang</div>
-              <div className={`text-sm ${janjangComparison.better ? 'text-emerald-600' : 'text-red-600'}`}>
-                {janjangComparison.better ? 'Lebih baik' : 'Kurang baik'} ({janjangComparison.diff >= 0 ? '+' : ''}{janjangComparison.diff} / {janjangComparison.pct}%)
-              </div>
-            </div>
-            <div className="space-y-1">
-              <div className="text-sm text-muted-foreground">Tonase (Real vs Taksasi)</div>
-              <div className="text-lg font-semibold">{(totals.kgAngkut / 1000).toFixed(2)} ton vs {taksasiTotals.taksasiTon.toFixed(2)} ton</div>
-              <div className={`text-sm ${kgComparison.better ? 'text-emerald-600' : 'text-red-600'}`}>
-                {kgComparison.better ? 'Lebih baik' : 'Kurang baik'} ({kgComparison.diff >= 0 ? '+' : ''}{kgComparison.diff} kg / {kgComparison.pct}%)
-              </div>
+          <div className="space-y-1">
+            <div className="text-sm text-muted-foreground">Janjang (Real vs Taksasi)</div>
+            <div className="text-lg font-semibold">{totals.janjangTBS} vs {taksasiTotals.taksasiJanjang} janjang</div>
+            <div className={`text-sm ${janjangComparison.better ? 'text-emerald-600' : 'text-red-600'}`}>
+              {janjangComparison.better ? 'Lebih baik' : 'Kurang baik'} ({janjangComparison.diff >= 0 ? '+' : ''}{janjangComparison.diff} / {janjangComparison.pct}%)
             </div>
           </div>
         </CardContent>

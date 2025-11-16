@@ -7,7 +7,18 @@ import { Button } from '@/components/ui/button';
 import { Download } from 'lucide-react';
 import { toast } from 'sonner';
 
-type Row = { estateId: string; division_id: number; block: string; realKg: number; taksasiKg: number; diffKg: number };
+type Row = { 
+  estateId: string; 
+  estateName?: string;
+  division: string; 
+  block: string; 
+  realJanjang: number; 
+  taksasiJanjang: number; 
+  diffJanjang: number;
+  realTon: number;
+  taksasiTon: number;
+  diffTon: number;
+};
 
 export default function Trend() {
   const [startDate, setStartDate] = useState<string>(new Date().toISOString().slice(0,10));
@@ -17,7 +28,7 @@ export default function Trend() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const exportCsv = () => {
-    const header = ['estateId','division_id','block','taksasiKg','realKg','diffKg','percent'];
+    const header = ['Estate','Divisi','Blok','Taksasi Janjang','Realisasi Janjang','Selisih Janjang','Taksasi Ton','Realisasi Ton','Selisih Ton','Persen'];
     const escape = (v: unknown) => {
       const s = v === undefined || v === null ? '' : String(v);
       if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
@@ -25,13 +36,16 @@ export default function Trend() {
     };
     const lines = [header.join(',')].concat(
       rows.map(r => [
-        r.estateId,
-        r.division_id,
+        r.estateName || r.estateId,
+        r.division,
         r.block,
-        r.taksasiKg,
-        r.realKg,
-        r.diffKg,
-        r.taksasiKg > 0 ? ((r.realKg / r.taksasiKg) * 100).toFixed(2) : ''
+        r.taksasiJanjang,
+        r.realJanjang,
+        r.diffJanjang,
+        r.taksasiTon.toFixed(2),
+        r.realTon.toFixed(2),
+        r.diffTon.toFixed(2),
+        r.taksasiJanjang > 0 ? ((r.realJanjang / r.taksasiJanjang) * 100).toFixed(2) : ''
       ].map(escape).join(','))
     );
     const csv = '\ufeff' + lines.join('\n');
@@ -69,7 +83,13 @@ export default function Trend() {
     setError(null);
     try {
       // Collect realisasi across dates
-  type RealRow = { estateId?: string; division?: string; block?: string; kgAngkut?: number };
+      type RealRow = { 
+        estateId?: string; 
+        estateName?: string;
+        division?: string; 
+        block?: string; 
+        hasilJjg?: number;
+      };
       const realAll: RealRow[] = [];
       for (const d of enumerateDates(startDate, endDate)) {
         const raw = localStorage.getItem(`realharvest_rows_${d}`);
@@ -81,7 +101,14 @@ export default function Trend() {
         }
       }
       // Collect taksasi across dates
-  type TaksRow = { estateId?: string; divisionId?: string; blockLabel?: string; taksasiTon?: number };
+      type TaksRow = { 
+        estateId?: string; 
+        estateName?: string;
+        divisionId?: string; 
+        blockLabel?: string; 
+        taksasiJanjang?: number;
+        taksasiTon?: number;
+      };
       const taksAll: TaksRow[] = [];
       for (const d of enumerateDates(startDate, endDate)) {
         const raw = localStorage.getItem(`taksasi_rows_${d}`);
@@ -94,27 +121,48 @@ export default function Trend() {
       }
 
       // Aggregate by estate + division + block
-      const realMap = new Map<string, { estateId: string; division_id: number; block: string; realKg: number }>();
+      const realMap = new Map<string, { 
+        estateId: string; 
+        estateName?: string;
+        division: string; 
+        block: string; 
+        realJanjang: number;
+        realTon: number;
+      }>();
       for (const r of realAll) {
         const estateId = r.estateId || '-';
-        const division_id = Number(r.division || 0);
+        const estateName = r.estateName;
+        const division = r.division || '-';
         const block = r.block || '-';
-        const kg = Number(r.kgAngkut || 0);
-        const key = `${estateId}|${division_id}|${block}`;
-        const prev = realMap.get(key) ?? { estateId, division_id, block, realKg: 0 };
-        prev.realKg += kg;
+        const janjang = Number(r.hasilJjg || 0);
+        // Estimate ton: assume avg 15kg per janjang (same as taksasi default)
+        const ton = (janjang * 15) / 1000;
+        const key = `${estateId}|${division}|${block}`;
+        const prev = realMap.get(key) ?? { estateId, estateName, division, block, realJanjang: 0, realTon: 0 };
+        prev.realJanjang += janjang;
+        prev.realTon += ton;
         realMap.set(key, prev);
       }
 
-      const taksMap = new Map<string, { estateId: string; division_id: number; block: string; taksasiKg: number }>();
+      const taksMap = new Map<string, { 
+        estateId: string; 
+        estateName?: string;
+        division: string; 
+        block: string; 
+        taksasiJanjang: number;
+        taksasiTon: number;
+      }>();
       for (const t of taksAll) {
         const estateId = t.estateId || '-';
-        const division_id = Number(t.divisionId || 0);
+        const estateName = t.estateName;
+        const division = t.divisionId || '-';
         const block = t.blockLabel || '-';
-        const kg = Math.round(Number(t.taksasiTon || 0) * 1000);
-        const key = `${estateId}|${division_id}|${block}`;
-        const prev = taksMap.get(key) ?? { estateId, division_id, block, taksasiKg: 0 };
-        prev.taksasiKg += kg;
+        const janjang = Number(t.taksasiJanjang || 0);
+        const ton = Number(t.taksasiTon || 0);
+        const key = `${estateId}|${division}|${block}`;
+        const prev = taksMap.get(key) ?? { estateId, estateName, division, block, taksasiJanjang: 0, taksasiTon: 0 };
+        prev.taksasiJanjang += janjang;
+        prev.taksasiTon += ton;
         taksMap.set(key, prev);
       }
 
@@ -125,18 +173,33 @@ export default function Trend() {
         const r = realMap.get(key);
         const t = taksMap.get(key);
         const estateId = r?.estateId || t?.estateId || '-';
-        const division_id = r?.division_id ?? t?.division_id ?? 0;
+        const estateName = r?.estateName || t?.estateName;
+        const division = r?.division || t?.division || '-';
         const block = r?.block || t?.block || '-';
-        const realKg = r?.realKg ?? 0;
-        const taksasiKg = t?.taksasiKg ?? 0;
-        const diffKg = realKg - taksasiKg; // positive means real > taksasi
-        combined.push({ estateId, division_id, block, realKg: Math.round(realKg), taksasiKg: Math.round(taksasiKg), diffKg });
+        const realJanjang = r?.realJanjang ?? 0;
+        const taksasiJanjang = t?.taksasiJanjang ?? 0;
+        const diffJanjang = realJanjang - taksasiJanjang;
+        const realTon = r?.realTon ?? 0;
+        const taksasiTon = t?.taksasiTon ?? 0;
+        const diffTon = realTon - taksasiTon;
+        combined.push({ 
+          estateId, 
+          estateName,
+          division, 
+          block, 
+          realJanjang: Math.round(realJanjang), 
+          taksasiJanjang: Math.round(taksasiJanjang), 
+          diffJanjang,
+          realTon,
+          taksasiTon,
+          diffTon
+        });
       }
 
-      // Rank by absolute difference (default: terbesar)
+      // Rank by absolute difference in janjang (default: terbesar)
       combined.sort((a, b) => {
-        const da = Math.abs(a.diffKg);
-        const db = Math.abs(b.diffKg);
+        const da = Math.abs(a.diffJanjang);
+        const db = Math.abs(b.diffJanjang);
         return sort === 'desc' ? db - da : da - db;
       });
       setRows(combined);
@@ -161,7 +224,7 @@ export default function Trend() {
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between gap-2">
-            <h3 className="text-lg font-semibold">Laporan Tren (Ranking Selisih Real vs Taksasi per Blok)</h3>
+            <h3 className="text-lg font-semibold">Laporan Tren (Ranking Selisih Realisasi vs Taksasi per Blok)</h3>
             <div className="flex items-center gap-2">
               <Button variant="outline" size="sm" onClick={load} disabled={loading}>Refresh</Button>
               <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={exportCsv} disabled={rows.length === 0}>
@@ -181,7 +244,7 @@ export default function Trend() {
             <Input type="date" value={endDate} onChange={(e)=> setEndDate(e.target.value)} />
           </div>
           <div>
-            <Label>Urutan (By |selisih|)</Label>
+            <Label>Urutan (By |selisih janjang|)</Label>
             <select className="w-full h-10 border rounded px-2" value={sort} onChange={(e)=> setSort(e.target.value as 'asc'|'desc')}>
               <option value="desc">Terbesar</option>
               <option value="asc">Terkecil</option>
@@ -196,35 +259,41 @@ export default function Trend() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Estate</TableHead>
-                  <TableHead>Divisi</TableHead>
-                  <TableHead>Blok</TableHead>
-                  <TableHead className="text-right">Taksasi (Kg)</TableHead>
-                  <TableHead className="text-right">Realisasi (Kg)</TableHead>
-                  <TableHead className="text-right">Selisih (Kg)</TableHead>
-                  <TableHead className="text-right">Persen</TableHead>
+                  <TableHead className="text-center">Estate</TableHead>
+                  <TableHead className="text-center">Divisi</TableHead>
+                  <TableHead className="text-center">Blok</TableHead>
+                  <TableHead className="text-center">Taksasi (Janjang)</TableHead>
+                  <TableHead className="text-center">Realisasi (Janjang)</TableHead>
+                  <TableHead className="text-center">Selisih (Janjang)</TableHead>
+                  <TableHead className="text-center">Taksasi (Ton)</TableHead>
+                  <TableHead className="text-center">Realisasi (Ton)</TableHead>
+                  <TableHead className="text-center">Selisih (Ton)</TableHead>
+                  <TableHead className="text-center">Persen</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading && (
-                  <TableRow><TableCell colSpan={5} className="text-center text-sm">Memuat…</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={10} className="text-center text-sm">Memuat…</TableCell></TableRow>
                 )}
                 {!loading && rows.map((r, i) => (
                   <TableRow key={i}>
-                    <TableCell>{r.estateId}</TableCell>
-                    <TableCell>{r.division_id}</TableCell>
-                    <TableCell>{r.block}</TableCell>
-                    <TableCell className="text-right">{r.taksasiKg}</TableCell>
-                    <TableCell className="text-right">{r.realKg}</TableCell>
-                    <TableCell className="text-right">{r.diffKg >= 0 ? `+${r.diffKg}` : r.diffKg}</TableCell>
-                    <TableCell className="text-right">{((r.realKg / r.taksasiKg) * 100).toFixed(2) || 0}%</TableCell>
+                    <TableCell className="text-center">{r.estateName || r.estateId}</TableCell>
+                    <TableCell className="text-center">{r.division}</TableCell>
+                    <TableCell className="text-center">{r.block}</TableCell>
+                    <TableCell className="text-center">{r.taksasiJanjang}</TableCell>
+                    <TableCell className="text-center">{r.realJanjang}</TableCell>
+                    <TableCell className="text-center">{r.diffJanjang >= 0 ? `+${r.diffJanjang}` : r.diffJanjang}</TableCell>
+                    <TableCell className="text-center">{r.taksasiTon.toFixed(2)}</TableCell>
+                    <TableCell className="text-center">{r.realTon.toFixed(2)}</TableCell>
+                    <TableCell className="text-center">{r.diffTon >= 0 ? `+${r.diffTon.toFixed(2)}` : r.diffTon.toFixed(2)}</TableCell>
+                    <TableCell className="text-center">{r.taksasiJanjang > 0 ? ((r.realJanjang / r.taksasiJanjang) * 100).toFixed(2) : '0.00'}%</TableCell>
                   </TableRow>
                 ))}
                 {!loading && rows.length === 0 && !error && (
-                  <TableRow><TableCell colSpan={6} className="text-center text-sm text-muted-foreground">Tidak ada data</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={10} className="text-center text-sm text-muted-foreground">Tidak ada data</TableCell></TableRow>
                 )}
                 {!loading && error && (
-                  <TableRow><TableCell colSpan={6} className="text-center text-sm text-destructive">{error}</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={10} className="text-center text-sm text-destructive">{error}</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>

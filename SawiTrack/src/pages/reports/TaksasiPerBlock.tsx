@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -8,22 +8,61 @@ import { Button } from '@/components/ui/button';
 import { Download } from 'lucide-react';
 import { toast } from 'sonner';
 
-type Row = { estateId: string; division_id: number; block_no: string; totalKg: number };
+type TaksasiRow = {
+  timestamp: string;
+  date: string;
+  estateId: string;
+  estateName: string;
+  divisionId: string;
+  blockLabel: string;
+  totalPokok: number;
+  samplePokok: number;
+  bm: number;
+  ptb: number;
+  bmbb: number;
+  bmm: number;
+  avgWeightKg: number;
+  basisJanjangPerPemanen: number;
+  akpPercent: number;
+  taksasiJanjang: number;
+  taksasiTon: number;
+  kebutuhanPemanen: number;
+};
 
 export default function TaksasiPerBlock() {
   const [date, setDate] = useState<string>(new Date().toISOString().slice(0,10));
-  const [rows, setRows] = useState<Row[]>([]);
+  const [rows, setRows] = useState<TaksasiRow[]>([]);
+  const [estates, setEstates] = useState<Array<{ _id: string; estate_name: string }>>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.estates().then(setEstates).catch(() => setEstates([]));
+  }, []);
+
   const exportCsv = () => {
-    const header = ['estateId','division_id','block_no','totalKg'];
+    const header = ['Estate','Divisi','Blok','Pokok','Sample','BM','PTB','BMBB','BMM','AKP %','Ton','Perkiraan Kg','Pemanen'];
     const escape = (v: unknown) => {
       const s = v === undefined || v === null ? '' : String(v);
       if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
       return s;
     };
     const lines = [header.join(',')].concat(
-      rows.map(r => [r.estateId, r.division_id, r.block_no, r.totalKg].map(escape).join(','))
+      rows.map(r => [
+        r.estateName || r.estateId,
+        r.divisionId,
+        r.blockLabel,
+        r.totalPokok,
+        r.samplePokok,
+        r.bm,
+        r.ptb,
+        r.bmbb,
+        r.bmm,
+        r.akpPercent,
+        r.taksasiTon,
+        Math.round(r.taksasiTon * 1000),
+        r.kebutuhanPemanen
+      ].map(escape).join(','))
     );
     const csv = '\ufeff' + lines.join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -37,32 +76,31 @@ export default function TaksasiPerBlock() {
     URL.revokeObjectURL(url);
   };
 
-  async function load() {
+  function load() {
     setLoading(true);
     setError(null);
     try {
-      // Try backend pre-aggregated report first
-      const data = await api.reportTaksasiPerBlock({ date });
-      setRows(data ?? []);
-    } catch (e) {
-      // Fallback: aggregate from taksasi list (sum weight per estate/div/block)
-      try {
-        const list = await api.taksasiList({ date });
-        const map = new Map<string, Row>();
-        for (const it of list) {
-          const key = `${it.estateId}|${it.division_id}|${it.block_no}`;
-          const prev = map.get(key) ?? { estateId: it.estateId, division_id: it.division_id, block_no: it.block_no, totalKg: 0 };
-          prev.totalKg += it.weightKg ?? 0;
-          map.set(key, prev);
-        }
-        setRows(Array.from(map.values()));
-        toast.info('Menampilkan data dari hasil taksasi (fallback).');
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Gagal memuat report taksasi';
-        setError(msg);
+      // Load from localStorage (where detailed taksasi data is stored)
+      const storageKey = `taksasi_rows_${date}`;
+      const raw = localStorage.getItem(storageKey);
+      if (!raw) {
         setRows([]);
-        toast.error(msg);
+        setLoading(false);
+        return;
       }
+      const parsed = JSON.parse(raw) as TaksasiRow[];
+      if (Array.isArray(parsed)) {
+        // Filter by date and sort
+        const filtered = parsed.filter(r => r.date === date);
+        setRows(filtered);
+      } else {
+        setRows([]);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Gagal memuat data taksasi';
+      setError(msg);
+      setRows([]);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -102,29 +140,47 @@ export default function TaksasiPerBlock() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Estate</TableHead>
-                  <TableHead>Divisi</TableHead>
-                  <TableHead>No Blok</TableHead>
-                  <TableHead className="text-right">Total (Kg)</TableHead>
+                  <TableHead className="text-center">Estate</TableHead>
+                  <TableHead className="text-center">Divisi</TableHead>
+                  <TableHead className="text-center">Blok</TableHead>
+                  <TableHead className="text-center">Pokok</TableHead>
+                  <TableHead className="text-center">Sample</TableHead>
+                  <TableHead className="text-center">BM</TableHead>
+                  <TableHead className="text-center">PTB</TableHead>
+                  <TableHead className="text-center">BMBB</TableHead>
+                  <TableHead className="text-center">BMM</TableHead>
+                  <TableHead className="text-center">AKP %</TableHead>
+                  <TableHead className="text-center">Ton</TableHead>
+                  <TableHead className="text-center">Perkiraan Kg</TableHead>
+                  <TableHead className="text-center">Pemanen</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading && (
-                  <TableRow><TableCell colSpan={4} className="text-center text-sm">Memuat…</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={13} className="text-center text-sm">Memuat…</TableCell></TableRow>
                 )}
                 {!loading && rows.map((r, i) => (
                   <TableRow key={i}>
-                    <TableCell>{r.estateId}</TableCell>
-                    <TableCell>{r.division_id}</TableCell>
-                    <TableCell>{r.block_no}</TableCell>
-                    <TableCell className="text-right">{r.totalKg}</TableCell>
+                    <TableCell className="text-center">{r.estateName || r.estateId}</TableCell>
+                    <TableCell className="text-center">{r.divisionId}</TableCell>
+                    <TableCell className="text-center">{r.blockLabel}</TableCell>
+                    <TableCell className="text-center">{r.totalPokok}</TableCell>
+                    <TableCell className="text-center">{r.samplePokok}</TableCell>
+                    <TableCell className="text-center">{r.bm}</TableCell>
+                    <TableCell className="text-center">{r.ptb}</TableCell>
+                    <TableCell className="text-center">{r.bmbb}</TableCell>
+                    <TableCell className="text-center">{r.bmm}</TableCell>
+                    <TableCell className="text-center">{r.akpPercent.toFixed(2)}</TableCell>
+                    <TableCell className="text-center">{r.taksasiTon.toFixed(2)}</TableCell>
+                    <TableCell className="text-center">{Math.round(r.taksasiTon * 1000)}</TableCell>
+                    <TableCell className="text-center">{r.kebutuhanPemanen}</TableCell>
                   </TableRow>
                 ))}
                 {!loading && rows.length === 0 && !error && (
-                  <TableRow><TableCell colSpan={4} className="text-center text-sm text-muted-foreground">Tidak ada data</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={13} className="text-center text-sm text-muted-foreground">Tidak ada data</TableCell></TableRow>
                 )}
                 {!loading && error && (
-                  <TableRow><TableCell colSpan={4} className="text-center text-sm text-destructive">{error}</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={13} className="text-center text-sm text-destructive">{error}</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>

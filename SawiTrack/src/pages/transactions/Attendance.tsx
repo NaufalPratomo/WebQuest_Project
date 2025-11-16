@@ -56,6 +56,18 @@ export default function Attendance() {
 
   const filtered = useMemo(() => rows.filter(r => r.date.startsWith(date)), [rows, date]);
 
+  const noteVal = (notes: string | undefined, key: string): string => {
+    if (!notes) return '';
+    try {
+      const parts = notes.split(/;\s*/);
+      for (const p of parts) {
+        const [k, v] = p.split('=');
+        if (k && k.trim() === key) return v ?? '';
+      }
+      return '';
+    } catch { return ''; }
+  };
+
   const addRow = async () => {
     try {
       if (!date || !pemanenId || !statusLabel) {
@@ -214,27 +226,48 @@ export default function Attendance() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Tgl_Panen</TableHead>
-                  <TableHead>Estate</TableHead>
-                  <TableHead>Div</TableHead>
-                  <TableHead>Blok</TableHead>
-                  <TableHead>Idmandor</TableHead>
-                  <TableHead>Idpemanen</TableHead>
-                  <TableHead>sts_hadir</TableHead>
+                  <TableHead className="text-center">Tgl_Panen</TableHead>
+                  <TableHead className="text-center">Estate</TableHead>
+                  <TableHead className="text-center">Div</TableHead>
+                  <TableHead className="text-center">Blok</TableHead>
+                  <TableHead className="text-center">mandor</TableHead>
+                  <TableHead className="text-center">pemanen</TableHead>
+                  <TableHead className="text-center">sts_hadir</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.map((r, idx) => {
                   const emp = employees.find(e => e._id === r.employeeId);
+                  const estateIdFromNotes = noteVal(r.notes, 'estate');
+                  const estateName = estates.find(e => e._id === estateIdFromNotes)?.estate_name || '-';
+                  const divFromNotes = noteVal(r.notes, 'div');
+                  const blokFromNotes = noteVal(r.notes, 'blok');
+                  const mandorFromNotes = noteVal(r.notes, 'mandor');
+                  const pemanenFromNotes = noteVal(r.notes, 'pemanen');
+                  // Extract status from notes (first part before semicolon, or from status field)
+                  let statusLabel = '';
+                  if (r.notes) {
+                    const firstPart = r.notes.split(';')[0].trim();
+                    if (['hadir', 'sakit', 'alpha', 'izin_dibayar'].includes(firstPart)) {
+                      statusLabel = firstPart;
+                    }
+                  }
+                  // Fallback to mapped status if not found in notes
+                  if (!statusLabel) {
+                    if (r.status === 'present') statusLabel = 'hadir';
+                    else if (r.status === 'absent') statusLabel = 'alpha';
+                    else if (r.status === 'leave') statusLabel = 'sakit';
+                    else statusLabel = r.status;
+                  }
                   return (
                     <TableRow key={r._id || idx}>
-                      <TableCell>{r.date}</TableCell>
-                      <TableCell>-</TableCell>
-                      <TableCell>-</TableCell>
-                      <TableCell>-</TableCell>
-                      <TableCell>-</TableCell>
-                      <TableCell>{emp?.name || r.employeeId}</TableCell>
-                      <TableCell className="capitalize">{r.status}</TableCell>
+                      <TableCell className="text-center">{r.date}</TableCell>
+                      <TableCell className="text-center">{estateName}</TableCell>
+                      <TableCell className="text-center">{divFromNotes || '-'}</TableCell>
+                      <TableCell className="text-center">{blokFromNotes || '-'}</TableCell>
+                      <TableCell className="text-center">{mandorFromNotes || '-'}</TableCell>
+                      <TableCell className="text-center">{pemanenFromNotes || emp?.name || r.employeeId}</TableCell>
+                      <TableCell className="text-center">{statusLabel}</TableCell>
                     </TableRow>
                   );
                 })}

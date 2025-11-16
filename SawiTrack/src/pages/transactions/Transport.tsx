@@ -265,33 +265,31 @@ export default function Transport() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Tgl_angkut</TableHead>
-                  <TableHead>Estate</TableHead>
-                  <TableHead>Div</TableHead>
-                  <TableHead>Blok</TableHead>
-                  <TableHead>NoTPH</TableHead>
-                  <TableHead className="text-right">jjg_angkut</TableHead>
-                  <TableHead className="text-right">kg_angkut</TableHead>
-                  <TableHead className="text-right">jjg_restan</TableHead>
-                  <TableHead className="text-right">kg_restan</TableHead>
+                  <TableHead className="text-center">Tgl_angkut</TableHead>
+                  <TableHead className="text-center">Estate</TableHead>
+                  <TableHead className="text-center">Div</TableHead>
+                  <TableHead className="text-center">Blok</TableHead>
+                  <TableHead className="text-center">NoTPH</TableHead>
+                  <TableHead className="text-center">jjg_angkut</TableHead>
+                  <TableHead className="text-center">No. Mobil</TableHead>
+                  <TableHead className="text-center">Nama Supir</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.map((r, idx) => (
                   <TableRow key={r._id || idx}>
-                    <TableCell>{String(r.date_angkut).slice(0,10)}</TableCell>
-                    <TableCell>{r.estateId}</TableCell>
-                    <TableCell>{r.division_id}</TableCell>
-                    <TableCell>{r.block_no}</TableCell>
-                    <TableCell>{noteVal(r.notes, 'notph') || '-'}</TableCell>
-                    <TableCell className="text-right">{noteVal(r.notes, 'jjg_angkut') || '-'}</TableCell>
-                    <TableCell className="text-right">{r.weightKg}</TableCell>
-                    <TableCell className="text-right">-</TableCell>
-                    <TableCell className="text-right">-</TableCell>
+                    <TableCell className="text-center">{String(r.date_angkut).slice(0,10)}</TableCell>
+                    <TableCell className="text-center">{r.estateId}</TableCell>
+                    <TableCell className="text-center">{r.division_id}</TableCell>
+                    <TableCell className="text-center">{r.block_no}</TableCell>
+                    <TableCell className="text-center">{noteVal(r.notes, 'notph') || '-'}</TableCell>
+                    <TableCell className="text-center">{noteVal(r.notes, 'jjg_angkut') || '-'}</TableCell>
+                    <TableCell className="text-center">{noteVal(r.notes, 'no_mobil') || '-'}</TableCell>
+                    <TableCell className="text-center">{noteVal(r.notes, 'supir') || '-'}</TableCell>
                   </TableRow>
                 ))}
                 {filtered.length === 0 && (
-                  <TableRow><TableCell colSpan={9} className="text-center text-sm text-muted-foreground">Tidak ada data</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={8} className="text-center text-sm text-muted-foreground">Tidak ada data</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>

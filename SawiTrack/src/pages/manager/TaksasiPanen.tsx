@@ -381,7 +381,6 @@ export default function TaksasiPanen() {
             <p className="text-sm text-muted-foreground">Belum ada data tersimpan untuk tanggal ini.</p>
           ) : (
             <Table>
-              <TableCaption>Data tersimpan di perangkat ini dan akan berbeda untuk setiap tanggal.</TableCaption>
               <TableHeader>
                 <TableRow>
                   <TableHead>Estate</TableHead>

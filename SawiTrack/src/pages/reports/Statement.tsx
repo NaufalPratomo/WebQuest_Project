@@ -6,24 +6,59 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { Download } from 'lucide-react';
 import { toast } from 'sonner';
+import { api } from '@/lib/api';
 
-type Row = { estateId: string; division_id: number; totalKg: number; blockCount: number };
+type RealRow = {
+  id: string;
+  timestamp: string;
+  date: string;
+  estateId?: string;
+  estateName?: string;
+  division: string;
+  block?: string;
+  noTPH?: string;
+  mandor: string;
+  pemanen: string;
+  jobType: string;
+  hasilJjg: number;
+  upahBasis: number;
+  premi: number;
+  kgAngkut: number;
+};
 
 export default function Statement() {
   const [startDate, setStartDate] = useState<string>(new Date().toISOString().slice(0,10));
   const [endDate, setEndDate] = useState<string>(new Date().toISOString().slice(0,10));
-  const [rows, setRows] = useState<Row[]>([]);
+  const [rows, setRows] = useState<RealRow[]>([]);
+  const [estates, setEstates] = useState<Array<{ _id: string; estate_name: string }>>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.estates().then(setEstates).catch(() => setEstates([]));
+  }, []);
+
   const exportCsv = () => {
-    const header = ['estateId','division_id','totalKg','blockCount'];
+    const header = ['Tgl_Panen','Estate','Divisi','Blok','NoTPH','mandor','pemanen','pekerjaan','hasil kerja (jjg)','upah basis','premi'];
     const escape = (v: unknown) => {
       const s = v === undefined || v === null ? '' : String(v);
       if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
       return s;
     };
     const lines = [header.join(',')].concat(
-      rows.map(r => [r.estateId, r.division_id, r.totalKg, r.blockCount].map(escape).join(','))
+      rows.map(r => [
+        r.date,
+        r.estateName || r.estateId || '-',
+        r.division,
+        r.block || '-',
+        r.noTPH || '-',
+        r.mandor,
+        r.pemanen,
+        r.jobType,
+        r.hasilJjg,
+        r.upahBasis,
+        r.premi
+      ].map(escape).join(','))
     );
     const csv = '\ufeff' + lines.join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -60,8 +95,7 @@ export default function Statement() {
     setError(null);
     try {
       const days = enumerateDates(startDate, endDate);
-  type RealRow = { estateId?: string; division?: string; block?: string; kgAngkut?: number };
-  const all: RealRow[] = [];
+      const all: RealRow[] = [];
       for (const d of days) {
         const key = `realharvest_rows_${d}`;
         try {
@@ -80,28 +114,17 @@ export default function Statement() {
         return;
       }
 
-      type Acc = { estateId: string; division_id: number; totalKg: number; blocks: Set<string> };
-      const map = new Map<string, Acc>();
-      for (const r of all) {
-        const estateId: string = r.estateId || '-';
-        const division_id: number = Number(r.division || 0);
-        const blockLabel: string = r.block || '-';
-        const kg: number = Number(r.kgAngkut || 0);
-        const key = `${estateId}|${division_id}`;
-        const prev = map.get(key) ?? { estateId, division_id, totalKg: 0, blocks: new Set<string>() };
-        prev.totalKg += kg;
-        if (blockLabel && blockLabel !== '-') prev.blocks.add(blockLabel);
-        map.set(key, prev);
-      }
-      const aggregated: Row[] = Array.from(map.values()).map((v) => ({
-        estateId: v.estateId,
-        division_id: v.division_id,
-        totalKg: Math.round(v.totalKg),
-        blockCount: v.blocks.size,
-      }));
-      // Optional: sort by estate then division
-      aggregated.sort((a, b) => a.estateId.localeCompare(b.estateId) || a.division_id - b.division_id);
-      setRows(aggregated);
+      // Sort by date, then estate, then division, then block
+      all.sort((a, b) => {
+        if (a.date !== b.date) return a.date.localeCompare(b.date);
+        const estateA = a.estateName || a.estateId || '';
+        const estateB = b.estateName || b.estateId || '';
+        if (estateA !== estateB) return estateA.localeCompare(estateB);
+        if (a.division !== b.division) return a.division.localeCompare(b.division);
+        return (a.block || '').localeCompare(b.block || '');
+      });
+
+      setRows(all);
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Gagal memuat statement realisasi';
       setError(msg);
@@ -117,7 +140,9 @@ export default function Statement() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startDate, endDate]);
 
-  const grandTotal = rows.reduce((s, r) => s + (r.totalKg || 0), 0);
+  const grandTotalJjg = rows.reduce((s, r) => s + (r.hasilJjg || 0), 0);
+  const grandTotalUpah = rows.reduce((s, r) => s + (r.upahBasis || 0), 0);
+  const grandTotalPremi = rows.reduce((s, r) => s + (r.premi || 0), 0);
 
   return (
     <div className="space-y-4">
@@ -143,7 +168,9 @@ export default function Statement() {
             <Label>Selesai</Label>
             <Input type="date" value={endDate} onChange={(e)=> setEndDate(e.target.value)} />
           </div>
-          <div className="md:col-span-2 text-right font-medium">Total: {grandTotal} Kg</div>
+          <div className="md:col-span-2 text-right font-medium">
+            <div className="text-sm text-muted-foreground">Total Janjang: {grandTotalJjg} | Total Upah: {grandTotalUpah} | Total Premi: {grandTotalPremi}</div>
+          </div>
         </CardContent>
       </Card>
 
@@ -153,29 +180,51 @@ export default function Statement() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Estate</TableHead>
-                  <TableHead>Divisi</TableHead>
-                  <TableHead className="text-right">Total (Kg)</TableHead>
-                  <TableHead className="text-right">Jumlah Blok</TableHead>
+                  <TableHead className="text-center">Tgl_Panen</TableHead>
+                  <TableHead className="text-center">Estate</TableHead>
+                  <TableHead className="text-center">Divisi</TableHead>
+                  <TableHead className="text-center">Blok</TableHead>
+                  <TableHead className="text-center">NoTPH</TableHead>
+                  <TableHead className="text-center">mandor</TableHead>
+                  <TableHead className="text-center">pemanen</TableHead>
+                  <TableHead className="text-center">pekerjaan</TableHead>
+                  <TableHead className="text-center">hasil kerja (jjg)</TableHead>
+                  <TableHead className="text-center">upah basis</TableHead>
+                  <TableHead className="text-center">premi</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading && (
-                  <TableRow><TableCell colSpan={4} className="text-center text-sm">Memuat…</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={11} className="text-center text-sm">Memuat…</TableCell></TableRow>
                 )}
                 {!loading && rows.map((r, i) => (
-                  <TableRow key={i}>
-                    <TableCell>{r.estateId}</TableCell>
-                    <TableCell>{r.division_id}</TableCell>
-                    <TableCell className="text-right">{r.totalKg}</TableCell>
-                    <TableCell className="text-right">{r.blockCount}</TableCell>
+                  <TableRow key={r.id || i}>
+                    <TableCell className="text-center">{r.date}</TableCell>
+                    <TableCell className="text-center">{r.estateName || r.estateId || '-'}</TableCell>
+                    <TableCell className="text-center">{r.division}</TableCell>
+                    <TableCell className="text-center">{r.block || '-'}</TableCell>
+                    <TableCell className="text-center">{r.noTPH || '-'}</TableCell>
+                    <TableCell className="text-center">{r.mandor}</TableCell>
+                    <TableCell className="text-center">{r.pemanen}</TableCell>
+                    <TableCell className="text-center">{r.jobType}</TableCell>
+                    <TableCell className="text-center">{r.hasilJjg}</TableCell>
+                    <TableCell className="text-center">{r.upahBasis}</TableCell>
+                    <TableCell className="text-center">{r.premi}</TableCell>
                   </TableRow>
                 ))}
+                {!loading && rows.length > 0 && (
+                  <TableRow className="font-medium">
+                    <TableCell className="text-center" colSpan={8}>Total</TableCell>
+                    <TableCell className="text-center">{grandTotalJjg}</TableCell>
+                    <TableCell className="text-center">{grandTotalUpah}</TableCell>
+                    <TableCell className="text-center">{grandTotalPremi}</TableCell>
+                  </TableRow>
+                )}
                 {!loading && rows.length === 0 && !error && (
-                  <TableRow><TableCell colSpan={4} className="text-center text-sm text-muted-foreground">Tidak ada data</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={11} className="text-center text-sm text-muted-foreground">Tidak ada data</TableCell></TableRow>
                 )}
                 {!loading && error && (
-                  <TableRow><TableCell colSpan={4} className="text-center text-sm text-destructive">{error}</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={11} className="text-center text-sm text-destructive">{error}</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>

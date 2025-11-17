@@ -23,7 +23,6 @@ type RealRow = {
   pemanenId: string; // link to employee
   pemanenName: string;
   jobCode: string;
-  noTPH: string;
   janjangTBS: number;
   janjangKosong: number;
   upahBasis: number;
@@ -53,7 +52,6 @@ const RealHarvest = () => {
     mandor: '',
     pemanenId: '',
     jobCode: '',
-    noTPH: '',
     janjangTBS: '0',
     janjangKosong: '0',
     premi: '0',
@@ -279,17 +277,12 @@ const RealHarvest = () => {
   }, [totals.janjangTBS, taksasiTotals.taksasiJanjang]);
 
   // Remove kgAngkut comparison (not part of per-employee wage calc). Placeholder diff based on janjang only.
-  const kgComparison = useMemo(() => {
-    const diff = totals.janjangTBS - taksasiTotals.taksasiKg; // fallback comparison
-    const better = diff >= 0;
-    const pct = taksasiTotals.taksasiKg > 0 ? Math.round((diff / taksasiTotals.taksasiKg) * 100) : 0;
-    return { diff, better, pct };
-  }, [totals.janjangTBS, taksasiTotals.taksasiKg]);
+  // kgComparison removed: tidak ada perhitungan kgAngkut di konteks ini
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <div>
+            <div className="grid gap-4 md:grid-cols-2">
           <h1 className="text-3xl font-bold">Realisasi Panen (Real Harvest)</h1>
           <p className="text-muted-foreground">Catat data panen aktual untuk dibandingkan dengan taksasi (berdasarkan sampel)</p>
         </div>
@@ -396,34 +389,18 @@ const RealHarvest = () => {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>NoTPH</Label>
-                <Input placeholder="Nomor TPH" value={form.noTPH} onChange={(e)=> setForm(p=> ({ ...p, noTPH: e.target.value }))} />
-              </div>
-              <div className="space-y-2">
-                <Label>Hasil Kerja (JJG)</Label>
-                <Input type="number" min={0} value={form.janjangTBS} onChange={(e) => setForm(prev => ({ ...prev, janjangTBS: e.target.value }))} />
-              </div>
-              <div className="space-y-2">
-                <Label>hasil kerja (jjg)</Label>
-                <Input type="number" min={0} value={form.hasilJjg} onChange={(e) => {
-                  const val = e.target.value;
-                  const hasil = Number(val || 0);
-                  const upah = hasil * 400;
-                  setForm(prev => ({ ...prev, hasilJjg: val, upahBasis: upah }));
-                }} />
-              </div>
-              <div className="space-y-2">
                 <Label>Upah Basis (Otomatis)</Label>
                 <Input readOnly value={upahPreview} />
               </div>
               <div className="space-y-2">
                 <Label>Premi (Input Mandor)</Label>
-                <Input type="number" min={0} value={form.premi} onChange={(e) => setForm(prev => ({ ...prev, premi: e.target.value }))} />
+                <Input type="number" min={0} value={form.premi} onChange={(e)=> setForm(p=> ({ ...p, premi: e.target.value }))} />
               </div>
               <div className="space-y-2">
                 <Label>Total Upah</Label>
                 <Input readOnly value={totalPreview} />
               </div>
+              {/* Duplicate legacy fields removed; premi now input manual */}
               {/* Removed Angkut fields in per-employee realisasi context */}
             </div>
             <div className="sticky bottom-0 pt-2 bg-background/60 backdrop-blur supports-[backdrop-filter]:bg-background/30">
@@ -461,6 +438,11 @@ const RealHarvest = () => {
               <TableRow>
                 <TableHead>Blok</TableHead>
                 <TableHead>Pemanen</TableHead>
+                <TableHead className="text-right">JJG TBS</TableHead>
+                <TableHead className="text-right">JJG Kosong</TableHead>
+                <TableHead className="text-right">Upah Basis</TableHead>
+                <TableHead className="text-right">Premi</TableHead>
+                <TableHead className="text-right">Total Upah</TableHead>
                 <TableHead>Aksi</TableHead>
               </TableRow>
             </TableHeader>
@@ -471,6 +453,11 @@ const RealHarvest = () => {
                   <TableRow key={r.id}>
                     <TableCell>{r.block || '-'}</TableCell>
                     <TableCell>{r.pemanenName}</TableCell>
+                    <TableCell className="text-right">{r.janjangTBS}</TableCell>
+                    <TableCell className="text-right">{r.janjangKosong}</TableCell>
+                    <TableCell className="text-right">{r.upahBasis}</TableCell>
+                    <TableCell className="text-right">{r.premi}</TableCell>
+                    <TableCell className="text-right">{r.totalUpah}</TableCell>
                     <TableCell>
                       <Button size="sm" variant={isComplete ? 'outline' : 'default'} onClick={() => {
                         setEditingId(r.id);

@@ -16,7 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { api, Employee as EmployeeDoc } from '@/lib/api';
+import { api, Employee as EmployeeDoc, Role, EmpStatus } from '@/lib/api';
 import EmployeeEditDialog from './components/EmployeeEditDialog';
 import { useRef } from 'react';
 
@@ -74,17 +74,24 @@ const Employees = () => {
       const idx = (k: string) => header.indexOf(k);
       const requireIdx = (...keys: string[]) => { for (const k of keys) if (idx(k) === -1) throw new Error(`Kolom '${k}' tidak ditemukan`); };
       requireIdx('name','email','role');
-      const toBody = (cols: string[]) => {
+      const toBody = (cols: string[]): {
+        name: string;
+        email: string;
+        role: Role;
+        division?: string | null;
+        status?: EmpStatus;
+        password?: string;
+      } => {
         const name = cols[idx('name')];
         const email = cols[idx('email')];
-        const role = (cols[idx('role')] || 'employee').toLowerCase() as 'manager'|'foreman'|'employee';
+        const role = (cols[idx('role')] || 'employee').toLowerCase() as Role;
         const division = idx('division') !== -1 ? (cols[idx('division')] || '') : '';
         const status = idx('status') !== -1 ? (cols[idx('status')] || 'active') : 'active';
         const providedPwd = idx('password') !== -1 ? (cols[idx('password')] || '') : '';
         const base = (name || (email?.split('@')[0] ?? '')).toString();
         const defaultPwd = base.trim().replace(/\s+/g,'') + '123';
         const finalPwd = providedPwd || defaultPwd;
-        return { name, email, role, division: division || null, status: (status === 'inactive' ? 'inactive' : 'active'), ...(finalPwd ? { password: finalPwd } : {}) };
+        return { name, email, role, division: division || null, status: (status === 'inactive' ? 'inactive' : 'active') as EmpStatus, ...(finalPwd ? { password: finalPwd } : {}) };
       };
       const existingEmails = new Set(rows.map(r => r.email.toLowerCase()));
       const seen = new Set<string>();

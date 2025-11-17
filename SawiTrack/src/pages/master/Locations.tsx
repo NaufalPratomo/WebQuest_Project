@@ -39,6 +39,38 @@ import { Toaster } from "@/components/ui/toaster";
 import { api } from "@/lib/api";
 import * as XLSX from "xlsx";
 
+// Define row structure expected from Excel import to avoid 'any'
+type ExcelRow = {
+  Divisi?: string;
+  divisi?: string;
+  [key: string]: unknown;
+  "No Blok"?: string | number;
+  "ID Blok"?: string | number;
+  "Jenis Tanah"?: string;
+  Topografi?: string | number;
+  "Luas Tanam"?: number | string;
+  "Tahun"?: number | string;
+  "Jumlah Pokok"?: number | string;
+  "Jenis Bibit"?: string;
+  "Luas Land Preparation"?: number | string;
+  "Luas Nursery"?: number | string;
+  "Luas Lain-Lain"?: number | string;
+  "Luas Lebungan"?: number | string;
+  "Luas Garapan"?: number | string;
+  "Luas Rawa"?: number | string;
+  "Luas Tanggul"?: number | string;
+  "Luas Area Non Efektif"?: number | string;
+  Konservasi?: number | string;
+  "Luas Konservasi"?: number | string;
+  "Luas PKS"?: number | string;
+  "Luas Jalan"?: number | string;
+  "Luas Drainase"?: number | string;
+  "Luas Perumahan"?: number | string;
+  "Luas Sarana Prasanara"?: number | string;
+  "Luas Blok"?: number | string;
+  SPH?: number | string;
+};
+
 type Division = { division_id: number };
 type Block = {
   id_blok?: string;
@@ -195,7 +227,7 @@ const Locations = () => {
   };
 
   const handleExportExcel = (estateId: string) => {
-    const exportData: any[] = [];
+    const exportData: Array<Record<string, string | number>> = [];
 
     const estate = estates.find((e) => e._id === estateId);
     if (!estate) return;
@@ -210,34 +242,37 @@ const Locations = () => {
         )
       : [];
 
+    const numOr0 = (v: unknown): number => (typeof v === "number" ? v : 0);
+    const strOrEmpty = (v: unknown): string => (v != null ? String(v) : "");
+
     blocksFlat.forEach(({ division_id, block }) => {
       exportData.push({
         Divisi: `Divisi ${division_id}`,
-        "No Blok": block.no_blok ?? "",
-        "ID Blok": block.id_blok ?? "",
-        "Location Type": block.location?.type ?? "",
-        "Jenis Tanah": block.jenis_tanah ?? "",
-        Topografi: block.topografi ?? "",
-        "Luas Tanam": block.luas_tanam_ ?? 0,
-        Tahun: block.tahun_ ?? 0,
-        "Jumlah Pokok": block.jumlak_pokok ?? 0,
-        "Jenis Bibit": block.jenis_bibit ?? "",
-        "Luas Land Preparation": block.luas_land_preparation ?? 0,
-        "Luas Nursery": block.luas_nursery ?? 0,
-        "Luas Lain-Lain": block.luas_lain___lain ?? 0,
-        "Luas Lebungan": block.luas_lebungan ?? 0,
-        "Luas Garapan": block.luas_garapan ?? 0,
-        "Luas Rawa": block.luas_rawa ?? 0,
-        "Luas Tanggul": block.luas_tanggul ?? 0,
-        "Luas Area Non Efektif": block.luas_area_non_efektif ?? 0,
-        "Luas Konservasi": block.luas_konservasi ?? 0,
-        "Luas PKS": block.luas_pks ?? 0,
-        "Luas Jalan": block.luas_jalan ?? 0,
-        "Luas Drainase": block.luas_drainase ?? 0,
-        "Luas Perumahan": block.luas_perumahan ?? 0,
-        "Luas Sarana Prasanara": block.luas_sarana_prasanara ?? 0,
-        "Luas Blok": block.luas_blok ?? 0,
-        SPH: block.SPH ?? 0,
+        "No Blok": strOrEmpty(block.no_blok),
+        "ID Blok": strOrEmpty(block.id_blok),
+        "Location Type": strOrEmpty(block.location?.type),
+        "Jenis Tanah": strOrEmpty(block.jenis_tanah),
+        Topografi: strOrEmpty(block.topografi),
+        "Luas Tanam": numOr0(block.luas_tanam_),
+        Tahun: numOr0(block.tahun_),
+        "Jumlah Pokok": numOr0(block.jumlak_pokok ?? block.jumlah_pokok),
+        "Jenis Bibit": strOrEmpty(block.jenis_bibit),
+        "Luas Land Preparation": numOr0(block.luas_land_preparation),
+        "Luas Nursery": numOr0(block.luas_nursery),
+        "Luas Lain-Lain": numOr0(block.luas_lain___lain ?? block.luas_lain__lain),
+        "Luas Lebungan": numOr0(block.luas_lebungan),
+        "Luas Garapan": numOr0(block.luas_garapan),
+        "Luas Rawa": numOr0(block.luas_rawa),
+        "Luas Tanggul": numOr0(block.luas_tanggul),
+        "Luas Area Non Efektif": numOr0(block.luas_area_non_efektif),
+        "Luas Konservasi": numOr0(block.luas_konservasi),
+        "Luas PKS": numOr0(block.luas_pks),
+        "Luas Jalan": numOr0(block.luas_jalan),
+        "Luas Drainase": numOr0(block.luas_drainase),
+        "Luas Perumahan": numOr0(block.luas_perumahan),
+        "Luas Sarana Prasanara": numOr0(block.luas_sarana_prasanara),
+        "Luas Blok": numOr0(block.luas_blok),
+        SPH: numOr0(block.SPH),
       });
     });
 
@@ -257,8 +292,9 @@ const Locations = () => {
     const input = document.createElement("input");
     input.type = "file";
     input.accept = ".xlsx,.xls";
-    input.onchange = async (e: any) => {
-      const file = e.target?.files?.[0];
+    input.onchange = async (e: Event) => {
+      const target = e.target as HTMLInputElement | null;
+      const file = target?.files?.[0] || null;
       if (!file) return;
 
       const reader = new FileReader();
@@ -267,13 +303,13 @@ const Locations = () => {
           const data = new Uint8Array(event.target?.result as ArrayBuffer);
           const workbook = XLSX.read(data, { type: "array" });
           const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-          const jsonData: any[] = XLSX.utils.sheet_to_json(worksheet);
+          const jsonData = XLSX.utils.sheet_to_json<ExcelRow>(worksheet) as ExcelRow[];
 
           // Group data by Division only (Estate already selected)
-          const groupedData: Record<string, any[]> = {};
+          const groupedData: Record<string, Partial<Block>[]> = {};
 
-          jsonData.forEach((row) => {
-            const divisi = row.Divisi || row.divisi || "";
+          jsonData.forEach((row: ExcelRow) => {
+            const divisi = (row.Divisi || row.divisi || "").toString();
 
             if (!divisi) {
               console.warn("Skipping row with missing Divisi:", row);
@@ -288,32 +324,35 @@ const Locations = () => {
             console.log("Raw row data:", row);
 
             // Transform row to Block format (sesuai dengan struktur database)
-            const blockData: any = {
-              no_blok: row["No Blok"] || "",
-              id_blok: row["ID Blok"] || "",
-              jenis_tanah: row["Jenis Tanah"] || "",
-              topografi: row["Topografi"] || row.Topografi || "",
-              luas_tanam_: Number(row["Luas Tanam"]) || 0,
-              tahun_: Number(row["Tahun"]) || Number(row.Tahun) || 0,
-              jumlak_pokok: Number(row["Jumlah Pokok"]) || 0,
-              jenis_bibit: row["Jenis Bibit"] || "",
-              luas_land_preparation: Number(row["Luas Land Preparation"]) || 0,
-              luas_nursery: Number(row["Luas Nursery"]) || 0,
-              luas_lain___lain: Number(row["Luas Lain-Lain"]) || 0,
-              luas_lebungan: Number(row["Luas Lebungan"]) || 0,
-              luas_garapan: Number(row["Luas Garapan"]) || 0,
-              luas_rawa: Number(row["Luas Rawa"]) || 0,
-              luas_tanggul: Number(row["Luas Tanggul"]) || 0,
-              luas_area_non_efektif: Number(row["Luas Area Non Efektif"]) || 0,
-              luas_konservasi:
-                Number(row["Luas Konservasi"]) || Number(row.Konservasi) || 0,
-              luas_pks: Number(row["Luas PKS"]) || 0,
-              luas_jalan: Number(row["Luas Jalan"]) || 0,
-              luas_drainase: Number(row["Luas Drainase"]) || 0,
-              luas_perumahan: Number(row["Luas Perumahan"]) || 0,
-              luas_sarana_prasanara: Number(row["Luas Sarana Prasanara"]) || 0,
-              luas_blok: Number(row["Luas Blok"]) || 0,
-              SPH: Number(row["SPH"]) || Number(row.SPH) || 0,
+            const toNum = (v: unknown): number => {
+              const n = typeof v === "string" ? parseFloat(v) : (v as number);
+              return Number.isFinite(n) && !Number.isNaN(n) ? n : 0;
+            };
+            const blockData: Partial<Block> = {
+              no_blok: (row["No Blok"] ?? "").toString(),
+              id_blok: (row["ID Blok"] ?? "").toString(),
+              jenis_tanah: (row["Jenis Tanah"] ?? "") as string,
+              topografi: (row.Topografi ?? "") as string,
+              luas_tanam_: toNum(row["Luas Tanam"]),
+              tahun_: toNum(row["Tahun"]),
+              jumlak_pokok: toNum(row["Jumlah Pokok"]),
+              jenis_bibit: (row["Jenis Bibit"] ?? "") as string,
+              luas_land_preparation: toNum(row["Luas Land Preparation"]),
+              luas_nursery: toNum(row["Luas Nursery"]),
+              luas_lain___lain: toNum(row["Luas Lain-Lain"]),
+              luas_lebungan: toNum(row["Luas Lebungan"]),
+              luas_garapan: toNum(row["Luas Garapan"]),
+              luas_rawa: toNum(row["Luas Rawa"]),
+              luas_tanggul: toNum(row["Luas Tanggul"]),
+              luas_area_non_efektif: toNum(row["Luas Area Non Efektif"]),
+              luas_konservasi: toNum(row["Luas Konservasi"] ?? row.Konservasi),
+              luas_pks: toNum(row["Luas PKS"]),
+              luas_jalan: toNum(row["Luas Jalan"]),
+              luas_drainase: toNum(row["Luas Drainase"]),
+              luas_perumahan: toNum(row["Luas Perumahan"]),
+              luas_sarana_prasanara: toNum(row["Luas Sarana Prasanara"]),
+              luas_blok: toNum(row["Luas Blok"]),
+              SPH: toNum(row.SPH),
             };
 
             groupedData[divisi].push(blockData);
@@ -334,7 +373,7 @@ const Locations = () => {
             }
 
             // Get existing estate data
-            const existingEstate: any = await api.estate(estateId);
+            const existingEstate = await api.estate(estateId) as { divisions?: Array<{ division_id: number; blocks?: Block[] }> };
             const existingDivisions = existingEstate.divisions || [];
 
             // Build divisions array with blocks
@@ -346,8 +385,8 @@ const Locations = () => {
               );
 
               // Find existing division or create new
-              let divisionIndex = updatedDivisions.findIndex(
-                (d: any) => d.division_id === divisionId
+              const divisionIndex = updatedDivisions.findIndex(
+                (d) => d.division_id === divisionId
               );
 
               if (divisionIndex === -1) {
@@ -358,26 +397,18 @@ const Locations = () => {
                 });
               } else {
                 // Add new blocks to existing division (tidak menimpa)
-                const existingBlocks =
-                  updatedDivisions[divisionIndex].blocks || [];
-                const mergedBlocks = [...existingBlocks];
-
-                let addedCount = 0;
-                (blocks as any[]).forEach((newBlock: any) => {
-                  // Cek apakah blok sudah ada berdasarkan id_blok ATAU no_blok
+                const existingBlocks: Block[] = (updatedDivisions[divisionIndex].blocks || []) as Block[];
+                const mergedBlocks: Block[] = [...existingBlocks];
+                blocks.forEach((newBlock) => {
                   const existingIndex = mergedBlocks.findIndex(
-                    (b: any) =>
+                    (b) =>
                       (b.id_blok && b.id_blok === newBlock.id_blok) ||
                       (b.no_blok && b.no_blok === newBlock.no_blok)
                   );
-
-                  // Hanya tambah jika benar-benar belum ada
                   if (existingIndex === -1) {
-                    mergedBlocks.push(newBlock);
-                    addedCount++;
+                    mergedBlocks.push(newBlock as Block);
                   }
                 });
-
                 updatedDivisions[divisionIndex].blocks = mergedBlocks;
               }
             }

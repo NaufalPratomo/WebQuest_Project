@@ -41,6 +41,8 @@ const Employees = () => {
   );
   const [openEdit, setOpenEdit] = useState(false);
   const [editTarget, setEditTarget] = useState<EmployeeRow | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [uploading, setUploading] = useState(false);
   const exportCsv = () => {
@@ -112,7 +114,7 @@ const Employees = () => {
       const mapped: EmployeeRow[] = successes.map((e)=> ({ id: e._id, name: e.name, email: e.email, role: e.role, division: e.division || undefined, status: e.status }));
       if (mapped.length) setRows(prev => [...mapped, ...prev]);
       if (failures.length === 0) {
-        toast.success(`Import ${mapped.length} karyawan berhasil`);
+        toast.success(`Import ${mapped.length} Pengguna berhasil`);
       } else if (mapped.length > 0) {
         toast.info(`Berhasil ${mapped.length} baris, gagal ${failures.length} baris`);
       } else {
@@ -152,12 +154,23 @@ const Employees = () => {
     emp.email.toLowerCase().includes(search.toLowerCase())
   ), [rows, search]);
 
+  const totalPages = Math.ceil(filteredEmployees.length / itemsPerPage);
+  const paginatedEmployees = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredEmployees.slice(start, start + itemsPerPage);
+  }, [filteredEmployees, currentPage]);
+
+  // Reset to page 1 when search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search]);
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold">Karyawan</h1>
-          <p className="text-muted-foreground">Kelola data karyawan</p>
+          <h1 className="text-3xl font-bold">Pengguna</h1>
+          <p className="text-muted-foreground">Kelola data pengguna</p>
           {error && <p className="text-sm text-red-600">{error}</p>}
           {loading && <p className="text-sm text-muted-foreground">Memuat data...</p>}
         </div>
@@ -165,12 +178,12 @@ const Employees = () => {
           <DialogTrigger asChild>
             <Button className="bg-orange-500 hover:bg-orange-600">
               <Plus className="h-4 w-4 mr-2" />
-              Tambah Karyawan
+              Tambah Pengguna
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Tambah Karyawan Baru</DialogTitle>
+              <DialogTitle>Tambah Pengguna Baru</DialogTitle>
             </DialogHeader>
             <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
               <div className="space-y-2">
@@ -228,7 +241,7 @@ const Employees = () => {
                   setRows(prev=>[{ id: created._id, name: created.name, email: created.email, role: created.role, division: created.division || undefined, status: created.status }, ...prev]);
                   setOpenAdd(false);
                   setForm({ name:'', email:'', role:'', division:'', password: '' });
-                  toast.success('Karyawan berhasil ditambahkan');
+                  toast.success('Pengguna berhasil ditambahkan');
                 }catch(e){
                   const msg = e instanceof Error ? e.message : 'Gagal menyimpan';
                   toast.error(msg);
@@ -246,7 +259,7 @@ const Employees = () => {
             setOpenEdit(v);
             if (!v) setEditTarget(null);
           }}
-          employee={editTarget ? { id: editTarget.id, name: editTarget.name, email: editTarget.email, role: (editTarget.role as 'manager'|'foreman'|'employee'), division: editTarget.division } : null}
+          employee={editTarget ? { id: editTarget.id, name: editTarget.name, email: editTarget.email, role: (editTarget.role as 'manager'|'foreman'|'employee'), division: editTarget.division, status: editTarget.status } : null}
           onUpdated={(updated) => {
             setRows((prev) => prev.map((r) => r.id === updated._id ? ({ id: updated._id, name: updated.name, email: updated.email, role: updated.role, division: updated.division || undefined, status: updated.status }) : r));
           }}
@@ -259,7 +272,7 @@ const Employees = () => {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Cari karyawan..."
+                placeholder="Cari pengguna..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-10"
@@ -291,7 +304,7 @@ const Employees = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredEmployees.map((employee) => (
+              {paginatedEmployees.map((employee) => (
                 <TableRow key={employee.id}>
                   <TableCell className="font-medium">{employee.name}</TableCell>
                   <TableCell>{employee.email}</TableCell>
@@ -322,7 +335,7 @@ const Employees = () => {
                         try{
                           await api.deleteEmployee(employee.id);
                           setRows(prev=>prev.filter(r=>r.id!==employee.id));
-                          toast.success('Karyawan dihapus');
+                          toast.success('Pengguna dihapus');
                         }catch(e){
                           const msg = e instanceof Error ? e.message : 'Gagal menghapus';
                           toast.error(msg);
@@ -336,6 +349,32 @@ const Employees = () => {
               ))}
             </TableBody>
           </Table>
+          <div className="flex items-center justify-between mt-4">
+            <div className="text-sm text-muted-foreground">
+              Total {filteredEmployees.length} pengguna
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+              >
+                Prev
+              </Button>
+              <span className="text-sm">
+                Halaman {currentPage} dari {totalPages || 1}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages || totalPages === 0}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
     </div>

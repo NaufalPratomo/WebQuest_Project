@@ -33,7 +33,7 @@ const Layout = ({ children }: LayoutProps) => {
     {
       label: 'Master Data',
       items: [
-        { path: '/master/employees', icon: Users, label: 'Data Karyawan', roles: ['manager'] },
+        { path: '/master/employees', icon: Users, label: 'Data Pengguna', roles: ['manager'] },
         { path: '/master/locations', icon: MapPin, label: 'Data Aresta', roles: ['manager'] },
       ],
     },

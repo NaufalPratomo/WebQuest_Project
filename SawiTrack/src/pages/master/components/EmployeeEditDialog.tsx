@@ -9,17 +9,18 @@ import { api, Employee as EmployeeDoc } from '@/lib/api';
 
 type Role = 'manager' | 'foreman' | 'employee';
 type RoleOption = Role | '';
+type Status = 'active' | 'inactive';
 
 export interface EmployeeEditDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  employee: { id: string; name: string; email: string; role: Role; division?: string } | null;
+  employee: { id: string; name: string; email: string; role: Role; division?: string; status?: string } | null;
   onUpdated: (updated: EmployeeDoc) => void;
 }
 
 export default function EmployeeEditDialog({ open, onOpenChange, employee, onUpdated }: EmployeeEditDialogProps) {
-  const [form, setForm] = useState<{ name: string; email: string; role: RoleOption; division: string | ''; password?: string }>(
-    { name: '', email: '', role: '', division: '', password: '' }
+  const [form, setForm] = useState<{ name: string; email: string; role: RoleOption; division: string | ''; status: Status; password?: string }>(
+    { name: '', email: '', role: '', division: '', status: 'active', password: '' }
   );
   const [divisions, setDivisions] = useState<string[]>([]);
   const [loadingDivisions, setLoadingDivisions] = useState(false);
@@ -31,6 +32,7 @@ export default function EmployeeEditDialog({ open, onOpenChange, employee, onUpd
         email: employee.email,
         role: employee.role,
         division: employee.division || '',
+        status: (employee.status === 'inactive' ? 'inactive' : 'active') as Status,
         password: '',
       });
     }
@@ -74,11 +76,12 @@ export default function EmployeeEditDialog({ open, onOpenChange, employee, onUpd
         toast.error('Nama, email, dan role wajib diisi');
         return;
       }
-      const payload: Partial<{ name: string; email: string; role: Role; division: string | null; password: string }> = {
+      const payload: Partial<{ name: string; email: string; role: Role; division: string | null; status: Status; password: string }> = {
         name: form.name,
         email: form.email,
         role: (form.role || 'employee') as Role,
         division: form.division || null,
+        status: form.status,
       };
       const pwd = (form.password || '').trim();
       if (pwd) payload.password = pwd;
@@ -135,6 +138,18 @@ export default function EmployeeEditDialog({ open, onOpenChange, employee, onUpd
                     <SelectItem key={d} value={d}>Divisi {d}</SelectItem>
                   ))
                 )}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="estatus">Status</Label>
+            <Select value={form.status} onValueChange={(v) => setForm((f) => ({ ...f, status: v as Status }))}>
+              <SelectTrigger>
+                <SelectValue placeholder="Pilih status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="active">Aktif</SelectItem>
+                <SelectItem value="inactive">Nonaktif</SelectItem>
               </SelectContent>
             </Select>
           </div>

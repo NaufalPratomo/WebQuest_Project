@@ -389,6 +389,26 @@ const RealHarvest = () => {
                 </Select>
               </div>
               <div className="space-y-2">
+                <Label>JJG TBS (Hasil Kerja)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={form.janjangTBS}
+                  onChange={(e)=> setForm(p=> ({ ...p, janjangTBS: e.target.value }))}
+                  placeholder="Jumlah janjang TBS"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>JJG Kosong</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={form.janjangKosong}
+                  onChange={(e)=> setForm(p=> ({ ...p, janjangKosong: e.target.value }))}
+                  placeholder="Jumlah janjang kosong"
+                />
+              </div>
+              <div className="space-y-2">
                 <Label>Upah Basis (Otomatis)</Label>
                 <Input readOnly value={upahPreview} />
               </div>

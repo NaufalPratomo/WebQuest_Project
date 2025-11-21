@@ -47,6 +47,17 @@ export interface RecapHKRow {
   rejected: number;
 }
 
+export interface Company {
+  _id: string;
+  company_name: string;
+  address: string;
+  phone?: string;
+  email?: string;
+  estates?: Array<{ _id: string; estate_name: string }>;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 // New data contracts
 export type TaksasiRow = {
   _id?: string;
@@ -137,6 +148,34 @@ export const api = {
     }),
   me: () => http<Employee>(`/auth/me`),
   health: () => http<{ ok: boolean; uptime: number }>(`/health`),
+  // Companies
+  companies: () => http<Company[]>(`/companies`),
+  company: (id: string) => http<Company>(`/companies/${id}`),
+  createCompany: (body: {
+    company_name: string;
+    address: string;
+    phone?: string;
+    email?: string;
+    estates?: string[];
+  }) =>
+    http<Company>(`/companies`, { method: "POST", body: JSON.stringify(body) }),
+  updateCompany: (
+    id: string,
+    body: Partial<{
+      company_name: string;
+      address: string;
+      phone: string;
+      email: string;
+      estates: string[];
+    }>
+  ) =>
+    http<Company>(`/companies/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+  deleteCompany: (id: string) =>
+    http<{ ok: boolean }>(`/companies/${id}`, { method: "DELETE" }),
+  // Estates
   estates: () => http<Array<{ _id: string; estate_name: string }>>(`/estates`),
   estate: (id: string) => http(`/estates/${id}`),
   createEstate: (body: {

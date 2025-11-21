@@ -4,6 +4,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import mongoose from "mongoose";
 import Estate from "./models/Estate.js";
+import Company from "./models/Company.js";
 import Employee from "./models/Employee.js";
 import Target from "./models/Target.js";
 import Report from "./models/Report.js";
@@ -160,6 +161,82 @@ app.get(`${API_BASE_PATH}/estates`, async (_req, res) => {
   try {
     const estates = await Estate.find({}, { _id: 1, estate_name: 1 }).lean();
     res.json(estates);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Companies
+app.get(`${API_BASE_PATH}/companies`, async (_req, res) => {
+  try {
+    const companies = await Company.find()
+      .populate("estates", "_id estate_name")
+      .lean();
+    res.json(companies);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get(`${API_BASE_PATH}/companies/:id`, async (req, res) => {
+  try {
+    const company = await Company.findById(req.params.id)
+      .populate("estates", "_id estate_name")
+      .lean();
+    if (!company) return res.status(404).json({ error: "Company not found" });
+    res.json(company);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post(`${API_BASE_PATH}/companies`, async (req, res) => {
+  try {
+    console.log("POST /companies - Body:", req.body);
+    const { company_name, address, phone, email, estates } = req.body;
+    if (!company_name || !address)
+      return res
+        .status(400)
+        .json({ error: "company_name and address are required" });
+    const created = await Company.create({
+      company_name,
+      address,
+      phone,
+      email,
+      estates: estates || [],
+    });
+    console.log("Company created:", created);
+    res.status(201).json(created);
+  } catch (err) {
+    console.error("Error creating company:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put(`${API_BASE_PATH}/companies/:id`, async (req, res) => {
+  try {
+    const { company_name, address, phone, email, estates } = req.body;
+    const update = {};
+    if (company_name !== undefined) update.company_name = company_name;
+    if (address !== undefined) update.address = address;
+    if (phone !== undefined) update.phone = phone;
+    if (email !== undefined) update.email = email;
+    if (estates !== undefined) update.estates = estates;
+    const updated = await Company.findByIdAndUpdate(req.params.id, update, {
+      new: true,
+    }).lean();
+    if (!updated) return res.status(404).json({ error: "Company not found" });
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete(`${API_BASE_PATH}/companies/:id`, async (req, res) => {
+  try {
+    const deleted = await Company.findByIdAndDelete(req.params.id);
+    if (!deleted) return res.status(404).json({ error: "Company not found" });
+    res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

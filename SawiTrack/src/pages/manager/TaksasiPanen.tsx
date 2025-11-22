@@ -193,20 +193,20 @@ export default function TaksasiPanen() {
     const newEmp: Emp = { _id: id, name, division };
     setCustomEmployees(prev => {
       const next = [...prev, newEmp];
-      try { localStorage.setItem(customKey, JSON.stringify(next)); } catch {/* ignore */}
+      try { localStorage.setItem(customKey, JSON.stringify(next)); } catch {/* ignore */ }
       return next;
     });
     // auto-select it
     setSelectedIds(prev => {
       const next = [...prev, id];
-      try { localStorage.setItem(selectionKey, JSON.stringify(next)); } catch {/* ignore */}
+      try { localStorage.setItem(selectionKey, JSON.stringify(next)); } catch {/* ignore */ }
       return next;
     });
     setOtherName('');
     toast.success('Karyawan lainnya ditambahkan');
   }
 
-  function saveRow() {
+  async function saveRow() {
     if (!date || !estateId || !divisionId || !selectedBlock) {
       toast.error('Mohon lengkapi Tanggal, Estate, Divisi, dan Blok');
       return;
@@ -237,52 +237,65 @@ export default function TaksasiPanen() {
       taksasiTon: Number(taksasiTon.toFixed(2)),
       kebutuhanPemanen,
     };
-    const composite = `${date}|${estateId}|${divisionId}|${blockLabel}`;
-    let newRows: TaksasiRow[];
-    const existingIndex = rows.findIndex(r => `${r.date}|${r.estateId}|${r.divisionId}|${r.blockLabel}` === composite);
-    if (existingIndex !== -1) {
-      // replace existing (edit or duplicate detected)
-      newRows = rows.slice();
-      newRows[existingIndex] = row;
-      toast.success('Taksasi diperbarui (blok sudah ada)');
-    } else if (editingKey) {
-      // editing but composite changed (treat as upsert)
-      newRows = rows.map(r => (
-        `${r.date}|${r.estateId}|${r.divisionId}|${r.blockLabel}` === editingKey ? row : r
-      ));
-      toast.success('Taksasi hasil edit tersimpan');
-    } else {
-      newRows = [...rows, row];
-      toast.success('Taksasi tersimpan');
-    }
-    setRows(newRows);
+
+    // Simpan ke server dulu
     try {
-      localStorage.setItem(storageKey, JSON.stringify(newRows));
-    } catch {
-      // ignore localStorage failure
-    }
-    // Simpan ke server sebagai taksasi per blok (fokus ke tonase/kg)
-    api
-      .taksasiCreate({
+      await api.taksasiCreate({
         date,
         estateId,
         division_id: Number(divisionId),
         block_no: blockLabel,
         weightKg: Math.round(taksasiTon * 1000),
         notes: `AKP=${row.akpPercent}%; BM=${bm}; PTB=${ptb}`,
-      })
-      .then(() => toast.success('Taksasi tersimpan ke server'))
-      .catch((e) => toast.error(e instanceof Error ? e.message : 'Gagal simpan taksasi ke server'));
-    // reset for next input but keep date and selections so user can continue quickly
-    setStep(1);
-    // preserve date; clear lower selections and inputs for safety
-    setDivisionId('');
-    setBlocks([]);
-    setBlockIndex('');
-    setBm(0); setPtb(0); setBmbb(0); setBmm(0);
-    setAvgWeightKg(15); setBasisJanjangPerPemanen(120);
-    setEditingKey(null);
-    setPendingEditBlockLabel('');
+      });
+
+      // Jika sukses, baru update local state
+      const composite = `${date}|${estateId}|${divisionId}|${blockLabel}`;
+      let newRows: TaksasiRow[];
+      const existingIndex = rows.findIndex(r => `${r.date}|${r.estateId}|${r.divisionId}|${r.blockLabel}` === composite);
+
+      if (existingIndex !== -1) {
+        newRows = rows.slice();
+        newRows[existingIndex] = row;
+        toast.success('Taksasi diperbarui dan tersimpan ke server');
+      } else if (editingKey) {
+        newRows = rows.map(r => (
+          `${r.date}|${r.estateId}|${r.divisionId}|${r.blockLabel}` === editingKey ? row : r
+        ));
+        toast.success('Taksasi hasil edit tersimpan ke server');
+      } else {
+        newRows = [...rows, row];
+        toast.success('Taksasi tersimpan ke server');
+      }
+
+      setRows(newRows);
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(newRows));
+      } catch {
+        // ignore localStorage failure
+      }
+
+      // reset for next input
+      setStep(1);
+      setDivisionId('');
+      setBlocks([]);
+      setBlockIndex('');
+      setBm(0); setPtb(0); setBmbb(0); setBmm(0);
+      setAvgWeightKg(15); setBasisJanjangPerPemanen(120);
+      setEditingKey(null);
+      setPendingEditBlockLabel('');
+
+    } catch (e: any) {
+      let msg = e instanceof Error ? e.message : 'Gagal simpan taksasi ke server';
+      // Clean up JSON error message if present
+      try {
+        const parsed = JSON.parse(msg);
+        if (parsed.error) msg = parsed.error;
+      } catch {
+        // not JSON, use as is
+      }
+      toast.error(msg);
+    }
   }
 
   function nextStep() {

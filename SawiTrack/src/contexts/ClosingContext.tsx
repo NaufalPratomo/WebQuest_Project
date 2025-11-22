@@ -1,47 +1,51 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { toast } from 'sonner';
-import { api } from '@/lib/api'; // Assuming you have an api utility
+import { api } from '@/lib/api';
 
-interface ClosedMonth {
-  year: number;
-  month: number; // 1-indexed month
+interface ClosingPeriod {
+  _id: string;
+  startDate: string;
+  endDate: string;
+  notes?: string;
 }
 
 interface ClosingContextType {
-  closedMonths: ClosedMonth[];
-  isMonthClosed: (dateString: string) => boolean;
-  fetchClosedMonths: () => Promise<void>;
+  closingPeriods: ClosingPeriod[];
+  isDateClosed: (dateString: string) => boolean;
+  fetchClosingPeriods: () => Promise<void>;
 }
 
 const ClosingContext = createContext<ClosingContextType | undefined>(undefined);
 
 export const ClosingProvider = ({ children }: { children: ReactNode }) => {
-  const [closedMonths, setClosedMonths] = useState<ClosedMonth[]>([]);
+  const [closingPeriods, setClosingPeriods] = useState<ClosingPeriod[]>([]);
 
-  const fetchClosedMonths = async () => {
+  const fetchClosingPeriods = async () => {
     try {
-      const response = await api.closedMonths(); // Adjust API endpoint as needed
-      setClosedMonths(response || []);
+      const response = await api.closingPeriods();
+      setClosingPeriods(response || []);
     } catch (error) {
-      toast.error('Gagal memuat daftar bulan yang ditutup.');
-      console.error('Error fetching closed months:', error);
+      // toast.error('Gagal memuat daftar periode closing.');
+      console.error('Error fetching closing periods:', error);
     }
   };
 
   useEffect(() => {
-    fetchClosedMonths();
+    fetchClosingPeriods();
   }, []);
 
-  const isMonthClosed = (dateString: string): boolean => {
-    const date = new Date(dateString);
-    const year = date.getFullYear();
-    const month = date.getMonth() + 1; // getMonth() is 0-indexed
-
-    return closedMonths.some(cm => cm.year === year && cm.month === month);
+  const isDateClosed = (dateString: string): boolean => {
+    if (!dateString) return false;
+    const d = new Date(dateString);
+    return closingPeriods.some(p => {
+      const start = new Date(p.startDate);
+      const end = new Date(p.endDate);
+      return d >= start && d <= end;
+    });
   };
 
   return (
-    <ClosingContext.Provider value={{ closedMonths, isMonthClosed, fetchClosedMonths }}>
+    <ClosingContext.Provider value={{ closingPeriods, isDateClosed, fetchClosingPeriods }}>
       {children}
     </ClosingContext.Provider>
   );

@@ -89,8 +89,12 @@ const InputReport = () => {
       toast.success('Laporan berhasil disubmit');
       // reset minimal
       setNotes('');
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Gagal submit laporan';
+    } catch (err: any) {
+      let message = err instanceof Error ? err.message : 'Gagal submit laporan';
+      try {
+        const parsed = JSON.parse(message);
+        if (parsed.error) message = parsed.error;
+      } catch { }
       toast.error(message);
     }
   };

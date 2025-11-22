@@ -11,8 +11,8 @@ import { toast } from 'sonner';
 
 export default function Transport() {
   type BlockOption = { no_blok?: string; id_blok?: string };
-  const [datePanen, setDatePanen] = useState<string>(new Date().toISOString().slice(0,10));
-  const [dateAngkut, setDateAngkut] = useState<string>(new Date().toISOString().slice(0,10));
+  const [datePanen, setDatePanen] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [dateAngkut, setDateAngkut] = useState<string>(new Date().toISOString().slice(0, 10));
   const [estates, setEstates] = useState<Array<{ _id: string; estate_name: string }>>([]);
   const [estateId, setEstateId] = useState<string>('');
   const [divisions, setDivisions] = useState<Array<{ division_id: number }>>([]);
@@ -64,7 +64,7 @@ export default function Transport() {
     }
   }, [harvestStorageKey, datePanen]);
   const exportCsv = () => {
-    const header = ['date_panen','date_angkut','estateId','division_id','block_no','weightKg'];
+    const header = ['date_panen', 'date_angkut', 'estateId', 'division_id', 'block_no', 'weightKg'];
     const escape = (v: unknown) => {
       const s = v === undefined || v === null ? '' : String(v);
       if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
@@ -173,8 +173,12 @@ export default function Transport() {
       toast.success('Tersimpan');
       setRows(prev => Array.isArray(created) ? [...prev, ...created] : [...prev, created as AngkutRow]);
       setBlockNo(''); setNoTPH(''); setJjgAngkut(''); setNoMobil(''); setNamaSupir('');
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Gagal menyimpan';
+    } catch (e: any) {
+      let msg = e instanceof Error ? e.message : 'Gagal menyimpan';
+      try {
+        const parsed = JSON.parse(msg);
+        if (parsed.error) msg = parsed.error;
+      } catch { }
       toast.error(msg);
     }
   };
@@ -208,8 +212,12 @@ export default function Transport() {
       const latest = await api.angkutList({ date_panen: datePanen });
       setRows(latest);
       toast.success('JJG angkut diperbarui');
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Gagal memperbarui JJG angkut';
+    } catch (e: any) {
+      let msg = e instanceof Error ? e.message : 'Gagal memperbarui JJG angkut';
+      try {
+        const parsed = JSON.parse(msg);
+        if (parsed.error) msg = parsed.error;
+      } catch { }
       toast.error(msg);
     }
   };
@@ -248,8 +256,13 @@ export default function Transport() {
       toast.success('Data angkut diperbarui');
       setCompleteOpen(false);
       setCompleteTarget(null);
-    } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : 'Gagal menyimpan');
+    } catch (e: any) {
+      let msg = e instanceof Error ? e.message : 'Gagal menyimpan';
+      try {
+        const parsed = JSON.parse(msg);
+        if (parsed.error) msg = parsed.error;
+      } catch { }
+      toast.error(msg);
     }
   };
 
@@ -262,7 +275,7 @@ export default function Transport() {
       const header = lines[0].split(',').map((s) => s.trim().toLowerCase());
       const idx = (k: string) => header.indexOf(k);
       const requireIdx = (...keys: string[]) => { for (const k of keys) if (idx(k) === -1) throw new Error(`Kolom '${k}' tidak ditemukan`); };
-      requireIdx('date_panen','date_angkut','estateid','division_id','block_no','weightkg');
+      requireIdx('date_panen', 'date_angkut', 'estateid', 'division_id', 'block_no', 'weightkg');
       const parsed: AngkutRow[] = lines.slice(1).map((line) => {
         const cols = line.split(',');
         return {
@@ -274,8 +287,8 @@ export default function Transport() {
           weightKg: Number(cols[idx('weightkg')]),
         } as AngkutRow;
       }).filter(r => r.date_panen && r.date_angkut && r.estateId && r.division_id && r.block_no && !Number.isNaN(r.weightKg));
-      const key = (r: AngkutRow) => `${String(r.date_panen).slice(0,10)}|${String(r.date_angkut).slice(0,10)}|${r.estateId}|${r.division_id}|${r.block_no}`;
-      const dates = Array.from(new Set(parsed.map(r => String(r.date_panen).slice(0,10))));
+      const key = (r: AngkutRow) => `${String(r.date_panen).slice(0, 10)}|${String(r.date_angkut).slice(0, 10)}|${r.estateId}|${r.division_id}|${r.block_no}`;
+      const dates = Array.from(new Set(parsed.map(r => String(r.date_panen).slice(0, 10))));
       let existing: AngkutRow[] = [];
       for (const d of dates) {
         try {
@@ -299,8 +312,12 @@ export default function Transport() {
       }
       const latest = await api.angkutList({ date_panen: datePanen });
       setRows(latest);
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Gagal import CSV';
+    } catch (e: any) {
+      let msg = e instanceof Error ? e.message : 'Gagal import CSV';
+      try {
+        const parsed = JSON.parse(msg);
+        if (parsed.error) msg = parsed.error;
+      } catch { }
       toast.error(msg);
     } finally {
       setUploading(false);
@@ -339,7 +356,7 @@ export default function Transport() {
                 type="file"
                 accept=".csv"
                 className="hidden"
-                onChange={(e)=> e.target.files && handleCsvUpload(e.target.files[0])}
+                onChange={(e) => e.target.files && handleCsvUpload(e.target.files[0])}
                 disabled={uploading}
               />
             </div>
@@ -348,7 +365,7 @@ export default function Transport() {
         <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
           <div>
             <Label>Tanggal Panen (Kunci)</Label>
-            <Input type="date" value={datePanen} onChange={(e)=> setDatePanen(e.target.value)} />
+            <Input type="date" value={datePanen} onChange={(e) => setDatePanen(e.target.value)} />
           </div>
           <div className="flex gap-2">
             <Dialog>
@@ -362,47 +379,47 @@ export default function Transport() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <Label>Tanggal Angkut</Label>
-                    <Input type="date" value={dateAngkut} onChange={(e)=> setDateAngkut(e.target.value)} />
+                    <Input type="date" value={dateAngkut} onChange={(e) => setDateAngkut(e.target.value)} />
                   </div>
                   <div>
                     <Label>Estate</Label>
-                    <select className="w-full h-10 border rounded px-2" value={estateId} onChange={(e)=> setEstateId(e.target.value)}>
+                    <select className="w-full h-10 border rounded px-2" value={estateId} onChange={(e) => setEstateId(e.target.value)}>
                       <option value="">Pilih</option>
                       {estates.map(es => <option key={es._id} value={es._id}>{es.estate_name}</option>)}
                     </select>
                   </div>
                   <div>
                     <Label>Divisi</Label>
-                    <select className="w-full h-10 border rounded px-2" value={divisionId} onChange={(e)=> setDivisionId(e.target.value ? Number(e.target.value) : '')}>
+                    <select className="w-full h-10 border rounded px-2" value={divisionId} onChange={(e) => setDivisionId(e.target.value ? Number(e.target.value) : '')}>
                       <option value="">Pilih</option>
                       {divisions.map(d => <option key={d.division_id} value={d.division_id}>Divisi {d.division_id}</option>)}
                     </select>
                   </div>
                   <div>
                     <Label>Blok</Label>
-                    <select className="w-full h-10 border rounded px-2" value={blockNo} onChange={(e)=> setBlockNo(e.target.value)}>
+                    <select className="w-full h-10 border rounded px-2" value={blockNo} onChange={(e) => setBlockNo(e.target.value)}>
                       <option value="">Pilih</option>
-                      {blocks.map((b, i:number) => {
+                      {blocks.map((b, i: number) => {
                         const label = String(b.no_blok || b.id_blok || '');
-                        return <option key={i} value={label}>{label || `Blok ${i+1}`}</option>;
+                        return <option key={i} value={label}>{label || `Blok ${i + 1}`}</option>;
                       })}
                     </select>
                   </div>
                   <div>
                     <Label>NoTPH</Label>
-                    <Input type="text" value={noTPH} onChange={(e)=> setNoTPH(e.target.value)} />
+                    <Input type="text" value={noTPH} onChange={(e) => setNoTPH(e.target.value)} />
                   </div>
                   <div>
                     <Label>jjg_angkut</Label>
-                    <Input type="number" value={jjgAngkut} onChange={(e)=> setJjgAngkut(e.target.value ? Number(e.target.value) : '')} />
+                    <Input type="number" value={jjgAngkut} onChange={(e) => setJjgAngkut(e.target.value ? Number(e.target.value) : '')} />
                   </div>
                   <div>
                     <Label>No. Mobil</Label>
-                    <Input type="text" value={noMobil} onChange={(e)=> setNoMobil(e.target.value)} />
+                    <Input type="text" value={noMobil} onChange={(e) => setNoMobil(e.target.value)} />
                   </div>
                   <div>
                     <Label>Nama Supir</Label>
-                    <Input type="text" value={namaSupir} onChange={(e)=> setNamaSupir(e.target.value)} />
+                    <Input type="text" value={namaSupir} onChange={(e) => setNamaSupir(e.target.value)} />
                   </div>
                 </div>
                 <div className="flex gap-2 mt-2">
@@ -410,7 +427,7 @@ export default function Transport() {
                 </div>
               </DialogContent>
             </Dialog>
-            
+
           </div>
         </CardContent>
       </Card>
@@ -440,7 +457,7 @@ export default function Transport() {
               <TableBody>
                 {derived.map(({ row: r, totalJJG, jjgAngkut, restan }, idx) => (
                   <TableRow key={(r as AngkutRowWithId)._id || idx}>
-                    <TableCell className="text-center">{String(r.date_angkut).slice(0,10)}</TableCell>
+                    <TableCell className="text-center">{String(r.date_angkut).slice(0, 10)}</TableCell>
                     <TableCell className="text-center">{r.estateId}</TableCell>
                     <TableCell className="text-center">{r.division_id}</TableCell>
                     <TableCell className="text-center">{r.block_no}</TableCell>
@@ -473,7 +490,7 @@ export default function Transport() {
               </TableBody>
             </Table>
             {/* Dialog Lengkapi */}
-            <Dialog open={completeOpen} onOpenChange={(o)=> { if (!o) { setCompleteOpen(false); setCompleteTarget(null); } }}>
+            <Dialog open={completeOpen} onOpenChange={(o) => { if (!o) { setCompleteOpen(false); setCompleteTarget(null); } }}>
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>{(noteVal(completeTarget?.notes, 'no_mobil') && noteVal(completeTarget?.notes, 'supir')) ? 'Edit Data Angkut' : 'Lengkapi Data Angkut'}</DialogTitle>
@@ -481,11 +498,11 @@ export default function Transport() {
                 <div className="grid gap-4 md:grid-cols-2">
                   <div>
                     <Label>No. Mobil</Label>
-                    <Input value={editNoMobil} onChange={(e)=> setEditNoMobil(e.target.value)} placeholder="Isi nomor mobil" />
+                    <Input value={editNoMobil} onChange={(e) => setEditNoMobil(e.target.value)} placeholder="Isi nomor mobil" />
                   </div>
                   <div>
                     <Label>Nama Supir</Label>
-                    <Input value={editSupir} onChange={(e)=> setEditSupir(e.target.value)} placeholder="Isi nama supir" />
+                    <Input value={editSupir} onChange={(e) => setEditSupir(e.target.value)} placeholder="Isi nama supir" />
                   </div>
                   <div className="md:col-span-2 text-sm text-muted-foreground">TPH: {noteVal(completeTarget?.notes, 'notph') || '-'}</div>
                   <div className="md:col-span-2 text-sm">JJG Realisasi: {(() => {
@@ -496,7 +513,7 @@ export default function Transport() {
                 </div>
                 <div className="flex gap-2 mt-4">
                   <Button onClick={saveComplete} className="flex-1">Simpan</Button>
-                  <Button variant="outline" onClick={()=> { setCompleteOpen(false); setCompleteTarget(null); }}>Batal</Button>
+                  <Button variant="outline" onClick={() => { setCompleteOpen(false); setCompleteTarget(null); }}>Batal</Button>
                 </div>
               </DialogContent>
             </Dialog>
@@ -506,14 +523,14 @@ export default function Transport() {
     </div>
   );
 }
-  const noteVal = (notes: string | undefined, key: string): string => {
-    if (!notes) return '';
-    try {
-      const parts = notes.split(/;\s*/);
-      for (const p of parts) {
-        const [k, v] = p.split('=');
-        if (k && k.trim() === key) return v ?? '';
-      }
-      return '';
-    } catch { return ''; }
-  };
+const noteVal = (notes: string | undefined, key: string): string => {
+  if (!notes) return '';
+  try {
+    const parts = notes.split(/;\s*/);
+    for (const p of parts) {
+      const [k, v] = p.split('=');
+      if (k && k.trim() === key) return v ?? '';
+    }
+    return '';
+  } catch { return ''; }
+};

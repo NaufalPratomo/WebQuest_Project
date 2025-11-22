@@ -13,7 +13,8 @@ import Panen from "./models/Panen.js";
 import Angkut from "./models/Angkut.js";
 import Attendance from "./models/Attendance.js";
 import JobCode from "./models/JobCode.js";
-import ClosingMonth from "./models/ClosingMonth.js";
+import ClosingPeriod from "./models/ClosingPeriod.js";
+import ActivityLog from "./models/ActivityLog.js";
 import path from "path";
 import { fileURLToPath } from "url";
 import bcrypt from "bcryptjs";
@@ -74,6 +75,54 @@ async function connectMongo() {
   console.log("Connected to MongoDB");
 }
 
+// Helper: Log Activity
+async function logActivity(req, action, details = {}, userOverride = null) {
+  try {
+    let user = userOverride;
+    if (!user && req.headers.authorization) {
+      const token = req.headers.authorization.split(" ")[1];
+      if (token) {
+        try {
+          const payload = jwt.verify(token, JWT_SECRET);
+          // We might need to fetch user details if not in payload, but payload has role/division/sub
+          // For simplicity, we'll try to use what we have or fetch if critical.
+          // Let's just store the ID and maybe fetch name if not provided.
+          if (!user) {
+            // If we really need the name, we might have to fetch it, or rely on the caller passing it.
+            // For now, let's assume the caller passes 'user' object if available, or we use ID.
+            user = { _id: payload.sub, role: payload.role };
+          }
+        } catch (e) { }
+      }
+    }
+
+    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    await ActivityLog.create({
+      user_id: user?._id,
+      user_name: user?.name || details.user_name || 'System/Unknown',
+      role: user?.role,
+      action,
+      details,
+      ip_address: ip
+    });
+  } catch (err) {
+    console.error("Activity Log Error:", err);
+  }
+}
+
+
+// Helper: Check if date is in closed period
+async function checkDateClosed(dateInput) {
+  if (!dateInput) return false;
+  const d = new Date(dateInput);
+  // Find any period where startDate <= d <= endDate
+  const closed = await ClosingPeriod.findOne({
+    startDate: { $lte: d },
+    endDate: { $gte: d }
+  }).lean();
+  return !!closed;
+}
+
 // Health
 app.get(`${API_BASE_PATH}/health`, (_req, res) => {
   res.json({ ok: true, uptime: process.uptime() });
@@ -119,6 +168,8 @@ app.post(`${API_BASE_PATH}/auth/login`, async (req, res) => {
       division: doc.division_id ?? null,
       status: doc.status,
     };
+    // Log login
+    logActivity(req, "LOGIN", { email }, user);
     return res.json({ token, user });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -207,6 +258,7 @@ app.post(`${API_BASE_PATH}/companies`, async (req, res) => {
       estates: estates || [],
     });
     console.log("Company created:", created);
+    logActivity(req, "CREATE_COMPANY", { company_name });
     res.status(201).json(created);
   } catch (err) {
     console.error("Error creating company:", err);
@@ -227,6 +279,7 @@ app.put(`${API_BASE_PATH}/companies/:id`, async (req, res) => {
       new: true,
     }).lean();
     if (!updated) return res.status(404).json({ error: "Company not found" });
+    logActivity(req, "UPDATE_COMPANY", { company_id: req.params.id, updates: update });
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -237,6 +290,7 @@ app.delete(`${API_BASE_PATH}/companies/:id`, async (req, res) => {
   try {
     const deleted = await Company.findByIdAndDelete(req.params.id);
     if (!deleted) return res.status(404).json({ error: "Company not found" });
+    logActivity(req, "DELETE_COMPANY", { company_id: req.params.id });
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -253,6 +307,7 @@ app.post(`${API_BASE_PATH}/estates`, async (req, res) => {
       estate_name,
       divisions: divisions || [],
     });
+    logActivity(req, "CREATE_ESTATE", { estate_name });
     res.status(201).json(created);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -269,6 +324,7 @@ app.put(`${API_BASE_PATH}/estates/:id`, async (req, res) => {
       new: true,
     }).lean();
     if (!updated) return res.status(404).json({ error: "Not found" });
+    logActivity(req, "UPDATE_ESTATE", { estate_id: req.params.id, updates: update });
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -279,6 +335,7 @@ app.delete(`${API_BASE_PATH}/estates/:id,`, async (req, res) => {
   try {
     const deleted = await Estate.findByIdAndDelete(req.params.id).lean();
     if (!deleted) return res.status(404).json({ error: "Not found" });
+    logActivity(req, "DELETE_ESTATE", { estate_id: req.params.id });
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -398,6 +455,7 @@ app.post(`${API_BASE_PATH}/employees`, async (req, res) => {
       division: division ?? null,
       status: created.status,
     };
+    logActivity(req, "CREATE_EMPLOYEE", { new_employee_name: name, new_employee_email: email });
     res.status(201).json(safe);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -432,6 +490,8 @@ app.put(`${API_BASE_PATH}/employees/:id`, async (req, res) => {
       division: updated.division_id ?? null,
       status: updated.status,
     };
+
+    logActivity(req, "UPDATE_EMPLOYEE", { employee_id: req.params.id, updates: update });
     res.json(safe);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -442,6 +502,7 @@ app.delete(`${API_BASE_PATH}/employees/:id`, async (req, res) => {
   try {
     const deleted = await Employee.findByIdAndDelete(req.params.id).lean();
     if (!deleted) return res.status(404).json({ error: "Not found" });
+    logActivity(req, "DELETE_EMPLOYEE", { employee_id: req.params.id, employee_name: deleted.name });
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -480,6 +541,8 @@ app.post(`${API_BASE_PATH}/targets`, async (req, res) => {
       achieved,
       status,
     });
+
+    logActivity(req, "CREATE_TARGET", { division, period, target });
     res.status(201).json(created);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -492,6 +555,7 @@ app.put(`${API_BASE_PATH}/targets/:id`, async (req, res) => {
       new: true,
     }).lean();
     if (!updated) return res.status(404).json({ error: "Not found" });
+    logActivity(req, "UPDATE_TARGET", { target_id: req.params.id, updates: req.body });
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -502,51 +566,62 @@ app.delete(`${API_BASE_PATH}/targets/:id`, async (req, res) => {
   try {
     const deleted = await Target.findByIdAndDelete(req.params.id).lean();
     if (!deleted) return res.status(404).json({ error: "Not found" });
+    logActivity(req, "DELETE_TARGET", { target_id: req.params.id });
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Closing: list closed months
-app.get(`${API_BASE_PATH}/closed-months`, async (_req, res) => {
+// Closing Periods
+app.get(`${API_BASE_PATH}/closing-periods`, async (_req, res) => {
   try {
-    const docs = await ClosingMonth.find({}, { _id: 0, year: 1, month: 1 })
-      .sort({ year: 1, month: 1 })
-      .lean();
+    const docs = await ClosingPeriod.find({}).sort({ startDate: -1 }).lean();
     res.json(docs);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Closing: close current month
-app.post(`${API_BASE_PATH}/close-month`, async (req, res) => {
+app.post(`${API_BASE_PATH}/closing-periods`, async (req, res) => {
   try {
-    let { year, month } = req.body || {};
-    if (!year || !month) {
-      const now = new Date();
-      year = now.getFullYear();
-      month = now.getMonth() + 1;
+    const { startDate, endDate, notes } = req.body;
+    if (!startDate || !endDate) {
+      return res.status(400).json({ error: "Start date and End date are required" });
     }
-    // Ensure valid range
-    year = Number(year);
-    month = Number(month);
-    if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
-      return res.status(400).json({ success: false, message: "Parameter bulan/tahun tidak valid." });
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+
+    if (start > end) {
+      return res.status(400).json({ error: "Start date must be before End date" });
     }
-    // Ensure idempotency
-    const exists = await ClosingMonth.findOne({ year, month }).lean();
-    if (exists) {
-      return res.json({ success: false, message: "Bulan ini sudah ditutup." });
+
+    // Check overlap (optional, but good practice)
+    const overlap = await ClosingPeriod.findOne({
+      $or: [
+        { startDate: { $lte: end }, endDate: { $gte: start } }
+      ]
+    });
+    if (overlap) {
+      return res.status(400).json({ error: "Periode ini bertabrakan dengan periode yang sudah ditutup." });
     }
-    await ClosingMonth.create({ year, month });
-    res.json({ success: true });
+
+    const created = await ClosingPeriod.create({ startDate: start, endDate: end, notes });
+    logActivity(req, "CLOSE_PERIOD", { startDate, endDate });
+    res.status(201).json(created);
   } catch (err) {
-    // Handle unique index violation nicely
-    if (err && err.code === 11000) {
-      return res.json({ success: false, message: "Bulan ini sudah ditutup." });
-    }
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete(`${API_BASE_PATH}/closing-periods/:id`, async (req, res) => {
+  try {
+    // Only manager should be able to do this (middleware check usually, here we assume role check in frontend + trust for now or add explicit check)
+    const deleted = await ClosingPeriod.findByIdAndDelete(req.params.id);
+    if (!deleted) return res.status(404).json({ error: "Not found" });
+    logActivity(req, "REOPEN_PERIOD", { period_id: req.params.id, startDate: deleted.startDate, endDate: deleted.endDate });
+    res.json({ ok: true });
+  } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
@@ -581,13 +656,26 @@ app.get(`${API_BASE_PATH}/reports/:id`, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-// Update report
+
+
+
+// Redefine PUT /reports/:id correctly
 app.put(`${API_BASE_PATH}/reports/:id`, async (req, res) => {
   try {
+    const current = await Report.findById(req.params.id).lean();
+    if (!current) return res.status(404).json({ error: "Not found" });
+
+    if (await checkDateClosed(current.date)) {
+      return res.status(400).json({ error: "Periode transaksi ini sudah ditutup. Tidak dapat mengubah data." });
+    }
+    if (req.body.date && await checkDateClosed(req.body.date)) {
+      return res.status(400).json({ error: "Tanggal baru berada dalam periode yang sudah ditutup." });
+    }
+
     const updated = await Report.findByIdAndUpdate(req.params.id, req.body, {
       new: true,
     }).lean();
-    if (!updated) return res.status(404).json({ error: "Not found" });
+    logActivity(req, "UPDATE_REPORT", { report_id: req.params.id, updates: req.body });
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -596,8 +684,15 @@ app.put(`${API_BASE_PATH}/reports/:id`, async (req, res) => {
 // Delete report
 app.delete(`${API_BASE_PATH}/reports/:id`, async (req, res) => {
   try {
+    const current = await Report.findById(req.params.id).lean();
+    if (!current) return res.status(404).json({ error: "Not found" });
+
+    if (await checkDateClosed(current.date)) {
+      return res.status(400).json({ error: "Periode transaksi ini sudah ditutup. Tidak dapat menghapus data." });
+    }
+
     const deleted = await Report.findByIdAndDelete(req.params.id).lean();
-    if (!deleted) return res.status(404).json({ error: "Not found" });
+    logActivity(req, "DELETE_REPORT", { report_id: req.params.id });
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -611,6 +706,10 @@ app.post(`${API_BASE_PATH}/reports`, async (req, res) => {
     if (!employeeName || !date || !division || !jobType || hk === undefined) {
       return res.status(400).json({ error: "Missing required fields" });
     }
+
+    if (await checkDateClosed(date)) {
+      return res.status(400).json({ error: "Periode transaksi ini sudah ditutup." });
+    }
     const doc = await Report.create({
       employeeId,
       employeeName,
@@ -620,6 +719,7 @@ app.post(`${API_BASE_PATH}/reports`, async (req, res) => {
       hk,
       notes,
     });
+    logActivity(req, "INPUT_DAILY_REPORT", { employee: employeeName, job: jobType, hk });
     res.status(201).json(doc);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -628,12 +728,19 @@ app.post(`${API_BASE_PATH}/reports`, async (req, res) => {
 
 app.patch(`${API_BASE_PATH}/reports/:id/approve`, async (req, res) => {
   try {
+    const current = await Report.findById(req.params.id).lean();
+    if (!current) return res.status(404).json({ error: "Not found" });
+    if (await checkDateClosed(current.date)) {
+      return res.status(400).json({ error: "Periode transaksi ini sudah ditutup." });
+    }
+
     const updated = await Report.findByIdAndUpdate(
       req.params.id,
       { status: "approved", rejectedReason: null },
       { new: true }
     ).lean();
     if (!updated) return res.status(404).json({ error: "Not found" });
+    logActivity(req, "APPROVE_REPORT", { report_id: req.params.id });
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -642,6 +749,12 @@ app.patch(`${API_BASE_PATH}/reports/:id/approve`, async (req, res) => {
 
 app.patch(`${API_BASE_PATH}/reports/:id/reject`, async (req, res) => {
   try {
+    const current = await Report.findById(req.params.id).lean();
+    if (!current) return res.status(404).json({ error: "Not found" });
+    if (await checkDateClosed(current.date)) {
+      return res.status(400).json({ error: "Periode transaksi ini sudah ditutup." });
+    }
+
     const { reason } = req.body;
     const updated = await Report.findByIdAndUpdate(
       req.params.id,
@@ -649,6 +762,7 @@ app.patch(`${API_BASE_PATH}/reports/:id/reject`, async (req, res) => {
       { new: true }
     ).lean();
     if (!updated) return res.status(404).json({ error: "Not found" });
+    logActivity(req, "REJECT_REPORT", { report_id: req.params.id, reason });
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -696,6 +810,7 @@ app.get(`${API_BASE_PATH}/recap/hk`, async (req, res) => {
       { $sort: { employee: 1 } },
     ];
     const rows = await Report.aggregate(pipeline);
+    logActivity(req, "VIEW_REPORT_RECAP", { startDate, endDate });
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -758,11 +873,18 @@ function restrictByDivision(req, baseFilter = {}) {
 app.post(`${API_BASE_PATH}/taksasi`, async (req, res) => {
   try {
     const body = req.body;
+    // Check closing for single or array
+    const datesToCheck = Array.isArray(body) ? body.map(i => i.date) : [body.date];
+    for (const d of datesToCheck) {
+      if (await checkDateClosed(d)) return res.status(400).json({ error: `Periode untuk tanggal ${d} sudah ditutup.` });
+    }
+
     if (Array.isArray(body)) {
       const docs = await Taksasi.insertMany(body);
       return res.status(201).json(docs);
     }
     const created = await Taksasi.create(body);
+    logActivity(req, "INPUT_TAKSASI", { count: Array.isArray(body) ? body.length : 1 });
     res.status(201).json(created);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -786,11 +908,17 @@ app.get(`${API_BASE_PATH}/taksasi`, async (req, res) => {
 app.post(`${API_BASE_PATH}/panen`, async (req, res) => {
   try {
     const body = req.body;
+    const datesToCheck = Array.isArray(body) ? body.map(i => i.date_panen) : [body.date_panen];
+    for (const d of datesToCheck) {
+      if (await checkDateClosed(d)) return res.status(400).json({ error: `Periode untuk tanggal ${d} sudah ditutup.` });
+    }
+
     if (Array.isArray(body)) {
       const docs = await Panen.insertMany(body);
       return res.status(201).json(docs);
     }
     const created = await Panen.create(body);
+    logActivity(req, "INPUT_PANEN", { count: Array.isArray(body) ? body.length : 1 });
     res.status(201).json(created);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -814,6 +942,11 @@ app.get(`${API_BASE_PATH}/panen`, async (req, res) => {
 app.post(`${API_BASE_PATH}/angkut`, async (req, res) => {
   try {
     const body = req.body;
+    const datesToCheck = Array.isArray(body) ? body.map(i => i.date_panen) : [body.date_panen];
+    for (const d of datesToCheck) {
+      if (await checkDateClosed(d)) return res.status(400).json({ error: `Periode untuk tanggal ${d} sudah ditutup.` });
+    }
+
     if (Array.isArray(body)) {
       for (const r of body)
         if (!r.date_panen)
@@ -824,6 +957,7 @@ app.post(`${API_BASE_PATH}/angkut`, async (req, res) => {
     if (!body.date_panen)
       return res.status(400).json({ error: "date_panen required" });
     const created = await Angkut.create(body);
+    logActivity(req, "INPUT_ANGKUT", { count: 1 });
     res.status(201).json(created);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -848,9 +982,17 @@ app.get(`${API_BASE_PATH}/angkut`, async (req, res) => {
 app.post(`${API_BASE_PATH}/attendance`, async (req, res) => {
   try {
     // enforce division for foreman
+    // enforce division for foreman
     const filter = restrictByDivision(req, {});
     if (filter.division_id != null) req.body.division_id = filter.division_id;
+
+    const datesToCheck = Array.isArray(req.body) ? req.body.map(i => i.date) : [req.body.date];
+    for (const d of datesToCheck) {
+      if (await checkDateClosed(d)) return res.status(400).json({ error: `Periode untuk tanggal ${d} sudah ditutup.` });
+    }
+
     const created = await Attendance.create(req.body);
+    logActivity(req, "INPUT_ATTENDANCE", { count: Array.isArray(req.body) ? req.body.length : 1 });
     res.status(201).json(created);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -881,6 +1023,7 @@ app.get(`${API_BASE_PATH}/jobcodes`, async (_req, res) => {
 app.post(`${API_BASE_PATH}/jobcodes`, async (req, res) => {
   try {
     const created = await JobCode.create(req.body);
+    logActivity(req, "CREATE_JOBCODE", { code: req.body.code, description: req.body.description });
     res.status(201).json(created);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -894,6 +1037,7 @@ app.put(`${API_BASE_PATH}/jobcodes/:code`, async (req, res) => {
       { new: true }
     ).lean();
     if (!updated) return res.status(404).json({ error: "Not found" });
+    logActivity(req, "UPDATE_JOBCODE", { code: req.params.code, updates: req.body });
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -902,6 +1046,7 @@ app.put(`${API_BASE_PATH}/jobcodes/:code`, async (req, res) => {
 app.delete(`${API_BASE_PATH}/jobcodes/:code`, async (req, res) => {
   try {
     await JobCode.deleteOne({ code: req.params.code });
+    logActivity(req, "DELETE_JOBCODE", { code: req.params.code });
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -937,6 +1082,7 @@ app.get(`${API_BASE_PATH}/reports/taksasi-per-block`, async (req, res) => {
       },
       { $sort: { estateId: 1, division_id: 1, block_no: 1 } },
     ]);
+    logActivity(req, "VIEW_REPORT_TAKSASI", { date });
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -980,6 +1126,7 @@ app.get(`${API_BASE_PATH}/reports/trend`, async (req, res) => {
         { $limit: Number(limit) },
       ])
       .exec();
+    logActivity(req, "VIEW_REPORT_TREND", { type, limit, sort });
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1016,7 +1163,36 @@ app.get(`${API_BASE_PATH}/reports/statement`, async (req, res) => {
       },
       { $sort: { estateId: 1, division_id: 1 } },
     ]);
+    logActivity(req, "VIEW_REPORT_STATEMENT", { startDate, endDate });
     res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Activity Logs
+app.get(`${API_BASE_PATH}/activity-logs`, async (req, res) => {
+  try {
+    const { limit = 50, page = 1 } = req.query;
+    const skip = (page - 1) * limit;
+
+    const logs = await ActivityLog.find({})
+      .sort({ timestamp: -1 })
+      .skip(skip)
+      .limit(Number(limit))
+      .lean();
+
+    const total = await ActivityLog.countDocuments({});
+
+    res.json({
+      data: logs,
+      pagination: {
+        total,
+        page: Number(page),
+        limit: Number(limit),
+        pages: Math.ceil(total / limit)
+      }
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

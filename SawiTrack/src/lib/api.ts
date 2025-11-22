@@ -410,11 +410,14 @@ export const api = {
     >(`/reports/statement${search}`);
   },
   // Closing endpoints
-  closedMonths: () =>
-    http<Array<{ year: number; month: number }>>(`/closed-months`),
-  closeMonth: (body?: { year: number; month: number }) =>
-    http<{ success: boolean; message?: string }>(`/close-month`, {
+  // Closing endpoints
+  closingPeriods: () =>
+    http<Array<{ _id: string; startDate: string; endDate: string; notes?: string }>>(`/closing-periods`),
+  createClosingPeriod: (body: { startDate: string; endDate: string; notes?: string }) =>
+    http<{ _id: string }>(`/closing-periods`, {
       method: "POST",
-      body: body ? JSON.stringify(body) : undefined,
+      body: JSON.stringify(body),
     }),
+  deleteClosingPeriod: (id: string) =>
+    http<{ ok: boolean }>(`/closing-periods/${id}`, { method: "DELETE" }),
 };

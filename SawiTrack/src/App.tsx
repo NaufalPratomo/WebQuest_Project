@@ -27,6 +27,7 @@ import Closing from "./pages/transactions/Closing";
 import TaksasiPerBlock from "./pages/reports/TaksasiPerBlock";
 import Trend from "./pages/reports/Trend";
 import Statement from "./pages/reports/Statement";
+import ActivityLog from "./pages/ActivityLog";
 
 const queryClient = new QueryClient();
 
@@ -35,118 +36,124 @@ const App = () => (
     <TooltipProvider>
       <AuthProvider>
         <ClosingProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            <Route path="/login" element={<Login />} />
-            
-            <Route path="/dashboard" element={
-              <ProtectedRoute allowedRoles={['manager', 'foreman']}>
-                <Layout><Dashboard /></Layout>
-              </ProtectedRoute>
-            } />
-            
-            <Route path="/master/employees" element={
-              <ProtectedRoute allowedRoles={['manager']}>
-                <Layout><Employees /></Layout>
-              </ProtectedRoute>
-            } />
-            
-            <Route path="/master/locations" element={
-              <ProtectedRoute allowedRoles={['manager']}>
-                <Layout><Locations /></Layout>
-              </ProtectedRoute>
-            } />
-            
-            <Route path="/master/targets" element={
-              <ProtectedRoute allowedRoles={['manager']}>
-                <Layout><Targets /></Layout>
-              </ProtectedRoute>
-            } />
-            <Route path="/transactions/panen" element={
-              <ProtectedRoute allowedRoles={['manager', 'foreman']}>
-                <Layout><Harvest /></Layout>
-              </ProtectedRoute>
-            } />
-            <Route path="/transactions/angkut" element={
-              <ProtectedRoute allowedRoles={['manager', 'foreman']}>
-                <Layout><Transport /></Layout>
-              </ProtectedRoute>
-            } />
-            <Route path="/transactions/attendance" element={
-              <ProtectedRoute allowedRoles={['manager', 'foreman']}>
-                <Layout><Attendance /></Layout>
-              </ProtectedRoute>
-            } />
-            <Route path="/transactions/upah" element={
-              <ProtectedRoute allowedRoles={['manager', 'foreman']}>
-                <Layout><Upah /></Layout>
-              </ProtectedRoute>
-            } />
-            <Route path="/transactions/closing" element={
-              <ProtectedRoute allowedRoles={['manager']}>
-                <Layout><Closing /></Layout>
-              </ProtectedRoute>
-            } />
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <Routes>
+              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/login" element={<Login />} />
 
-            {/* Reports */}
-            <Route path="/reports/taksasi" element={
-              <ProtectedRoute allowedRoles={['manager', 'foreman']}>
-                <Layout><TaksasiPerBlock /></Layout>
-              </ProtectedRoute>
-            } />
-            <Route path="/reports/trend" element={
-              <ProtectedRoute allowedRoles={['manager', 'foreman']}>
-                <Layout><Trend /></Layout>
-              </ProtectedRoute>
-            } />
-            <Route path="/reports/statement" element={
-              <ProtectedRoute allowedRoles={['manager', 'foreman']}>
-                <Layout><Statement /></Layout>
-              </ProtectedRoute>
-            } />
-            
-            <Route path="/activities/input" element={
-              <ProtectedRoute allowedRoles={['manager', 'foreman', 'employee']}>
-                <Layout><InputReport /></Layout>
-              </ProtectedRoute>
-            } />
-            
-            <Route path="/activities/history" element={
-              <ProtectedRoute allowedRoles={['manager', 'foreman', 'employee']}>
-                <Layout><History /></Layout>
-              </ProtectedRoute>
-            } />
-            
-            <Route path="/verification" element={
-              <ProtectedRoute allowedRoles={['foreman']}>
-                <Layout><Verification /></Layout>
-              </ProtectedRoute>
-            } />
-            
-            <Route path="/recap" element={
-              <ProtectedRoute allowedRoles={['manager']}>
-                <Layout><Recap /></Layout>
-              </ProtectedRoute>
-            } />
-            
-            <Route path="/reports" element={
-              <ProtectedRoute allowedRoles={['manager', 'foreman']}>
-                <Layout><Reports /></Layout>
-              </ProtectedRoute>
-            } />
+              <Route path="/dashboard" element={
+                <ProtectedRoute allowedRoles={['manager', 'foreman']}>
+                  <Layout><Dashboard /></Layout>
+                </ProtectedRoute>
+              } />
 
-            <Route path="/taksasi" element={
-              <ProtectedRoute allowedRoles={['manager']}>
-                <Layout><TaksasiPanen /></Layout>
-              </ProtectedRoute>
-            } />
-            
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
+              <Route path="/master/employees" element={
+                <ProtectedRoute allowedRoles={['manager']}>
+                  <Layout><Employees /></Layout>
+                </ProtectedRoute>
+              } />
+
+              <Route path="/master/locations" element={
+                <ProtectedRoute allowedRoles={['manager']}>
+                  <Layout><Locations /></Layout>
+                </ProtectedRoute>
+              } />
+
+              <Route path="/master/targets" element={
+                <ProtectedRoute allowedRoles={['manager']}>
+                  <Layout><Targets /></Layout>
+                </ProtectedRoute>
+              } />
+              <Route path="/transactions/panen" element={
+                <ProtectedRoute allowedRoles={['manager', 'foreman']}>
+                  <Layout><Harvest /></Layout>
+                </ProtectedRoute>
+              } />
+              <Route path="/transactions/angkut" element={
+                <ProtectedRoute allowedRoles={['manager', 'foreman']}>
+                  <Layout><Transport /></Layout>
+                </ProtectedRoute>
+              } />
+              <Route path="/transactions/attendance" element={
+                <ProtectedRoute allowedRoles={['manager', 'foreman']}>
+                  <Layout><Attendance /></Layout>
+                </ProtectedRoute>
+              } />
+              <Route path="/transactions/upah" element={
+                <ProtectedRoute allowedRoles={['manager', 'foreman']}>
+                  <Layout><Upah /></Layout>
+                </ProtectedRoute>
+              } />
+              <Route path="/transactions/closing" element={
+                <ProtectedRoute allowedRoles={['manager']}>
+                  <Layout><Closing /></Layout>
+                </ProtectedRoute>
+              } />
+
+              {/* Reports */}
+              <Route path="/reports/taksasi" element={
+                <ProtectedRoute allowedRoles={['manager', 'foreman']}>
+                  <Layout><TaksasiPerBlock /></Layout>
+                </ProtectedRoute>
+              } />
+              <Route path="/reports/trend" element={
+                <ProtectedRoute allowedRoles={['manager', 'foreman']}>
+                  <Layout><Trend /></Layout>
+                </ProtectedRoute>
+              } />
+              <Route path="/reports/statement" element={
+                <ProtectedRoute allowedRoles={['manager', 'foreman']}>
+                  <Layout><Statement /></Layout>
+                </ProtectedRoute>
+              } />
+
+              <Route path="/activities/input" element={
+                <ProtectedRoute allowedRoles={['manager', 'foreman', 'employee']}>
+                  <Layout><InputReport /></Layout>
+                </ProtectedRoute>
+              } />
+
+              <Route path="/activities/history" element={
+                <ProtectedRoute allowedRoles={['manager', 'foreman', 'employee']}>
+                  <Layout><History /></Layout>
+                </ProtectedRoute>
+              } />
+
+              <Route path="/verification" element={
+                <ProtectedRoute allowedRoles={['foreman']}>
+                  <Layout><Verification /></Layout>
+                </ProtectedRoute>
+              } />
+
+              <Route path="/recap" element={
+                <ProtectedRoute allowedRoles={['manager']}>
+                  <Layout><Recap /></Layout>
+                </ProtectedRoute>
+              } />
+
+              <Route path="/activity-logs" element={
+                <ProtectedRoute allowedRoles={['manager']}>
+                  <Layout><ActivityLog /></Layout>
+                </ProtectedRoute>
+              } />
+
+              <Route path="/reports" element={
+                <ProtectedRoute allowedRoles={['manager', 'foreman']}>
+                  <Layout><Reports /></Layout>
+                </ProtectedRoute>
+              } />
+
+              <Route path="/taksasi" element={
+                <ProtectedRoute allowedRoles={['manager']}>
+                  <Layout><TaksasiPanen /></Layout>
+                </ProtectedRoute>
+              } />
+
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </BrowserRouter>
         </ClosingProvider>
       </AuthProvider>
     </TooltipProvider>

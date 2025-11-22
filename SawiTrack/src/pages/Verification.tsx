@@ -71,8 +71,12 @@ const Verification = () => {
       await api.approveReport(id);
       setReports(prev => prev.map(r => (r.id === id ? { ...r, status: 'approved' } : r)));
       toast.success('Laporan berhasil disetujui');
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Gagal menyetujui laporan';
+    } catch (e: any) {
+      let msg = e instanceof Error ? e.message : 'Gagal menyetujui laporan';
+      try {
+        const parsed = JSON.parse(msg);
+        if (parsed.error) msg = parsed.error;
+      } catch { }
       toast.error(msg);
     }
   };
@@ -82,8 +86,12 @@ const Verification = () => {
       await api.rejectReport(id);
       setReports(prev => prev.map(r => (r.id === id ? { ...r, status: 'rejected' } : r)));
       toast.success('Laporan berhasil ditolak');
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Gagal menolak laporan';
+    } catch (e: any) {
+      let msg = e instanceof Error ? e.message : 'Gagal menolak laporan';
+      try {
+        const parsed = JSON.parse(msg);
+        if (parsed.error) msg = parsed.error;
+      } catch { }
       toast.error(msg);
     }
   };
@@ -115,15 +123,15 @@ const Verification = () => {
                   report.status === 'approved'
                     ? 'default'
                     : report.status === 'rejected'
-                    ? 'destructive'
-                    : 'secondary'
+                      ? 'destructive'
+                      : 'secondary'
                 }
               >
                 {report.status === 'approved'
                   ? 'Disetujui'
                   : report.status === 'rejected'
-                  ? 'Ditolak'
-                  : 'Menunggu'}
+                    ? 'Ditolak'
+                    : 'Menunggu'}
               </Badge>
             </TableCell>
             <TableCell className="text-right">

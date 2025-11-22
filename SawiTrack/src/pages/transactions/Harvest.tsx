@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 
 export default function Harvest() {
   type BlockOption = { no_blok?: string; id_blok?: string };
-  const [date, setDate] = useState<string>(new Date().toISOString().slice(0,10));
+  const [date, setDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [estates, setEstates] = useState<Array<{ _id: string; estate_name: string }>>([]);
   const [estateId, setEstateId] = useState<string>('');
   const [divisions, setDivisions] = useState<Array<{ division_id: number }>>([]);
@@ -34,7 +34,7 @@ export default function Harvest() {
 
   useEffect(() => {
     if (!estateId || !divisionId) { setBlocks([]); return; }
-  api.blocks(estateId, Number(divisionId)).then((b)=> setBlocks(Array.isArray(b)? (b as BlockOption[]): [])).catch(()=> setBlocks([]));
+    api.blocks(estateId, Number(divisionId)).then((b) => setBlocks(Array.isArray(b) ? (b as BlockOption[]) : [])).catch(() => setBlocks([]));
   }, [estateId, divisionId]);
 
   const filtered = useMemo(() => rows.filter(r => r.date_panen.startsWith(date)), [rows, date]);
@@ -55,8 +55,12 @@ export default function Harvest() {
       toast.success('Tersimpan');
       setRows(prev => Array.isArray(created) ? [...prev, ...created] : [...prev, created as PanenRow]);
       setBlockNo(''); setWeightKg('');
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Gagal menyimpan';
+    } catch (e: any) {
+      let msg = e instanceof Error ? e.message : 'Gagal menyimpan';
+      try {
+        const parsed = JSON.parse(msg);
+        if (parsed.error) msg = parsed.error;
+      } catch { }
       toast.error(msg);
     }
   };
@@ -72,7 +76,7 @@ export default function Harvest() {
       const requireIdx = (...keys: string[]) => {
         for (const k of keys) if (idx(k) === -1) throw new Error(`Kolom '${k}' tidak ditemukan`);
       };
-      requireIdx('date_panen','estateid','division_id','block_no','weightkg');
+      requireIdx('date_panen', 'estateid', 'division_id', 'block_no', 'weightkg');
       const parsed: PanenRow[] = lines.slice(1).map((line) => {
         const cols = line.split(',');
         return {
@@ -83,8 +87,8 @@ export default function Harvest() {
           weightKg: Number(cols[idx('weightkg')]),
         } as PanenRow;
       }).filter(r => r.date_panen && r.estateId && r.division_id && r.block_no && !Number.isNaN(r.weightKg));
-      const key = (r: PanenRow) => `${String(r.date_panen).slice(0,10)}|${r.estateId}|${r.division_id}|${r.block_no}`;
-      const dates = Array.from(new Set(parsed.map(r => String(r.date_panen).slice(0,10))));
+      const key = (r: PanenRow) => `${String(r.date_panen).slice(0, 10)}|${r.estateId}|${r.division_id}|${r.block_no}`;
+      const dates = Array.from(new Set(parsed.map(r => String(r.date_panen).slice(0, 10))));
       let existing: PanenRow[] = [];
       for (const d of dates) {
         try {
@@ -109,8 +113,12 @@ export default function Harvest() {
       // reload list
       const latest = await api.panenList({ date_panen: date });
       setRows(latest);
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Gagal import CSV';
+    } catch (e: any) {
+      let msg = e instanceof Error ? e.message : 'Gagal import CSV';
+      try {
+        const parsed = JSON.parse(msg);
+        if (parsed.error) msg = parsed.error;
+      } catch { }
       toast.error(msg);
     } finally {
       setUploading(false);
@@ -126,7 +134,7 @@ export default function Harvest() {
         <CardContent className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
           <div>
             <Label>Tanggal Panen</Label>
-            <Input type="date" value={date} onChange={(e)=> setDate(e.target.value)} />
+            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
           <div className="col-span-2 md:col-span-3">
             {/* Add entry via dialog */}
@@ -143,28 +151,28 @@ export default function Harvest() {
                 <div className="grid grid-cols-1 gap-4">
                   <div>
                     <Label>Estate</Label>
-                    <select className="w-full h-10 border rounded px-2" value={estateId} onChange={(e)=> setEstateId(e.target.value)}>
+                    <select className="w-full h-10 border rounded px-2" value={estateId} onChange={(e) => setEstateId(e.target.value)}>
                       <option value="">Pilih</option>
                       {estates.map(es => <option key={es._id} value={es._id}>{es.estate_name}</option>)}
                     </select>
                   </div>
                   <div>
                     <Label>Divisi</Label>
-                    <select className="w-full h-10 border rounded px-2" value={divisionId} onChange={(e)=> setDivisionId(e.target.value ? Number(e.target.value) : '')}>
+                    <select className="w-full h-10 border rounded px-2" value={divisionId} onChange={(e) => setDivisionId(e.target.value ? Number(e.target.value) : '')}>
                       <option value="">Pilih</option>
                       {divisions.map(d => <option key={d.division_id} value={d.division_id}>Divisi {d.division_id}</option>)}
                     </select>
                   </div>
                   <div>
                     <Label>No Blok</Label>
-                    <input className="w-full h-10 border rounded px-2" list="blocks" value={blockNo} onChange={(e)=> setBlockNo(e.target.value)} />
+                    <input className="w-full h-10 border rounded px-2" list="blocks" value={blockNo} onChange={(e) => setBlockNo(e.target.value)} />
                     <datalist id="blocks">
-                      {blocks.map((b, i:number) => <option key={i} value={String(b.no_blok || b.id_blok || '')} />)}
+                      {blocks.map((b, i: number) => <option key={i} value={String(b.no_blok || b.id_blok || '')} />)}
                     </datalist>
                   </div>
                   <div>
                     <Label>Berat (Kg)</Label>
-                    <Input type="number" value={weightKg} onChange={(e)=> setWeightKg(e.target.value ? Number(e.target.value) : '')} />
+                    <Input type="number" value={weightKg} onChange={(e) => setWeightKg(e.target.value ? Number(e.target.value) : '')} />
                   </div>
                   <div className="flex gap-2">
                     <Button onClick={addRow}>Simpan</Button>
@@ -183,7 +191,7 @@ export default function Harvest() {
                       type="file"
                       accept=".csv"
                       className="hidden"
-                      onChange={(e)=> e.target.files && handleCsvUpload(e.target.files[0])}
+                      onChange={(e) => e.target.files && handleCsvUpload(e.target.files[0])}
                       disabled={uploading}
                     />
                   </div>

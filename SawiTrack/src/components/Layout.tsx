@@ -1,9 +1,8 @@
-import { ReactNode, useEffect, type ComponentType } from 'react';
+import { ReactNode, useState, type ComponentType } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
-import { LayoutDashboard, Users, MapPin, FileText, CheckSquare, BarChart3, Download, LogOut, Menu, Truck } from 'lucide-react';
-import { useState } from 'react';
+import { LayoutDashboard, Users, MapPin, FileText, CheckSquare, BarChart3, Download, LogOut, Menu, Truck, Activity } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface LayoutProps {
@@ -22,7 +21,7 @@ const Layout = ({ children }: LayoutProps) => {
   };
 
   type IconType = ComponentType<{ className?: string }>;
-  type MenuItem = { path: string; icon: IconType; label: string; roles: Array<'manager'|'foreman'|'employee'> };
+  type MenuItem = { path: string; icon: IconType; label: string; roles: Array<'manager' | 'foreman' | 'employee'> };
   type MenuGroup = { label: string; items: MenuItem[] };
 
   const topLevel: MenuItem[] = [
@@ -35,6 +34,7 @@ const Layout = ({ children }: LayoutProps) => {
       items: [
         { path: '/master/employees', icon: Users, label: 'Data Pengguna', roles: ['manager'] },
         { path: '/master/locations', icon: MapPin, label: 'Data Aresta', roles: ['manager'] },
+        { path: '/transactions/closing', icon: FileText, label: 'Periode Closing Transaksi', roles: ['manager'] },
       ],
     },
     {
@@ -42,12 +42,8 @@ const Layout = ({ children }: LayoutProps) => {
       items: [
         { path: '/taksasi', icon: FileText, label: 'Taksasi', roles: ['manager'] },
         { path: '/transactions/attendance', icon: CheckSquare, label: 'Absensi Harian', roles: ['manager', 'foreman'] },
-        // Realisasi diletakkan tepat di bawah Taksasi
         { path: '/master/targets', icon: FileText, label: 'Realisasi', roles: ['manager'] },
-        // Transaksi Panen dihilangkan sesuai permintaan
-        // { path: '/transactions/panen', icon: FileText, label: 'Transaksi Panen', roles: ['manager', 'foreman'] },
         { path: '/transactions/angkut', icon: Truck, label: 'Angkutan', roles: ['manager', 'foreman'] },
-        { path: '/transactions/closing', icon: FileText, label: 'Data Closing Transaksi', roles: ['manager'] },
       ],
     },
     {
@@ -63,6 +59,7 @@ const Layout = ({ children }: LayoutProps) => {
   const others: MenuItem[] = [
     { path: '/verification', icon: CheckSquare, label: 'Verifikasi', roles: ['foreman'] },
     { path: '/recap', icon: BarChart3, label: 'Rekapitulasi', roles: ['manager'] },
+    { path: '/activity-logs', icon: Activity, label: 'Log Aktivitas', roles: ['manager'] },
   ];
 
   const canSee = (item: MenuItem) => user && item.roles.includes(user.role);
@@ -71,8 +68,6 @@ const Layout = ({ children }: LayoutProps) => {
     .map(g => ({ label: g.label, items: g.items.filter(canSee) }))
     .filter(g => g.items.length > 0);
   const visibleOthers = others.filter(canSee);
-
-  // Sidebar now shows static section labels with items always visible (no dropdowns)
 
   return (
     <div className="flex h-screen bg-muted/30">
@@ -116,10 +111,10 @@ const Layout = ({ children }: LayoutProps) => {
             );
           })}
 
-          {/* Groups (static headings, not collapsible) */}
+          {/* Groups */}
           {visibleGroups.map((group) => (
             <div key={group.label} className="mt-3">
-              <div className={cn('px-3 py-2 text-muted-foreground')}> 
+              <div className={cn('px-3 py-2 text-muted-foreground')}>
                 {sidebarOpen ? (
                   <span className="text-xs font-semibold uppercase tracking-wide">{group.label}</span>
                 ) : (

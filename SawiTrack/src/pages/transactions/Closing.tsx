@@ -1,144 +1,170 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useClosing } from '@/contexts/ClosingContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
-import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/select';
-import { Label } from '@/components/ui/label';
-
-interface ClosedMonth {
-  year: number;
-  month: number;
-}
+import { format } from 'date-fns';
+import { Trash2, AlertTriangle } from 'lucide-react';
 
 const Closing = () => {
-  const [closedMonths, setClosedMonths] = useState<ClosedMonth[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [closing, setClosing] = useState(false);
-  const [selectedYear, setSelectedYear] = useState<string>('');
-  const [selectedMonth, setSelectedMonth] = useState<string>('');
+  const { closingPeriods, fetchClosingPeriods } = useClosing();
+  const { user } = useAuth();
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [notes, setNotes] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    fetchClosedMonths();
-  }, []);
+  const handleClose = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!startDate || !endDate) {
+      toast.error('Tanggal mulai dan akhir harus diisi.');
+      return;
+    }
+    if (new Date(startDate) > new Date(endDate)) {
+      toast.error('Tanggal mulai tidak boleh lebih besar dari tanggal akhir.');
+      return;
+    }
 
-  const fetchClosedMonths = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      // TODO: Replace with actual API call to get closed months
-      const months = await api.closedMonths();
-      setClosedMonths(months);
-    } catch (error) {
-      toast.error('Gagal memuat daftar bulan yang ditutup.');
-      console.error('Error fetching closed months:', error);
+      await api.createClosingPeriod({ startDate, endDate, notes });
+      toast.success('Periode berhasil ditutup.');
+      setStartDate('');
+      setEndDate('');
+      setNotes('');
+      await fetchClosingPeriods();
+    } catch (error: any) {
+      toast.error(error.message || 'Gagal menutup periode.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleCloseMonth = async () => {
-    const yearNum = Number(selectedYear);
-    const monthNum = Number(selectedMonth);
-    const targetText = selectedYear && selectedMonth ? `${monthNum}/${yearNum}` : 'bulan ini';
-    if (!confirm(`Apakah Anda yakin ingin menutup transaksi untuk ${targetText}? Data bulan sebelumnya tidak akan bisa diubah.`)) {
-      return;
-    }
-
+  const handleReopen = async (id: string) => {
+    if (!confirm('Apakah Anda yakin ingin membuka kembali periode ini?')) return;
     try {
-      setClosing(true);
-      const body = selectedYear && selectedMonth ? { year: yearNum, month: monthNum } : undefined;
-      const res = await api.closeMonth(body);
-      if (res.success) {
-        toast.success('Bulan berhasil ditutup!');
-        setSelectedYear('');
-        setSelectedMonth('');
-        fetchClosedMonths();
-      } else {
-        toast.error(res.message || 'Gagal menutup bulan.');
-      }
-    } catch (error) {
-      toast.error('Terjadi kesalahan saat menutup bulan.');
-      console.error('Error closing month:', error);
-    } finally {
-      setClosing(false);
+      await api.deleteClosingPeriod(id);
+      toast.success('Periode berhasil dibuka kembali.');
+      await fetchClosingPeriods();
+    } catch (error: any) {
+      toast.error(error.message || 'Gagal membuka periode.');
     }
   };
 
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold">Data Closing Transaksi</h1>
-      <p className="text-muted-foreground">Kelola penutupan transaksi bulanan. Data pada bulan yang sudah ditutup tidak dapat diubah.</p>
+      <h1 className="text-3xl font-bold tracking-tight">Periode Closing Transaksi</h1>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Tutup Bulan</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-            <div>
-              <Label>Tahun</Label>
-              <Select value={selectedYear} onValueChange={(v) => setSelectedYear(v)}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Pilih tahun (opsional)" />
-                </SelectTrigger>
-                <SelectContent>
-                  {Array.from({ length: 6 }).map((_, i) => {
-                    const year = new Date().getFullYear() - 2 + i; // range: currentYear-2 .. currentYear+3
-                    return (
-                      <SelectItem key={year} value={String(year)}>{year}</SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Bulan</Label>
-              <Select value={selectedMonth} onValueChange={(v) => setSelectedMonth(v)}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Pilih bulan (opsional)" />
-                </SelectTrigger>
-                <SelectContent>
-                  {Array.from({ length: 12 }).map((_, i) => {
-                    const m = i + 1;
-                    const y = Number(selectedYear);
-                    const isClosed = selectedYear ? closedMonths.some(cm => cm.year === y && cm.month === m) : false;
-                    return (
-                      <SelectItem key={m} value={String(m)} disabled={isClosed}>
-                        {m} {isClosed ? '(Ditutup)' : ''}
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex items-end">
-              <Button onClick={handleCloseMonth} disabled={closing || (selectedYear && selectedMonth && closedMonths.some(cm => cm.year === Number(selectedYear) && cm.month === Number(selectedMonth)))} className="w-full">
-                {closing ? 'Menutup...' : (selectedYear && selectedMonth ? (closedMonths.some(cm => cm.year === Number(selectedYear) && cm.month === Number(selectedMonth)) ? 'Sudah Ditutup' : `Tutup ${selectedMonth}/${selectedYear}`) : 'Tutup Bulan Ini')}
+      <div className="grid gap-6 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Tutup Periode Baru</CardTitle>
+            <CardDescription>
+              Menutup periode transaksi akan mencegah perubahan data pada rentang tanggal yang dipilih.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleClose} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="startDate">Tanggal Mulai</Label>
+                  <Input
+                    id="startDate"
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="endDate">Tanggal Akhir</Label>
+                  <Input
+                    id="endDate"
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="notes">Catatan (Opsional)</Label>
+                <Input
+                  id="notes"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Contoh: Tutup buku bulan Januari"
+                />
+              </div>
+
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  Pastikan semua data sudah benar sebelum menutup periode.
+                </AlertDescription>
+              </Alert>
+
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? 'Memproses...' : 'Tutup Periode'}
               </Button>
-            </div>
-          </div>
-          <p className="text-sm text-muted-foreground">Jika Anda tidak memilih tahun/bulan, sistem akan menutup bulan berjalan.</p>
-        </CardContent>
-      </Card>
+            </form>
+          </CardContent>
+        </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Bulan yang Sudah Ditutup</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <p>Memuat daftar bulan...</p>
-          ) : closedMonths.length === 0 ? (
-            <p>Belum ada bulan yang ditutup.</p>
-          ) : (
-            <ul className="list-disc pl-5">
-              {closedMonths.map((month, index) => (
-                <li key={index}>{`${month.month}/${month.year}`}</li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Riwayat Periode Ditutup</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Periode</TableHead>
+                  <TableHead>Catatan</TableHead>
+                  <TableHead className="w-[50px]"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {closingPeriods.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={3} className="text-center text-muted-foreground">
+                      Belum ada periode yang ditutup.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  closingPeriods.map((period) => (
+                    <TableRow key={period._id}>
+                      <TableCell>
+                        {format(new Date(period.startDate), 'dd MMM yyyy')} - {format(new Date(period.endDate), 'dd MMM yyyy')}
+                      </TableCell>
+                      <TableCell>{period.notes || '-'}</TableCell>
+                      <TableCell>
+                        {user?.role === 'manager' && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                            onClick={() => handleReopen(period._id)}
+                            title="Buka Kembali Periode"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 };

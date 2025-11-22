@@ -43,13 +43,13 @@ function toBackendStatus(local: string): { backend: BackendStatus; note?: string
     case 'leave':
     default:
       // already backend or unknown -> pass through best effort
-      return { backend: (['present','absent','leave'].includes(local) ? (local as BackendStatus) : 'absent'), note: undefined };
+      return { backend: (['present', 'absent', 'leave'].includes(local) ? (local as BackendStatus) : 'absent'), note: undefined };
   }
 }
 
 function toLocalStatus(backendOrLocal: string): string {
   // If already one of our localized set, return as-is
-  const localized = ['hadir','sakit','tidak_hadir_diganti','mangkir','izin_dibayar'];
+  const localized = ['hadir', 'sakit', 'tidak_hadir_diganti', 'mangkir', 'izin_dibayar'];
   if (localized.includes(backendOrLocal)) return backendOrLocal;
   // Map backend enums to our defaults
   if (backendOrLocal === 'present') return 'hadir';
@@ -60,7 +60,7 @@ function toLocalStatus(backendOrLocal: string): string {
 
 export default function Attendance() {
   const { user } = useAuth();
-  const [date, setDate] = useState<string>(new Date().toISOString().slice(0,10));
+  const [date, setDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [employeeId, setEmployeeId] = useState<string>('');
   const [status, setStatus] = useState<string>('hadir');
@@ -85,7 +85,7 @@ export default function Attendance() {
       }>;
       if (!Array.isArray(arr) || arr.length === 0) return null;
       // pick the latest by timestamp
-      const latest = [...arr].sort((a,b) => (a.timestamp > b.timestamp ? 1 : -1)).at(-1)!;
+      const latest = [...arr].sort((a, b) => (a.timestamp > b.timestamp ? 1 : -1)).at(-1)!;
       const mandorId = (user?.id || user?._id) as string | undefined;
       return {
         estateId: latest.estateId,
@@ -93,7 +93,7 @@ export default function Attendance() {
         division_id: Number(latest.divisionId),
         block_no: latest.blockLabel,
         mandorId,
-      } as Pick<AttendanceRow,'estateId'|'estateName'|'division_id'|'block_no'|'mandorId'>;
+      } as Pick<AttendanceRow, 'estateId' | 'estateName' | 'division_id' | 'block_no' | 'mandorId'>;
     } catch {
       return null;
     }
@@ -230,7 +230,7 @@ export default function Attendance() {
             const next = [...existing, placeholder];
             localStorage.setItem(realKey, JSON.stringify(next));
           }
-        } catch {/* ignore */}
+        } catch {/* ignore */ }
       }
       // reload list
       const latest = await api.attendanceList({ date });
@@ -262,8 +262,12 @@ export default function Attendance() {
       // reset some inputs
       setEmployeeId('');
       setStatus('hadir');
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Gagal menyimpan';
+    } catch (e: any) {
+      let msg = e instanceof Error ? e.message : 'Gagal menyimpan';
+      try {
+        const parsed = JSON.parse(msg);
+        if (parsed.error) msg = parsed.error;
+      } catch { }
       toast.error(msg);
     }
   };
@@ -309,7 +313,7 @@ export default function Attendance() {
             const next = [...existing, placeholder];
             localStorage.setItem(realKey, JSON.stringify(next));
           }
-        } catch {/* ignore */}
+        } catch {/* ignore */ }
       }
       const latest = await api.attendanceList({ date });
       let selected: string[] = [];
@@ -337,8 +341,12 @@ export default function Attendance() {
         }));
       setRows([...serverRows, ...missing]);
       toast.success('Status diperbarui');
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Gagal memperbarui';
+    } catch (e: any) {
+      let msg = e instanceof Error ? e.message : 'Gagal memperbarui';
+      try {
+        const parsed = JSON.parse(msg);
+        if (parsed.error) msg = parsed.error;
+      } catch { }
       toast.error(msg);
     }
   };
@@ -352,7 +360,7 @@ export default function Attendance() {
         <CardContent className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
           <div>
             <Label>Tanggal</Label>
-            <Input type="date" value={date} onChange={(e)=> setDate(e.target.value)} />
+            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
           <div className="col-span-2 md:col-span-4">
             {/* Add attendance via dialog */}
@@ -367,11 +375,11 @@ export default function Attendance() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <Label>Tgl_Panen</Label>
-                    <Input type="date" value={date} onChange={(e)=> setDate(e.target.value)} />
+                    <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
                   </div>
                   <div>
                     <Label>Pemanen</Label>
-                    <Select value={employeeId} onValueChange={(v)=> setEmployeeId(v)}>
+                    <Select value={employeeId} onValueChange={(v) => setEmployeeId(v)}>
                       <SelectTrigger>
                         <SelectValue placeholder="Pilih pemanen" />
                       </SelectTrigger>
@@ -384,7 +392,7 @@ export default function Attendance() {
                   </div>
                   <div>
                     <Label>sts_hadir</Label>
-                    <Select value={status} onValueChange={(v)=> setStatus(v)}>
+                    <Select value={status} onValueChange={(v) => setStatus(v)}>
                       <SelectTrigger>
                         <SelectValue placeholder="Pilih status" />
                       </SelectTrigger>
@@ -460,9 +468,9 @@ export default function Attendance() {
                         <select
                           className="h-9 border rounded px-2"
                           value={toLocalStatus(r.status) || ''}
-                          onChange={(e)=> {
+                          onChange={(e) => {
                             const val = e.target.value;
-                            setRows(prev => prev.map((row,i) => i===idx ? { ...row, status: val } : row));
+                            setRows(prev => prev.map((row, i) => i === idx ? { ...row, status: val } : row));
                           }}
                         >
                           <option value="">- pilih -</option>
@@ -474,7 +482,7 @@ export default function Attendance() {
                         </select>
                       </TableCell>
                       <TableCell>
-                        <Button size="sm" onClick={()=> saveInline(r)}>Simpan</Button>
+                        <Button size="sm" onClick={() => saveInline(r)}>Simpan</Button>
                       </TableCell>
                     </TableRow>
                   );

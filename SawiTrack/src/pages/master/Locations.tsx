@@ -85,6 +85,7 @@ type Division = { division_id: number };
 type Block = {
   id_blok?: string;
   no_blok?: string;
+  no_tph?: string;
   luas_blok?: number;
   jumlak_pokok?: number;
   jumlah_pokok?: number;
@@ -153,6 +154,7 @@ const Locations = () => {
     setEditFormData({
       id_blok: block.id_blok,
       no_blok: block.no_blok,
+      no_tph: block.no_tph,
       luas_blok: block.luas_blok,
       jumlah_pokok: block.jumlah_pokok ?? block.jumlak_pokok,
       SPH: block.SPH,
@@ -424,6 +426,7 @@ const Locations = () => {
       exportData.push({
         Divisi: `Divisi ${division_id}`,
         "No Blok": strOrEmpty(block.no_blok),
+        "No TPH": strOrEmpty(block.no_tph),
         "ID Blok": strOrEmpty(block.id_blok),
         "Location Type": strOrEmpty(block.location?.type),
         "Jenis Tanah": strOrEmpty(block.jenis_tanah),
@@ -496,6 +499,7 @@ const Locations = () => {
       [
         "Divisi",
         "No Blok",
+        "No TPH",
         "ID Blok",
         "Luas Blok",
         "Jumlah Pokok",
@@ -517,6 +521,7 @@ const Locations = () => {
     const rows = blocksFlat.map(({ division_id, block }) => [
       `Divisi ${division_id}`,
       String(block.no_blok ?? ""),
+      String(block.no_tph ?? ""),
       String(block.id_blok ?? ""),
       formatNumber(block.luas_blok),
       formatNumber(block.jumlah_pokok ?? block.jumlak_pokok),
@@ -587,6 +592,7 @@ const Locations = () => {
     const totalRow = [
       "TOTAL:",
       `${totalDivisi} Divisi`,
+      "", // No TPH (empty)
       `${totalBlok} Blok`,
       formatNumber(totalLuasBlok),
       formatNumber(totalJumlahPokok),
@@ -676,6 +682,7 @@ const Locations = () => {
             };
             const blockData: Partial<Block> = {
               no_blok: (row["No Blok"] ?? "").toString(),
+              no_tph: (row["No TPH"] ?? "").toString(),
               id_blok: (row["ID Blok"] ?? "").toString(),
               jenis_tanah: (row["Jenis Tanah"] ?? "") as string,
               topografi: (row.Topografi ?? "") as string,
@@ -1087,6 +1094,7 @@ const Locations = () => {
                                       <TableRow>
                                         <TableHead>Divisi</TableHead>
                                         <TableHead>No Blok</TableHead>
+                                        <TableHead>No TPH</TableHead>
                                         <TableHead>ID Blok</TableHead>
                                         <TableHead className="text-right">
                                           Luas Blok
@@ -1140,6 +1148,9 @@ const Locations = () => {
                                             </TableCell>
                                             <TableCell>
                                               {String(block.no_blok ?? "")}
+                                            </TableCell>
+                                            <TableCell>
+                                              {block.no_tph || "-"}
                                             </TableCell>
                                             <TableCell>
                                               {String(block.id_blok ?? "")}
@@ -1374,6 +1385,7 @@ const Locations = () => {
                                               <TableCell className="text-right">
                                                 {totalBlok} Blok
                                               </TableCell>
+                                              <TableCell></TableCell>
                                               <TableCell className="text-right">
                                                 {formatNumber(totalLuasBlok)}
                                               </TableCell>
@@ -1491,6 +1503,19 @@ const Locations = () => {
                     setEditFormData({
                       ...editFormData,
                       no_blok: e.target.value,
+                    })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-no-tph">No TPH</Label>
+                <Input
+                  id="edit-no-tph"
+                  value={editFormData.no_tph || ""}
+                  onChange={(e) =>
+                    setEditFormData({
+                      ...editFormData,
+                      no_tph: e.target.value,
                     })
                   }
                 />

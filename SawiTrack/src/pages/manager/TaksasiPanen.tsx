@@ -72,7 +72,7 @@ export default function TaksasiPanen() {
   const [basisJanjangPerPemanen, setBasisJanjangPerPemanen] = useState<number>(120);
 
   // Employee selection for capacity
-  type Emp = { _id: string; name: string; division?: string };
+  type Emp = { _id: string; name: string; division?: string; role?: string };
   const [employees, setEmployees] = useState<Emp[]>([]);
   const selectionKey = useMemo(() => `taksasi_selection_${date}`, [date]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -119,7 +119,15 @@ export default function TaksasiPanen() {
 
   // load employees and existing selection
   useEffect(() => {
-    api.employees().then((list) => setEmployees(list || [])).catch(() => setEmployees([]));
+    api.employees()
+      .then((list) => {
+        // Assume API employee shape includes 'role'; narrow via predicate
+        const onlyKaryawan: Emp[] = (list || []).filter((e: unknown): e is Emp => {
+          return typeof e === 'object' && e !== null && (e as { role?: string }).role === 'karyawan';
+        });
+        setEmployees(onlyKaryawan);
+      })
+      .catch(() => setEmployees([]));
     try {
       const raw = localStorage.getItem(selectionKey);
       const arr = raw ? (JSON.parse(raw) as string[]) : [];
@@ -190,7 +198,7 @@ export default function TaksasiPanen() {
     }
     const id = `other_${Date.now()}`;
     const division = divisionId || (employees[0]?.division ?? undefined);
-    const newEmp: Emp = { _id: id, name, division };
+    const newEmp: Emp = { _id: id, name, division, role: 'karyawan' };
     setCustomEmployees(prev => {
       const next = [...prev, newEmp];
       try { localStorage.setItem(customKey, JSON.stringify(next)); } catch {/* ignore */ }

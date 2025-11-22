@@ -44,7 +44,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Toaster } from "@/components/ui/toaster";
-import { api } from "@/lib/api";
+import { api, Company } from "@/lib/api";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -112,7 +112,12 @@ const Locations = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isAddEstateOpen, setIsAddEstateOpen] = useState(false);
+  const [isAddCompanyOpen, setIsAddCompanyOpen] = useState(false);
   const [newEstateName, setNewEstateName] = useState("");
+  const [newCompanyName, setNewCompanyName] = useState("");
+  const [newCompanyAddress, setNewCompanyAddress] = useState("");
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string>("");
+  const [companies, setCompanies] = useState<Company[]>([]);
   const [estates, setEstates] = useState<EstateLite[]>([]);
   const [meta, setMeta] = useState<
     Record<
@@ -222,11 +227,11 @@ const Locations = () => {
   useEffect(() => {
     let mounted = true;
     setLoading(true);
-    api
-      .estates()
-      .then((data) => {
+    Promise.all([api.companies(), api.estates()])
+      .then(([companiesData, estatesData]) => {
         if (!mounted) return;
-        setEstates(data || []);
+        setCompanies(companiesData || []);
+        setEstates(estatesData || []);
       })
       .catch((e) => setError(e.message || String(e)))
       .finally(() => setLoading(false));
@@ -277,11 +282,67 @@ const Locations = () => {
     [estates, search]
   );
 
+  const handleAddCompany = async () => {
+    if (!newCompanyName.trim()) {
+      toast({
+        title: "Gagal menambahkan perusahaan",
+        description: "Nama perusahaan tidak boleh kosong",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!newCompanyAddress.trim()) {
+      toast({
+        title: "Gagal menambahkan perusahaan",
+        description: "Alamat perusahaan tidak boleh kosong",
+        variant: "destructive",
+      });
+      return;
+    }
+    try {
+      console.log("Creating company:", {
+        company_name: newCompanyName,
+        address: newCompanyAddress,
+      });
+      const newCompany = await api.createCompany({
+        company_name: newCompanyName,
+        address: newCompanyAddress,
+      });
+      console.log("Company created:", newCompany);
+      setCompanies([...companies, newCompany]);
+      toast({
+        title: "Berhasil",
+        description: `Perusahaan "${newCompanyName}" berhasil ditambahkan`,
+      });
+      setNewCompanyName("");
+      setNewCompanyAddress("");
+      setIsAddCompanyOpen(false);
+    } catch (error) {
+      console.error("Error creating company:", error);
+      toast({
+        title: "Gagal",
+        description:
+          "Gagal menambahkan perusahaan: " +
+          (error instanceof Error ? error.message : String(error)),
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleAddEstate = async () => {
     if (!newEstateName.trim()) {
       toast({
         title: "Gagal menambahkan estate",
         description: "Nama estate tidak boleh kosong",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!selectedCompanyId) {
+      toast({
+        title: "Gagal menambahkan estate",
+        description: "Silakan pilih perusahaan terlebih dahulu",
         variant: "destructive",
       });
       return;
@@ -301,15 +362,32 @@ const Locations = () => {
         divisions: [],
       });
 
+      // Update company untuk menambahkan estate ID ke array estates
+      const company = companies.find((c) => c._id === selectedCompanyId);
+      if (company) {
+        const currentEstateIds =
+          company.estates?.map((e) => (typeof e === "string" ? e : e._id)) ||
+          [];
+
+        await api.updateCompany(selectedCompanyId, {
+          estates: [...currentEstateIds, estateId],
+        });
+      }
+
       toast({
         title: "Berhasil!",
         description: `Estate "${newEstateName}" berhasil ditambahkan`,
       });
       setNewEstateName("");
       setIsAddEstateOpen(false);
+      setSelectedCompanyId("");
 
-      // Refresh estates list
-      const updatedEstates = await api.estates();
+      // Refresh companies dan estates list
+      const [updatedCompanies, updatedEstates] = await Promise.all([
+        api.companies(),
+        api.estates(),
+      ]);
+      setCompanies(updatedCompanies || []);
       setEstates(updatedEstates || []);
     } catch (error) {
       console.error("Error adding estate:", error);
@@ -758,461 +836,640 @@ const Locations = () => {
             )}
           </div>
           <div className="flex gap-2">
-            <Dialog open={isAddEstateOpen} onOpenChange={setIsAddEstateOpen}>
+            <Dialog open={isAddCompanyOpen} onOpenChange={setIsAddCompanyOpen}>
               <DialogTrigger asChild>
                 <Button
                   variant="default"
                   className="bg-orange-500 hover:bg-orange-600"
                 >
                   <Plus className="mr-2 h-4 w-4" />
-                  Tambah Estate
+                  Tambah Perusahaan
                 </Button>
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>Tambah Estate Baru</DialogTitle>
+                  <DialogTitle>Tambah Perusahaan Baru</DialogTitle>
                   <DialogDescription>
-                    Masukkan nama estate yang ingin ditambahkan
+                    Masukkan nama perusahaan yang ingin ditambahkan
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                   <div className="space-y-2">
-                    <Label htmlFor="estate-name">Nama Estate</Label>
+                    <Label htmlFor="company-name">Nama Perusahaan</Label>
                     <Input
-                      id="estate-name"
-                      placeholder="Contoh: Estate ABC"
-                      value={newEstateName}
-                      onChange={(e) => setNewEstateName(e.target.value)}
+                      id="company-name"
+                      placeholder="Contoh: PT. ABC"
+                      value={newCompanyName}
+                      onChange={(e) => setNewCompanyName(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="company-address">Alamat</Label>
+                    <Input
+                      id="company-address"
+                      placeholder="Contoh: Jl. Perkebunan No. 1, Jakarta"
+                      value={newCompanyAddress}
+                      onChange={(e) => setNewCompanyAddress(e.target.value)}
                     />
                   </div>
                 </div>
                 <DialogFooter>
                   <Button
                     variant="outline"
-                    onClick={() => setIsAddEstateOpen(false)}
+                    onClick={() => setIsAddCompanyOpen(false)}
                   >
                     Batal
                   </Button>
-                  <Button onClick={handleAddEstate}>Simpan</Button>
+                  <Button onClick={handleAddCompany}>Simpan</Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
           </div>
         </div>
 
-        <Card>
-          <CardHeader>
-            <div className="space-y-2">
-              <Label htmlFor="search-estate">Cari Estate</Label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="search-estate"
-                  placeholder="Ketik nama estate..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <Accordion type="single" collapsible className="w-full">
-              {filteredEstates.map((es) => {
-                const metaEs = meta[es._id];
-                const blocksFlat: Array<{ division_id: number; block: Block }> =
-                  metaEs
-                    ? Object.entries(metaEs.blocksByDivision).flatMap(
-                        ([divId, blks]) =>
-                          (blks || []).map((b) => ({
-                            division_id: Number(divId),
-                            block: b,
-                          }))
-                      )
-                    : [];
+        {companies.map((company) => {
+          // Filter estate yang termasuk dalam company ini
+          const companyEstateIds =
+            company.estates?.map((e) => (typeof e === "string" ? e : e._id)) ||
+            [];
+          const companyEstates = filteredEstates.filter((estate) =>
+            companyEstateIds.includes(estate._id)
+          );
 
-                const currentPage = currentPages[es._id] || 1;
-                const itemsPerPage = 10;
-                const totalPages = Math.ceil(blocksFlat.length / itemsPerPage);
-                const startIndex = (currentPage - 1) * itemsPerPage;
-                const endIndex = startIndex + itemsPerPage;
-                const paginatedBlocks = blocksFlat.slice(startIndex, endIndex);
-
-                const handlePrevPage = () => {
-                  if (currentPage > 1) {
-                    setCurrentPages((prev) => ({
-                      ...prev,
-                      [es._id]: currentPage - 1,
-                    }));
-                  }
-                };
-
-                const handleNextPage = () => {
-                  if (currentPage < totalPages) {
-                    setCurrentPages((prev) => ({
-                      ...prev,
-                      [es._id]: currentPage + 1,
-                    }));
-                  }
-                };
-
-                return (
-                  <AccordionItem key={es._id} value={es._id}>
-                    <AccordionTrigger>
-                      <div className="flex items-center justify-between w-full">
-                        <span className="font-medium">{es.estate_name}</span>
-                        <span className="text-sm text-muted-foreground">
-                          {metaEs?.divisions?.length ?? 0} divisi —{" "}
-                          {blocksFlat.length} blok
-                        </span>
-                      </div>
-                    </AccordionTrigger>
-                    <AccordionContent>
-                      <div className="mb-4 flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleImportExcel(es._id)}
-                          className="border-green-500 text-green-600 hover:bg-green-50 hover:text-green-700"
-                        >
-                          <Upload className="mr-2 h-4 w-4" />
-                          Import Excel
-                        </Button>
-                        <Button
-                          size="sm"
-                          onClick={() => handleExportExcel(es._id)}
-                          className="bg-green-600 hover:bg-green-700"
-                        >
-                          <Download className="mr-2 h-4 w-4" />
-                          Export Excel
-                        </Button>
-                        <Button
-                          size="sm"
-                          onClick={() => handleExportPDF(es._id)}
-                          className="bg-red-600 hover:bg-red-700"
-                        >
-                          <Download className="mr-2 h-4 w-4" />
-                          Export PDF
-                        </Button>
-                      </div>
-                      <div className="overflow-x-auto">
-                        <Table className="min-w-max">
-                          <TableHeader className="bg-muted">
-                            <TableRow>
-                              <TableHead>Divisi</TableHead>
-                              <TableHead>No Blok</TableHead>
-                              <TableHead>ID Blok</TableHead>
-                              <TableHead className="text-right">
-                                Luas Blok
-                              </TableHead>
-                              <TableHead className="text-right">
-                                Jumlah Pokok
-                              </TableHead>
-                              <TableHead className="text-right">SPH</TableHead>
-                              <TableHead>Jenis Tanah</TableHead>
-                              <TableHead>Topografi</TableHead>
-                              <TableHead>Tahun</TableHead>
-                              <TableHead>Jenis Bibit</TableHead>
-                              <TableHead className="text-right">
-                                Luas Nursery
-                              </TableHead>
-                              <TableHead className="text-right">
-                                Luas Lain-Lain
-                              </TableHead>
-                              <TableHead className="text-right">
-                                Luas Garapan
-                              </TableHead>
-                              <TableHead className="text-right">
-                                Luas Rawa
-                              </TableHead>
-                              <TableHead className="text-right">
-                                Non Efektif
-                              </TableHead>
-                              <TableHead className="text-right">
-                                Konservasi
-                              </TableHead>
-                              <TableHead>Tipe Lokasi</TableHead>
-                              <TableHead className="text-right">Aksi</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {paginatedBlocks.map(
-                              ({ division_id, block }, idx) => (
-                                <TableRow
-                                  key={`${division_id}-${
-                                    block.no_blok ?? block.id_blok ?? idx
-                                  }`}
-                                >
-                                  <TableCell>Divisi {division_id}</TableCell>
-                                  <TableCell>
-                                    {String(block.no_blok ?? "")}
-                                  </TableCell>
-                                  <TableCell>
-                                    {String(block.id_blok ?? "")}
-                                  </TableCell>
-                                  <TableCell className="text-right font-medium">
-                                    {typeof block.luas_blok === "number"
-                                      ? formatNumber(block.luas_blok)
-                                      : block.luas_blok ?? "-"}
-                                  </TableCell>
-                                  <TableCell className="text-right font-medium">
-                                    {(() => {
-                                      const val =
-                                        block.jumlah_pokok ??
-                                        block.jumlak_pokok;
-                                      return typeof val === "number"
-                                        ? formatNumber(val)
-                                        : "-";
-                                    })()}
-                                  </TableCell>
-                                  <TableCell className="text-right font-medium">
-                                    {typeof block.SPH === "number"
-                                      ? formatNumber(block.SPH)
-                                      : block.SPH ?? "-"}
-                                  </TableCell>
-                                  <TableCell>
-                                    {String(block.jenis_tanah ?? "")}
-                                  </TableCell>
-                                  <TableCell>
-                                    {String(block.topografi ?? "")}
-                                  </TableCell>
-                                  <TableCell>
-                                    {String(block.tahun_ ?? block.tahun ?? "-")}
-                                  </TableCell>
-                                  <TableCell>
-                                    {String(block.jenis_bibit ?? "-")}
-                                  </TableCell>
-                                  <TableCell className="text-right">
-                                    {typeof block.luas_nursery === "number"
-                                      ? formatNumber(block.luas_nursery)
-                                      : block.luas_nursery ?? "-"}
-                                  </TableCell>
-                                  <TableCell className="text-right">
-                                    {(() => {
-                                      const val =
-                                        block.luas_lain___lain ??
-                                        block.luas_lain__lain;
-                                      return typeof val === "number"
-                                        ? formatNumber(val)
-                                        : "-";
-                                    })()}
-                                  </TableCell>
-                                  <TableCell className="text-right">
-                                    {typeof block.luas_garapan === "number"
-                                      ? formatNumber(block.luas_garapan)
-                                      : block.luas_garapan ?? "-"}
-                                  </TableCell>
-                                  <TableCell className="text-right">
-                                    {typeof block.luas_rawa === "number"
-                                      ? formatNumber(block.luas_rawa)
-                                      : block.luas_rawa ?? "-"}
-                                  </TableCell>
-                                  <TableCell className="text-right">
-                                    {typeof block.luas_area_non_efektif ===
-                                    "number"
-                                      ? formatNumber(
-                                          block.luas_area_non_efektif
-                                        )
-                                      : block.luas_area_non_efektif ?? "-"}
-                                  </TableCell>
-                                  <TableCell className="text-right">
-                                    {typeof block.luas_konservasi === "number"
-                                      ? formatNumber(block.luas_konservasi)
-                                      : block.luas_konservasi ?? "-"}
-                                  </TableCell>
-                                  <TableCell>
-                                    {block.location?.type ?? "—"}
-                                  </TableCell>
-                                  <TableCell className="text-right">
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-8 w-8"
-                                      onClick={() =>
-                                        handleOpenEditDialog(
-                                          es._id,
-                                          division_id,
-                                          block
-                                        )
-                                      }
-                                    >
-                                      <Edit className="h-4 w-4" />
-                                    </Button>
-                                  </TableCell>
-                                </TableRow>
-                              )
-                            )}
-                            {blocksFlat.length === 0 && (
-                              <TableRow>
-                                <TableCell
-                                  colSpan={19}
-                                  className="text-center text-sm text-muted-foreground"
-                                >
-                                  Tidak ada data blok
-                                </TableCell>
-                              </TableRow>
-                            )}
-                            {blocksFlat.length > 0 &&
-                              (() => {
-                                const totalDivisi = new Set(
-                                  blocksFlat.map(
-                                    ({ division_id }) => division_id
-                                  )
-                                ).size;
-                                const totalBlok = new Set(
-                                  blocksFlat.map(({ block }) => block.id_blok)
-                                ).size;
-                                const totalLuasBlok = blocksFlat.reduce(
-                                  (sum, { block }) =>
-                                    sum +
-                                    (typeof block.luas_blok === "number"
-                                      ? block.luas_blok
-                                      : 0),
-                                  0
-                                );
-                                const totalJumlahPokok = blocksFlat.reduce(
-                                  (sum, { block }) => {
-                                    const val =
-                                      block.jumlah_pokok ?? block.jumlak_pokok;
-                                    return (
-                                      sum + (typeof val === "number" ? val : 0)
-                                    );
-                                  },
-                                  0
-                                );
-                                const totalLuasNursery = blocksFlat.reduce(
-                                  (sum, { block }) =>
-                                    sum +
-                                    (typeof block.luas_nursery === "number"
-                                      ? block.luas_nursery
-                                      : 0),
-                                  0
-                                );
-                                const totalLuasLain = blocksFlat.reduce(
-                                  (sum, { block }) => {
-                                    const val =
-                                      block.luas_lain___lain ??
-                                      block.luas_lain__lain;
-                                    return (
-                                      sum + (typeof val === "number" ? val : 0)
-                                    );
-                                  },
-                                  0
-                                );
-                                const totalLuasGarapan = blocksFlat.reduce(
-                                  (sum, { block }) =>
-                                    sum +
-                                    (typeof block.luas_garapan === "number"
-                                      ? block.luas_garapan
-                                      : 0),
-                                  0
-                                );
-                                const totalLuasRawa = blocksFlat.reduce(
-                                  (sum, { block }) =>
-                                    sum +
-                                    (typeof block.luas_rawa === "number"
-                                      ? block.luas_rawa
-                                      : 0),
-                                  0
-                                );
-                                const totalNonEfektif = blocksFlat.reduce(
-                                  (sum, { block }) =>
-                                    sum +
-                                    (typeof block.luas_area_non_efektif ===
-                                    "number"
-                                      ? block.luas_area_non_efektif
-                                      : 0),
-                                  0
-                                );
-                                const totalKonservasi = blocksFlat.reduce(
-                                  (sum, { block }) =>
-                                    sum +
-                                    (typeof block.luas_konservasi === "number"
-                                      ? block.luas_konservasi
-                                      : 0),
-                                  0
-                                );
-
-                                return (
-                                  <TableRow className="bg-muted/50 font-bold">
-                                    <TableCell>TOTAL:</TableCell>
-                                    <TableCell className="text-right">
-                                      {totalDivisi} Divisi
-                                    </TableCell>
-                                    <TableCell className="text-right">
-                                      {totalBlok} Blok
-                                    </TableCell>
-                                    <TableCell className="text-right">
-                                      {formatNumber(totalLuasBlok)}
-                                    </TableCell>
-                                    <TableCell className="text-right">
-                                      {formatNumber(totalJumlahPokok)}
-                                    </TableCell>
-                                    <TableCell colSpan={5}></TableCell>
-                                    <TableCell className="text-right">
-                                      {formatNumber(totalLuasNursery)}
-                                    </TableCell>
-                                    <TableCell className="text-right">
-                                      {formatNumber(totalLuasLain)}
-                                    </TableCell>
-                                    <TableCell className="text-right">
-                                      {formatNumber(totalLuasGarapan)}
-                                    </TableCell>
-                                    <TableCell className="text-right">
-                                      {formatNumber(totalLuasRawa)}
-                                    </TableCell>
-                                    <TableCell className="text-right">
-                                      {formatNumber(totalNonEfektif)}
-                                    </TableCell>
-                                    <TableCell className="text-right">
-                                      {formatNumber(totalKonservasi)}
-                                    </TableCell>
-                                    <TableCell colSpan={2}></TableCell>
-                                  </TableRow>
-                                );
-                              })()}
-                          </TableBody>
-                        </Table>
-                      </div>
-                      {blocksFlat.length > itemsPerPage && (
-                        <div className="flex items-center justify-between mt-4">
-                          <div className="text-sm text-muted-foreground">
-                            Menampilkan {startIndex + 1} -{" "}
-                            {Math.min(endIndex, blocksFlat.length)} dari{" "}
-                            {blocksFlat.length} blok
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={handlePrevPage}
-                              disabled={currentPage === 1}
-                            >
-                              <ChevronLeft className="h-4 w-4" />
-                              Previous
-                            </Button>
-                            <span className="text-sm">
-                              Halaman {currentPage} dari {totalPages}
-                            </span>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={handleNextPage}
-                              disabled={currentPage >= totalPages}
-                            >
-                              Next
-                              <ChevronRight className="h-4 w-4" />
-                            </Button>
+          return (
+            <Accordion
+              key={company._id}
+              type="single"
+              collapsible
+              className="w-full mb-6"
+              defaultValue={`company-${company._id}`}
+            >
+              <AccordionItem
+                value={`company-${company._id}`}
+                className="border rounded-lg px-4"
+              >
+                <AccordionTrigger className="hover:no-underline">
+                  <div className="flex flex-col items-start text-left">
+                    <h2 className="text-xl font-bold">
+                      {company.company_name}
+                    </h2>
+                    <p className="text-sm text-muted-foreground font-normal">
+                      {company.address} • {companyEstates.length} Estate
+                    </p>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="pt-4">
+                  <Card>
+                    <CardHeader>
+                      <div className="flex items-end justify-between gap-4">
+                        <div className="space-y-2 flex-1">
+                          <Label htmlFor="search-estate">Cari Estate</Label>
+                          <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Input
+                              id="search-estate"
+                              placeholder="Ketik nama estate..."
+                              value={search}
+                              onChange={(e) => setSearch(e.target.value)}
+                              className="pl-10"
+                            />
                           </div>
                         </div>
+                        <Dialog
+                          open={isAddEstateOpen}
+                          onOpenChange={setIsAddEstateOpen}
+                        >
+                          <DialogTrigger asChild>
+                            <Button
+                              variant="default"
+                              size="sm"
+                              className="bg-green-600 hover:bg-green-700"
+                              onClick={() => setSelectedCompanyId(company._id)}
+                            >
+                              <Plus className="mr-2 h-4 w-4" />
+                              Tambah Estate
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent>
+                            <DialogHeader>
+                              <DialogTitle>Tambah Estate Baru</DialogTitle>
+                              <DialogDescription>
+                                Masukkan nama estate untuk perusahaan yang
+                                dipilih
+                              </DialogDescription>
+                            </DialogHeader>
+                            <div className="space-y-4 py-4">
+                              <div className="space-y-2">
+                                <Label>Perusahaan</Label>
+                                <div className="px-3 py-2 bg-muted rounded-md text-sm">
+                                  {companies.find(
+                                    (c) => c._id === selectedCompanyId
+                                  )?.company_name ||
+                                    "Tidak ada perusahaan dipilih"}
+                                </div>
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor="estate-name">Nama Estate</Label>
+                                <Input
+                                  id="estate-name"
+                                  placeholder="Contoh: Estate ABC"
+                                  value={newEstateName}
+                                  onChange={(e) =>
+                                    setNewEstateName(e.target.value)
+                                  }
+                                />
+                              </div>
+                            </div>
+                            <DialogFooter>
+                              <Button
+                                variant="outline"
+                                onClick={() => setIsAddEstateOpen(false)}
+                              >
+                                Batal
+                              </Button>
+                              <Button onClick={handleAddEstate}>Simpan</Button>
+                            </DialogFooter>
+                          </DialogContent>
+                        </Dialog>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <Accordion type="single" collapsible className="w-full">
+                        {companyEstates.map((es) => {
+                          const metaEs = meta[es._id];
+                          const blocksFlat: Array<{
+                            division_id: number;
+                            block: Block;
+                          }> = metaEs
+                            ? Object.entries(metaEs.blocksByDivision).flatMap(
+                                ([divId, blks]) =>
+                                  (blks || []).map((b) => ({
+                                    division_id: Number(divId),
+                                    block: b,
+                                  }))
+                              )
+                            : [];
+
+                          const currentPage = currentPages[es._id] || 1;
+                          const itemsPerPage = 10;
+                          const totalPages = Math.ceil(
+                            blocksFlat.length / itemsPerPage
+                          );
+                          const startIndex = (currentPage - 1) * itemsPerPage;
+                          const endIndex = startIndex + itemsPerPage;
+                          const paginatedBlocks = blocksFlat.slice(
+                            startIndex,
+                            endIndex
+                          );
+
+                          const handlePrevPage = () => {
+                            if (currentPage > 1) {
+                              setCurrentPages((prev) => ({
+                                ...prev,
+                                [es._id]: currentPage - 1,
+                              }));
+                            }
+                          };
+
+                          const handleNextPage = () => {
+                            if (currentPage < totalPages) {
+                              setCurrentPages((prev) => ({
+                                ...prev,
+                                [es._id]: currentPage + 1,
+                              }));
+                            }
+                          };
+
+                          return (
+                            <AccordionItem key={es._id} value={es._id}>
+                              <AccordionTrigger>
+                                <div className="flex items-center justify-between w-full">
+                                  <span className="font-medium">
+                                    {es.estate_name}
+                                  </span>
+                                  <span className="text-sm text-muted-foreground">
+                                    {metaEs?.divisions?.length ?? 0} divisi —{" "}
+                                    {blocksFlat.length} blok
+                                  </span>
+                                </div>
+                              </AccordionTrigger>
+                              <AccordionContent>
+                                <div className="mb-4 flex gap-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleImportExcel(es._id)}
+                                    className="border-green-500 text-green-600 hover:bg-green-50 hover:text-green-700"
+                                  >
+                                    <Upload className="mr-2 h-4 w-4" />
+                                    Import Excel
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    onClick={() => handleExportExcel(es._id)}
+                                    className="bg-green-600 hover:bg-green-700"
+                                  >
+                                    <Download className="mr-2 h-4 w-4" />
+                                    Export Excel
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    onClick={() => handleExportPDF(es._id)}
+                                    className="bg-red-600 hover:bg-red-700"
+                                  >
+                                    <Download className="mr-2 h-4 w-4" />
+                                    Export PDF
+                                  </Button>
+                                </div>
+                                <div className="overflow-x-auto">
+                                  <Table className="min-w-max">
+                                    <TableHeader className="bg-muted">
+                                      <TableRow>
+                                        <TableHead>Divisi</TableHead>
+                                        <TableHead>No Blok</TableHead>
+                                        <TableHead>ID Blok</TableHead>
+                                        <TableHead className="text-right">
+                                          Luas Blok
+                                        </TableHead>
+                                        <TableHead className="text-right">
+                                          Jumlah Pokok
+                                        </TableHead>
+                                        <TableHead className="text-right">
+                                          SPH
+                                        </TableHead>
+                                        <TableHead>Jenis Tanah</TableHead>
+                                        <TableHead>Topografi</TableHead>
+                                        <TableHead>Tahun</TableHead>
+                                        <TableHead>Jenis Bibit</TableHead>
+                                        <TableHead className="text-right">
+                                          Luas Nursery
+                                        </TableHead>
+                                        <TableHead className="text-right">
+                                          Luas Lain-Lain
+                                        </TableHead>
+                                        <TableHead className="text-right">
+                                          Luas Garapan
+                                        </TableHead>
+                                        <TableHead className="text-right">
+                                          Luas Rawa
+                                        </TableHead>
+                                        <TableHead className="text-right">
+                                          Non Efektif
+                                        </TableHead>
+                                        <TableHead className="text-right">
+                                          Konservasi
+                                        </TableHead>
+                                        <TableHead>Tipe Lokasi</TableHead>
+                                        <TableHead className="text-right">
+                                          Aksi
+                                        </TableHead>
+                                      </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                      {paginatedBlocks.map(
+                                        ({ division_id, block }, idx) => (
+                                          <TableRow
+                                            key={`${division_id}-${
+                                              block.no_blok ??
+                                              block.id_blok ??
+                                              idx
+                                            }`}
+                                          >
+                                            <TableCell>
+                                              Divisi {division_id}
+                                            </TableCell>
+                                            <TableCell>
+                                              {String(block.no_blok ?? "")}
+                                            </TableCell>
+                                            <TableCell>
+                                              {String(block.id_blok ?? "")}
+                                            </TableCell>
+                                            <TableCell className="text-right font-medium">
+                                              {typeof block.luas_blok ===
+                                              "number"
+                                                ? formatNumber(block.luas_blok)
+                                                : block.luas_blok ?? "-"}
+                                            </TableCell>
+                                            <TableCell className="text-right font-medium">
+                                              {(() => {
+                                                const val =
+                                                  block.jumlah_pokok ??
+                                                  block.jumlak_pokok;
+                                                return typeof val === "number"
+                                                  ? formatNumber(val)
+                                                  : "-";
+                                              })()}
+                                            </TableCell>
+                                            <TableCell className="text-right font-medium">
+                                              {typeof block.SPH === "number"
+                                                ? formatNumber(block.SPH)
+                                                : block.SPH ?? "-"}
+                                            </TableCell>
+                                            <TableCell>
+                                              {String(block.jenis_tanah ?? "")}
+                                            </TableCell>
+                                            <TableCell>
+                                              {String(block.topografi ?? "")}
+                                            </TableCell>
+                                            <TableCell>
+                                              {String(
+                                                block.tahun_ ??
+                                                  block.tahun ??
+                                                  "-"
+                                              )}
+                                            </TableCell>
+                                            <TableCell>
+                                              {String(block.jenis_bibit ?? "-")}
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                              {typeof block.luas_nursery ===
+                                              "number"
+                                                ? formatNumber(
+                                                    block.luas_nursery
+                                                  )
+                                                : block.luas_nursery ?? "-"}
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                              {(() => {
+                                                const val =
+                                                  block.luas_lain___lain ??
+                                                  block.luas_lain__lain;
+                                                return typeof val === "number"
+                                                  ? formatNumber(val)
+                                                  : "-";
+                                              })()}
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                              {typeof block.luas_garapan ===
+                                              "number"
+                                                ? formatNumber(
+                                                    block.luas_garapan
+                                                  )
+                                                : block.luas_garapan ?? "-"}
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                              {typeof block.luas_rawa ===
+                                              "number"
+                                                ? formatNumber(block.luas_rawa)
+                                                : block.luas_rawa ?? "-"}
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                              {typeof block.luas_area_non_efektif ===
+                                              "number"
+                                                ? formatNumber(
+                                                    block.luas_area_non_efektif
+                                                  )
+                                                : block.luas_area_non_efektif ??
+                                                  "-"}
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                              {typeof block.luas_konservasi ===
+                                              "number"
+                                                ? formatNumber(
+                                                    block.luas_konservasi
+                                                  )
+                                                : block.luas_konservasi ?? "-"}
+                                            </TableCell>
+                                            <TableCell>
+                                              {block.location?.type ?? "—"}
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                              <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-8 w-8"
+                                                onClick={() =>
+                                                  handleOpenEditDialog(
+                                                    es._id,
+                                                    division_id,
+                                                    block
+                                                  )
+                                                }
+                                              >
+                                                <Edit className="h-4 w-4" />
+                                              </Button>
+                                            </TableCell>
+                                          </TableRow>
+                                        )
+                                      )}
+                                      {blocksFlat.length === 0 && (
+                                        <TableRow>
+                                          <TableCell
+                                            colSpan={19}
+                                            className="text-center text-sm text-muted-foreground"
+                                          >
+                                            Tidak ada data blok
+                                          </TableCell>
+                                        </TableRow>
+                                      )}
+                                      {blocksFlat.length > 0 &&
+                                        (() => {
+                                          const totalDivisi = new Set(
+                                            blocksFlat.map(
+                                              ({ division_id }) => division_id
+                                            )
+                                          ).size;
+                                          const totalBlok = new Set(
+                                            blocksFlat.map(
+                                              ({ block }) => block.id_blok
+                                            )
+                                          ).size;
+                                          const totalLuasBlok =
+                                            blocksFlat.reduce(
+                                              (sum, { block }) =>
+                                                sum +
+                                                (typeof block.luas_blok ===
+                                                "number"
+                                                  ? block.luas_blok
+                                                  : 0),
+                                              0
+                                            );
+                                          const totalJumlahPokok =
+                                            blocksFlat.reduce(
+                                              (sum, { block }) => {
+                                                const val =
+                                                  block.jumlah_pokok ??
+                                                  block.jumlak_pokok;
+                                                return (
+                                                  sum +
+                                                  (typeof val === "number"
+                                                    ? val
+                                                    : 0)
+                                                );
+                                              },
+                                              0
+                                            );
+                                          const totalLuasNursery =
+                                            blocksFlat.reduce(
+                                              (sum, { block }) =>
+                                                sum +
+                                                (typeof block.luas_nursery ===
+                                                "number"
+                                                  ? block.luas_nursery
+                                                  : 0),
+                                              0
+                                            );
+                                          const totalLuasLain =
+                                            blocksFlat.reduce(
+                                              (sum, { block }) => {
+                                                const val =
+                                                  block.luas_lain___lain ??
+                                                  block.luas_lain__lain;
+                                                return (
+                                                  sum +
+                                                  (typeof val === "number"
+                                                    ? val
+                                                    : 0)
+                                                );
+                                              },
+                                              0
+                                            );
+                                          const totalLuasGarapan =
+                                            blocksFlat.reduce(
+                                              (sum, { block }) =>
+                                                sum +
+                                                (typeof block.luas_garapan ===
+                                                "number"
+                                                  ? block.luas_garapan
+                                                  : 0),
+                                              0
+                                            );
+                                          const totalLuasRawa =
+                                            blocksFlat.reduce(
+                                              (sum, { block }) =>
+                                                sum +
+                                                (typeof block.luas_rawa ===
+                                                "number"
+                                                  ? block.luas_rawa
+                                                  : 0),
+                                              0
+                                            );
+                                          const totalNonEfektif =
+                                            blocksFlat.reduce(
+                                              (sum, { block }) =>
+                                                sum +
+                                                (typeof block.luas_area_non_efektif ===
+                                                "number"
+                                                  ? block.luas_area_non_efektif
+                                                  : 0),
+                                              0
+                                            );
+                                          const totalKonservasi =
+                                            blocksFlat.reduce(
+                                              (sum, { block }) =>
+                                                sum +
+                                                (typeof block.luas_konservasi ===
+                                                "number"
+                                                  ? block.luas_konservasi
+                                                  : 0),
+                                              0
+                                            );
+
+                                          return (
+                                            <TableRow className="bg-muted/50 font-bold">
+                                              <TableCell>TOTAL:</TableCell>
+                                              <TableCell className="text-right">
+                                                {totalDivisi} Divisi
+                                              </TableCell>
+                                              <TableCell className="text-right">
+                                                {totalBlok} Blok
+                                              </TableCell>
+                                              <TableCell className="text-right">
+                                                {formatNumber(totalLuasBlok)}
+                                              </TableCell>
+                                              <TableCell className="text-right">
+                                                {formatNumber(totalJumlahPokok)}
+                                              </TableCell>
+                                              <TableCell
+                                                colSpan={5}
+                                              ></TableCell>
+                                              <TableCell className="text-right">
+                                                {formatNumber(totalLuasNursery)}
+                                              </TableCell>
+                                              <TableCell className="text-right">
+                                                {formatNumber(totalLuasLain)}
+                                              </TableCell>
+                                              <TableCell className="text-right">
+                                                {formatNumber(totalLuasGarapan)}
+                                              </TableCell>
+                                              <TableCell className="text-right">
+                                                {formatNumber(totalLuasRawa)}
+                                              </TableCell>
+                                              <TableCell className="text-right">
+                                                {formatNumber(totalNonEfektif)}
+                                              </TableCell>
+                                              <TableCell className="text-right">
+                                                {formatNumber(totalKonservasi)}
+                                              </TableCell>
+                                              <TableCell
+                                                colSpan={2}
+                                              ></TableCell>
+                                            </TableRow>
+                                          );
+                                        })()}
+                                    </TableBody>
+                                  </Table>
+                                </div>
+                                {blocksFlat.length > itemsPerPage && (
+                                  <div className="flex items-center justify-between mt-4">
+                                    <div className="text-sm text-muted-foreground">
+                                      Menampilkan {startIndex + 1} -{" "}
+                                      {Math.min(endIndex, blocksFlat.length)}{" "}
+                                      dari {blocksFlat.length} blok
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={handlePrevPage}
+                                        disabled={currentPage === 1}
+                                      >
+                                        <ChevronLeft className="h-4 w-4" />
+                                        Previous
+                                      </Button>
+                                      <span className="text-sm">
+                                        Halaman {currentPage} dari {totalPages}
+                                      </span>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={handleNextPage}
+                                        disabled={currentPage >= totalPages}
+                                      >
+                                        Next
+                                        <ChevronRight className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                  </div>
+                                )}
+                              </AccordionContent>
+                            </AccordionItem>
+                          );
+                        })}
+                      </Accordion>
+
+                      {companyEstates.length === 0 && (
+                        <div className="py-8 text-center text-muted-foreground">
+                          Belum ada estate di perusahaan ini. Klik &quot;Tambah
+                          Estate&quot; untuk menambahkan.
+                        </div>
                       )}
-                    </AccordionContent>
-                  </AccordionItem>
-                );
-              })}
+                    </CardContent>
+                  </Card>
+                </AccordionContent>
+              </AccordionItem>
             </Accordion>
-          </CardContent>
-        </Card>
+          );
+        })}
+
+        {companies.length === 0 && !loading && (
+          <Card>
+            <CardContent className="py-8 text-center text-muted-foreground">
+              Belum ada data perusahaan. Klik tombol &quot;Tambah
+              Perusahaan&quot; untuk menambahkan.
+            </CardContent>
+          </Card>
+        )}
 
         {/* Dialog Edit Blok */}
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>

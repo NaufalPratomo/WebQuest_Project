@@ -26,6 +26,43 @@ export default function Transport() {
   const [rows, setRows] = useState<AngkutRow[]>([]);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const harvestStorageKey = useMemo(() => `realharvest_rows_${datePanen}`, [datePanen]);
+  // Dialog lengkapi no mobil & supir
+  const [completeOpen, setCompleteOpen] = useState(false);
+  const [completeTarget, setCompleteTarget] = useState<AngkutRow | null>(null);
+  const [editNoMobil, setEditNoMobil] = useState('');
+  const [editSupir, setEditSupir] = useState('');
+
+  // Aggregate Real Harvest by TPH for the selected datePanen
+  const harvestTotalsByTPH = useMemo(() => {
+    try {
+      const raw = localStorage.getItem(harvestStorageKey);
+      const list: Array<{
+        date: string;
+        estateId?: string;
+        division?: string;
+        block?: string;
+        noTPH?: string;
+        janjangTBS: number;
+      }> = raw ? JSON.parse(raw) : [];
+      const map = new Map<string, { estateId: string; division_id: number; block_no: string; notph: string; totalJJG: number }>();
+      for (const r of list) {
+        if (!r || !String(r.date).startsWith(datePanen)) continue;
+        const estateId = r.estateId || '';
+        const division_id = Number(r.division || 0) || 0;
+        const block_no = r.block || '';
+        const notph = r.noTPH || '';
+        if (!notph) continue; // group only when TPH available
+        const key = `${estateId}|${division_id}|${block_no}|${notph}`;
+        const prev = map.get(key) || { estateId, division_id, block_no, notph, totalJJG: 0 };
+        prev.totalJJG += Number(r.janjangTBS || 0);
+        map.set(key, prev);
+      }
+      return map;
+    } catch {
+      return new Map<string, { estateId: string; division_id: number; block_no: string; notph: string; totalJJG: number }>();
+    }
+  }, [harvestStorageKey, datePanen]);
   const exportCsv = () => {
     const header = ['date_panen','date_angkut','estateId','division_id','block_no','weightKg'];
     const escape = (v: unknown) => {
@@ -66,10 +103,58 @@ export default function Transport() {
   }, [estateId, divisionId]);
 
   useEffect(() => {
-    api.angkutList({ date_panen: datePanen }).then(setRows).catch(() => setRows([]));
-  }, [datePanen]);
+    // Load angkut rows then ensure auto-populated from harvest totals
+    (async () => {
+      try {
+        const existing = await api.angkutList({ date_panen: datePanen });
+        setRows(existing);
+        // build set of existing keys (estate|division|block|notph)
+        const existingKeys = new Set(
+          existing.map((r) => `${r.estateId}|${r.division_id}|${r.block_no}|${noteVal(r.notes, 'notph')}`),
+        );
+        const toCreate: AngkutRow[] = [];
+        harvestTotalsByTPH.forEach((grp, key) => {
+          if (!existingKeys.has(key)) {
+            const notes = [`notph=${grp.notph}`, `jjg_angkut=0`].join('; ');
+            toCreate.push({
+              date_panen: datePanen,
+              date_angkut: datePanen, // default same day, can be edited later
+              estateId: grp.estateId,
+              division_id: grp.division_id,
+              block_no: grp.block_no,
+              weightKg: 0,
+              notes,
+            } as AngkutRow);
+          }
+        });
+        if (toCreate.length > 0) {
+          try {
+            await api.angkutCreate(toCreate);
+            const latest = await api.angkutList({ date_panen: datePanen });
+            setRows(latest);
+          } catch {
+            // ignore backend failure; at least UI will reflect harvest aggregates
+          }
+        }
+      } catch {
+        setRows([]);
+      }
+    })();
+  }, [datePanen, harvestTotalsByTPH]);
 
   const filtered = useMemo(() => rows.filter(r => String(r.date_panen).startsWith(datePanen)), [rows, datePanen]);
+
+  // Build derived data including JJG Realisasi and Restan per row
+  const derived = useMemo(() => {
+    return filtered.map((r) => {
+      const key = `${r.estateId}|${r.division_id}|${r.block_no}|${noteVal(r.notes, 'notph')}`;
+      const grp = harvestTotalsByTPH.get(key);
+      const totalJJG = grp?.totalJJG || 0;
+      const jjgAngkut = Number(noteVal(r.notes, 'jjg_angkut') || 0);
+      const restan = totalJJG - jjgAngkut;
+      return { row: r, totalJJG, jjgAngkut, restan };
+    });
+  }, [filtered, harvestTotalsByTPH]);
 
   const addRow = async () => {
     try {
@@ -91,6 +176,80 @@ export default function Transport() {
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Gagal menyimpan';
       toast.error(msg);
+    }
+  };
+
+  // Inline update jjg_angkut for a given row, persist to backend
+  type AngkutRowWithId = AngkutRow & { _id?: string };
+  const updateJjgAngkut = async (r: AngkutRow, value: number) => {
+    const notph = noteVal(r.notes, 'notph');
+    const no_mobil = noteVal(r.notes, 'no_mobil');
+    const supir = noteVal(r.notes, 'supir');
+    const notes = [
+      notph ? `notph=${notph}` : '',
+      `jjg_angkut=${Math.max(0, Math.floor(value || 0))}`,
+      no_mobil ? `no_mobil=${no_mobil}` : '',
+      supir ? `supir=${supir}` : '',
+    ]
+      .filter(Boolean)
+      .join('; ');
+    try {
+      const body: AngkutRow = {
+        _id: (r as AngkutRowWithId)._id,
+        date_panen: r.date_panen,
+        date_angkut: r.date_angkut,
+        estateId: r.estateId,
+        division_id: r.division_id,
+        block_no: r.block_no,
+        weightKg: r.weightKg || 0,
+        notes,
+      } as AngkutRow;
+      await api.angkutCreate(body);
+      const latest = await api.angkutList({ date_panen: datePanen });
+      setRows(latest);
+      toast.success('JJG angkut diperbarui');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Gagal memperbarui JJG angkut';
+      toast.error(msg);
+    }
+  };
+
+  const openComplete = (r: AngkutRow) => {
+    setCompleteTarget(r);
+    setEditNoMobil(noteVal(r.notes, 'no_mobil') || '');
+    setEditSupir(noteVal(r.notes, 'supir') || '');
+    setCompleteOpen(true);
+  };
+
+  const saveComplete = async () => {
+    if (!completeTarget) return;
+    try {
+      const notph = noteVal(completeTarget.notes, 'notph');
+      const jjg = noteVal(completeTarget.notes, 'jjg_angkut');
+      const notes = [
+        notph ? `notph=${notph}` : '',
+        jjg ? `jjg_angkut=${jjg}` : 'jjg_angkut=0',
+        editNoMobil ? `no_mobil=${editNoMobil}` : '',
+        editSupir ? `supir=${editSupir}` : '',
+      ].filter(Boolean).join('; ');
+      const body: AngkutRow = {
+        _id: (completeTarget as (AngkutRow & { _id?: string }))._id,
+        date_panen: completeTarget.date_panen,
+        date_angkut: completeTarget.date_angkut,
+        estateId: completeTarget.estateId,
+        division_id: completeTarget.division_id,
+        block_no: completeTarget.block_no,
+        weightKg: completeTarget.weightKg || 0,
+        notes,
+      } as AngkutRow;
+      await api.angkutCreate(body);
+      const latest = await api.angkutList({ date_panen: datePanen });
+      setRows(latest);
+      toast.success('Data angkut diperbarui');
+      setCompleteOpen(false);
+      setCompleteTarget(null);
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Gagal menyimpan');
     }
   };
 
@@ -270,29 +429,77 @@ export default function Transport() {
                   <TableHead className="text-center">Div</TableHead>
                   <TableHead className="text-center">Blok</TableHead>
                   <TableHead className="text-center">NoTPH</TableHead>
-                  <TableHead className="text-center">jjg_angkut</TableHead>
+                  <TableHead className="text-center">JJG Realisasi</TableHead>
+                  <TableHead className="text-center">JJG Angkut</TableHead>
+                  <TableHead className="text-center">Restan</TableHead>
                   <TableHead className="text-center">No. Mobil</TableHead>
                   <TableHead className="text-center">Nama Supir</TableHead>
+                  <TableHead className="text-center">Aksi</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((r, idx) => (
-                  <TableRow key={r._id || idx}>
+                {derived.map(({ row: r, totalJJG, jjgAngkut, restan }, idx) => (
+                  <TableRow key={(r as AngkutRowWithId)._id || idx}>
                     <TableCell className="text-center">{String(r.date_angkut).slice(0,10)}</TableCell>
                     <TableCell className="text-center">{r.estateId}</TableCell>
                     <TableCell className="text-center">{r.division_id}</TableCell>
                     <TableCell className="text-center">{r.block_no}</TableCell>
                     <TableCell className="text-center">{noteVal(r.notes, 'notph') || '-'}</TableCell>
-                    <TableCell className="text-center">{noteVal(r.notes, 'jjg_angkut') || '-'}</TableCell>
+                    <TableCell className="text-center font-medium">{totalJJG}</TableCell>
+                    <TableCell className="text-center">
+                      <Input
+                        type="number"
+                        value={jjgAngkut}
+                        min={0}
+                        onChange={(e) => {
+                          const v = e.target.value === '' ? 0 : Number(e.target.value);
+                          updateJjgAngkut(r, v);
+                        }}
+                      />
+                    </TableCell>
+                    <TableCell className={'text-center font-semibold ' + (restan > 0 ? 'text-red-600' : 'text-green-600')}>{restan}</TableCell>
                     <TableCell className="text-center">{noteVal(r.notes, 'no_mobil') || '-'}</TableCell>
                     <TableCell className="text-center">{noteVal(r.notes, 'supir') || '-'}</TableCell>
+                    <TableCell className="text-center">
+                      <Button size="sm" variant="outline" onClick={() => openComplete(r)}>
+                        {(noteVal(r.notes, 'no_mobil') && noteVal(r.notes, 'supir')) ? 'Edit' : 'Lengkapi'}
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 ))}
                 {filtered.length === 0 && (
-                  <TableRow><TableCell colSpan={8} className="text-center text-sm text-muted-foreground">Tidak ada data</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={11} className="text-center text-sm text-muted-foreground">Tidak ada data</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>
+            {/* Dialog Lengkapi */}
+            <Dialog open={completeOpen} onOpenChange={(o)=> { if (!o) { setCompleteOpen(false); setCompleteTarget(null); } }}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>{(noteVal(completeTarget?.notes, 'no_mobil') && noteVal(completeTarget?.notes, 'supir')) ? 'Edit Data Angkut' : 'Lengkapi Data Angkut'}</DialogTitle>
+                </DialogHeader>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <Label>No. Mobil</Label>
+                    <Input value={editNoMobil} onChange={(e)=> setEditNoMobil(e.target.value)} placeholder="Isi nomor mobil" />
+                  </div>
+                  <div>
+                    <Label>Nama Supir</Label>
+                    <Input value={editSupir} onChange={(e)=> setEditSupir(e.target.value)} placeholder="Isi nama supir" />
+                  </div>
+                  <div className="md:col-span-2 text-sm text-muted-foreground">TPH: {noteVal(completeTarget?.notes, 'notph') || '-'}</div>
+                  <div className="md:col-span-2 text-sm">JJG Realisasi: {(() => {
+                    if (!completeTarget) return 0;
+                    const key = `${completeTarget.estateId}|${completeTarget.division_id}|${completeTarget.block_no}|${noteVal(completeTarget.notes, 'notph')}`;
+                    return harvestTotalsByTPH.get(key)?.totalJJG || 0;
+                  })()}</div>
+                </div>
+                <div className="flex gap-2 mt-4">
+                  <Button onClick={saveComplete} className="flex-1">Simpan</Button>
+                  <Button variant="outline" onClick={()=> { setCompleteOpen(false); setCompleteTarget(null); }}>Batal</Button>
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
         </CardContent>
       </Card>

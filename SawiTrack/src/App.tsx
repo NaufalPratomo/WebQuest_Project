@@ -10,7 +10,9 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import Layout from "@/components/Layout";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
-import Employees from "./pages/master/Employees";
+import Users from "./pages/master/Users";
+import Workers from "./pages/master/Workers";
+import Companies from "./pages/master/Companies";
 import Locations from "./pages/master/Locations";
 import Targets from "./pages/master/RealHarvest";
 import InputReport from "./pages/activities/InputReport";
@@ -51,9 +53,21 @@ const App = () => (
                 </ProtectedRoute>
               } />
 
-              <Route path="/master/employees" element={
+              <Route path="/master/users" element={
                 <ProtectedRoute allowedRoles={['manager']}>
-                  <Layout><Employees /></Layout>
+                  <Layout><Users /></Layout>
+                </ProtectedRoute>
+              } />
+
+              <Route path="/master/workers" element={
+                <ProtectedRoute allowedRoles={['manager']}>
+                  <Layout><Workers /></Layout>
+                </ProtectedRoute>
+              } />
+
+              <Route path="/master/companies" element={
+                <ProtectedRoute allowedRoles={['manager']}>
+                  <Layout><Companies /></Layout>
                 </ProtectedRoute>
               } />
 

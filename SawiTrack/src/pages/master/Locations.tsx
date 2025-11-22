@@ -42,6 +42,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { Toaster } from "@/components/ui/toaster";
 import { api, Company } from "@/lib/api";
@@ -86,6 +87,7 @@ type Block = {
   id_blok?: string;
   no_blok?: string;
   no_tph?: string;
+  status?: string;
   luas_blok?: number;
   jumlak_pokok?: number;
   jumlah_pokok?: number;
@@ -105,7 +107,7 @@ type Block = {
   location?: { type?: string; coordinates?: unknown };
   [key: string]: unknown;
 };
-type EstateLite = { _id: string; estate_name: string };
+type EstateLite = { _id: string; estate_name: string; status?: string };
 
 const Locations = () => {
   const { toast } = useToast();
@@ -1055,8 +1057,7 @@ const Locations = () => {
                                     {es.estate_name}
                                   </span>
                                   <span className="text-sm text-muted-foreground">
-                                    {metaEs?.divisions?.length ?? 0} divisi —{" "}
-                                    {blocksFlat.length} blok
+                                    {metaEs?.divisions?.length ?? 0} divisi — {blocksFlat.length} blok
                                   </span>
                                 </div>
                               </AccordionTrigger>
@@ -1128,6 +1129,7 @@ const Locations = () => {
                                           Konservasi
                                         </TableHead>
                                         <TableHead>Tipe Lokasi</TableHead>
+                                        <TableHead>Status</TableHead>
                                         <TableHead className="text-right">
                                           Aksi
                                         </TableHead>
@@ -1243,6 +1245,45 @@ const Locations = () => {
                                             </TableCell>
                                             <TableCell>
                                               {block.location?.type ?? "—"}
+                                            </TableCell>
+                                            <TableCell>
+                                              <Select
+                                                value={block.status || 'active'}
+                                                onValueChange={async (newStatus) => {
+                                                  try {
+                                                    const updatedBlocks = metaEs.blocksByDivision[division_id].map(b => 
+                                                      b.no_blok === block.no_blok ? { ...b, status: newStatus } : b
+                                                    );
+                                                    await api.updateEstate(es._id, {
+                                                      divisions: metaEs.divisions.map(d => ({
+                                                        division_id: d.division_id,
+                                                        blocks: d.division_id === division_id ? updatedBlocks : metaEs.blocksByDivision[d.division_id]
+                                                      }))
+                                                    });
+                                                    setMeta(prev => ({
+                                                      ...prev,
+                                                      [es._id]: {
+                                                        ...prev[es._id],
+                                                        blocksByDivision: {
+                                                          ...prev[es._id].blocksByDivision,
+                                                          [division_id]: updatedBlocks
+                                                        }
+                                                      }
+                                                    }));
+                                                    toast({ title: 'Status blok berhasil diubah' });
+                                                  } catch (e) {
+                                                    toast({ title: 'Gagal', description: e instanceof Error ? e.message : 'Gagal mengubah status', variant: 'destructive' });
+                                                  }
+                                                }}
+                                              >
+                                                <SelectTrigger className="w-28 h-8">
+                                                  <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                  <SelectItem value="active">Aktif</SelectItem>
+                                                  <SelectItem value="inactive">Nonaktif</SelectItem>
+                                                </SelectContent>
+                                              </Select>
                                             </TableCell>
                                             <TableCell className="text-right">
                                               <Button
@@ -1508,17 +1549,32 @@ const Locations = () => {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="edit-no-tph">No TPH</Label>
-                <Input
-                  id="edit-no-tph"
-                  value={editFormData.no_tph || ""}
-                  onChange={(e) =>
-                    setEditFormData({
-                      ...editFormData,
-                      no_tph: e.target.value,
-                    })
-                  }
-                />
+                <Label htmlFor="edit-no-tph">No TPH (Pilih satu atau lebih)</Label>
+                <div className="flex flex-wrap gap-2 p-3 border rounded-md">
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => {
+                    const selected = editFormData.no_tph?.split(',').map(s => s.trim()).includes(String(num)) || false;
+                    return (
+                      <label key={num} className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={selected}
+                          onChange={(e) => {
+                            const currentTphs = editFormData.no_tph?.split(',').map(s => s.trim()).filter(Boolean) || [];
+                            const newTphs = e.target.checked
+                              ? [...currentTphs, String(num)]
+                              : currentTphs.filter(t => t !== String(num));
+                            setEditFormData({
+                              ...editFormData,
+                              no_tph: newTphs.sort((a, b) => Number(a) - Number(b)).join(', '),
+                            });
+                          }}
+                          className="w-4 h-4"
+                        />
+                        <span>TPH {num}</span>
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="edit-id-blok">ID Blok</Label>

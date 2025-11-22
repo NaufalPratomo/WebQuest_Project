@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { api } from '@/lib/api';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -82,42 +83,39 @@ export default function Trend() {
     setLoading(true);
     setError(null);
     try {
-      // Collect realisasi across dates
-      type RealRow = { 
-        estateId?: string; 
-        estateName?: string;
-        division?: string; 
-        block?: string; 
-        hasilJjg?: number;
-      };
-      const realAll: RealRow[] = [];
-      for (const d of enumerateDates(startDate, endDate)) {
-        const raw = localStorage.getItem(`realharvest_rows_${d}`);
-        if (raw) {
-          try {
-            const arr = JSON.parse(raw);
-            if (Array.isArray(arr)) realAll.push(...(arr as RealRow[]));
-          } catch { /* ignore */ }
-        }
-      }
-      // Collect taksasi across dates
-      type TaksRow = { 
-        estateId?: string; 
-        estateName?: string;
-        divisionId?: string; 
-        blockLabel?: string; 
-        taksasiJanjang?: number;
-        taksasiTon?: number;
-      };
-      const taksAll: TaksRow[] = [];
-      for (const d of enumerateDates(startDate, endDate)) {
-        const raw = localStorage.getItem(`taksasi_rows_${d}`);
-        if (raw) {
-          try {
-            const arr = JSON.parse(raw);
-            if (Array.isArray(arr)) taksAll.push(...(arr as TaksRow[]));
-          } catch { /* ignore */ }
-        }
+      // Collect realisasi & taksasi from server across dates
+      const dates = enumerateDates(startDate, endDate);
+      const realAll: Array<{ estateId: string; estateName?: string; division: string; block: string; hasilJjg: number; ton: number; }> = [];
+      const taksAll: Array<{ estateId: string; estateName?: string; division: string; block: string; taksasiJanjang: number; taksasiTon: number; }> = [];
+      for (const d of dates) {
+        // Panen (realisasi)
+        try {
+          const panen = await api.panenList({ date_panen: d });
+          for (const p of panen || []) {
+            const estateId = p.estateId || '-';
+            const estateName = p.estateId || undefined; // could map later
+            const division = String(p.division_id ?? '-');
+            const block = p.block_no || '-';
+            const janjang = Number(p.janjangTBS ?? 0);
+            const avgW = Number(p.weightKg && p.janjangTBS ? (p.weightKg / Math.max(1, p.janjangTBS)) : 15);
+            const ton = p.weightKg != null ? p.weightKg / 1000 : (janjang * avgW) / 1000;
+            realAll.push({ estateId, estateName, division, block, hasilJjg: janjang, ton });
+          }
+        } catch { /* ignore day failure */ }
+        // Taksasi
+        try {
+          const taks = await api.taksasiList({ date: d });
+          for (const t of taks || []) {
+            const estateId = t.estateId || '-';
+            const estateName = t.estateId || undefined;
+            const division = String(t.division_id ?? '-');
+            const block = t.block_no || '-';
+            const avgW = (t.avgWeightKg && t.avgWeightKg > 0) ? t.avgWeightKg : 15;
+            const janjang = Number(t.taksasiJanjang ?? Math.round((t.weightKg || 0) / avgW));
+            const ton = t.taksasiTon ?? (t.weightKg || 0) / 1000;
+            taksAll.push({ estateId, estateName, division, block, taksasiJanjang: janjang, taksasiTon: ton });
+          }
+        } catch { /* ignore day failure */ }
       }
 
       // Aggregate by estate + division + block
@@ -135,8 +133,7 @@ export default function Trend() {
         const division = r.division || '-';
         const block = r.block || '-';
         const janjang = Number(r.hasilJjg || 0);
-        // Estimate ton: assume avg 15kg per janjang (same as taksasi default)
-        const ton = (janjang * 15) / 1000;
+        const ton = r.ton || (janjang * 15) / 1000;
         const key = `${estateId}|${division}|${block}`;
         const prev = realMap.get(key) ?? { estateId, estateName, division, block, realJanjang: 0, realTon: 0 };
         prev.realJanjang += janjang;
@@ -155,8 +152,8 @@ export default function Trend() {
       for (const t of taksAll) {
         const estateId = t.estateId || '-';
         const estateName = t.estateName;
-        const division = t.divisionId || '-';
-        const block = t.blockLabel || '-';
+        const division = t.division || '-';
+        const block = t.block || '-';
         const janjang = Number(t.taksasiJanjang || 0);
         const ton = Number(t.taksasiTon || 0);
         const key = `${estateId}|${division}|${block}`;

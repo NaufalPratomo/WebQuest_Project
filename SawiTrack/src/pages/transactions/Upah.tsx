@@ -86,12 +86,11 @@ export default function Upah() {
         return;
       }
       const emp = employees.find((e) => e._id === employeeId);
-      const division = emp?.division ? String(emp.division) : '';
       const body = {
         employeeId,
         employeeName: emp?.name || 'Unknown',
         date,
-        division,
+        division: '',
         jobType: jobCode, // store job code as jobType
         hk: Number(hk || 0),
         notes,

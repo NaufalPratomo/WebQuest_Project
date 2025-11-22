@@ -1,14 +1,13 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { api, Employee } from '@/lib/api';
+import { api, User } from '@/lib/api';
+import { setToken, getToken, setUser as storeUser, getUser as loadUser } from '@/lib/authStore';
 
-type Role = 'manager' | 'foreman' | 'employee';
-
-type User = Employee & { _id: string; id: string };
+type UserWithId = User & { id: string };
 
 interface AuthContextType {
-  user: User | null;
+  user: UserWithId | null;
   // return the user on success, or null on failure
-  login: (email: string, password: string) => Promise<User | null>;
+  login: (email: string, password: string) => Promise<UserWithId | null>;
   logout: () => void;
   isAuthenticated: boolean;
   hydrated: boolean; // indicates auth state has been read from storage
@@ -19,60 +18,40 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 // No more mock users; use backend API
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<UserWithId | null>(null);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    // Try to hydrate from token -> fetch /auth/me
-    const token = localStorage.getItem('token');
-    const savedUser = localStorage.getItem('user');
-    if (!token && savedUser) {
-      // legacy path: if user exists but no token, just use it
-      try {
-        const parsed = JSON.parse(savedUser);
-        // normalize to include both _id and id
-        const normalized = parsed.id ? parsed : { ...parsed, id: parsed._id };
-        setUser(normalized);
-      } catch {
-        setUser(null);
-      }
-      setHydrated(true);
-      return;
-    }
-    if (!token) {
-      setHydrated(true);
-      return;
-    }
+    // Attempt hydration via cookie-based session first
     api.me()
       .then((u) => {
-        const eu = u as Employee;
-        const mapped = { ...eu, id: eu._id } as User;
+        const mapped = { ...u, id: u._id } as UserWithId;
         setUser(mapped);
-        localStorage.setItem('user', JSON.stringify(mapped));
+        storeUser(mapped); // keep in-memory copy for logger
       })
       .catch(() => {
-        // token invalid
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
+        // fallback: if we previously stored token manually try again? For now just unauth.
+        setToken(null);
         setUser(null);
+        storeUser(null);
       })
       .finally(() => setHydrated(true));
   }, []);
 
-  const login = async (email: string, password: string): Promise<User | null> => {
-  const { token, user } = await api.login({ email, password });
-  const eu = user as Employee;
-  const mapped = { ...eu, id: eu._id } as User;
-    localStorage.setItem('token', token);
-    localStorage.setItem('user', JSON.stringify(mapped));
+  const login = async (email: string, password: string): Promise<UserWithId | null> => {
+    const { token, user } = await api.login({ email, password });
+    // Token now stored as httpOnly cookie; we keep a copy in memory if needed for Authorization fallback
+    const mapped = { ...user, id: user._id } as UserWithId;
+    setToken(token);
+    storeUser(mapped);
     setUser(mapped);
     return mapped;
   };
 
   const logout = () => {
     setUser(null);
-    localStorage.removeItem('user');
-    localStorage.removeItem('token');
+    setToken(null); // in-memory only; cookie cleared by backend endpoint (optional future)
+    storeUser(null);
   };
 
   return (

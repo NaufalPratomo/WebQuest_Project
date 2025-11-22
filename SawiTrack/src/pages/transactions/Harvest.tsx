@@ -6,7 +6,7 @@ import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle } from 
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { api, PanenRow } from '@/lib/api';
+import { api, PanenRow, User } from '@/lib/api';
 import { toast } from 'sonner';
 
 export default function Harvest() {
@@ -20,6 +20,7 @@ export default function Harvest() {
   const [blockNo, setBlockNo] = useState('');
   const [weightKg, setWeightKg] = useState<number | ''>('');
   const [rows, setRows] = useState<PanenRow[]>([]);
+  const [users, setUsers] = useState<User[]>([]); // for mandor derivation (role: foreman)
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -44,13 +45,29 @@ export default function Harvest() {
     api.panenList({ date_panen: date }).then(setRows).catch(() => setRows([]));
   }, [date]);
 
+  useEffect(() => {
+    // fetch users (web accounts) to derive mandor (foreman) per division
+    api.users().then(setUsers).catch(() => setUsers([]));
+  }, []);
+
+  const mandorMap = useMemo(() => {
+    const m = new Map<number, string>();
+    for (const u of users) {
+      if (u.role === 'foreman' && u.division != null) {
+        const divNum = Number(u.division);
+        if (!Number.isNaN(divNum)) m.set(divNum, u.name);
+      }
+    }
+    return m;
+  }, [users]);
+
   const addRow = async () => {
     try {
       if (!date || !estateId || !divisionId || !blockNo || !weightKg) {
         toast.error('Lengkapi input');
         return;
       }
-      const body: PanenRow = { date_panen: date, estateId, division_id: Number(divisionId), block_no: blockNo, weightKg: Number(weightKg) };
+      const body: PanenRow = { date_panen: date, estateId, division_id: Number(divisionId), block_no: blockNo, weightKg: Number(weightKg), jobCode: 'panen' };
       const created = await api.panenCreate(body);
       toast.success('Tersimpan');
       setRows(prev => Array.isArray(created) ? [...prev, ...created] : [...prev, created as PanenRow]);
@@ -88,6 +105,7 @@ export default function Harvest() {
           division_id: Number(cols[idx('division_id')]),
           block_no: cols[idx('block_no')],
           weightKg: Number(cols[idx('weightkg')]),
+          jobCode: 'panen',
         } as PanenRow;
       }).filter(r => r.date_panen && r.estateId && r.division_id && r.block_no && !Number.isNaN(r.weightKg));
       const key = (r: PanenRow) => `${String(r.date_panen).slice(0, 10)}|${r.estateId}|${r.division_id}|${r.block_no}`;
@@ -110,6 +128,11 @@ export default function Harvest() {
       if (bulk.length === 0) {
         toast.info('Semua baris sudah ada, tidak ada data baru');
       } else {
+        const confirmed = confirm(`Apakah Anda yakin ingin mengimport ${bulk.length} data panen?`);
+        if (!confirmed) {
+          setUploading(false);
+          return;
+        }
         await api.panenCreate(bulk);
         toast.success(`Import ${bulk.length} baris berhasil`);
       }
@@ -219,7 +242,9 @@ export default function Harvest() {
                 <TableRow>
                   <TableHead>Estate</TableHead>
                   <TableHead>Divisi</TableHead>
+                  <TableHead>Mandor</TableHead>
                   <TableHead>No Blok</TableHead>
+                  <TableHead>Kode Pekerjaan</TableHead>
                   <TableHead className="text-right">Berat (Kg)</TableHead>
                 </TableRow>
               </TableHeader>
@@ -228,12 +253,14 @@ export default function Harvest() {
                   <TableRow key={r._id || idx}>
                     <TableCell>{r.estateId}</TableCell>
                     <TableCell>{r.division_id}</TableCell>
+                    <TableCell>{r.mandorName || mandorMap.get(r.division_id) || '-'}</TableCell>
                     <TableCell>{r.block_no}</TableCell>
+                    <TableCell>{r.jobCode || 'panen'}</TableCell>
                     <TableCell className="text-right">{r.weightKg}</TableCell>
                   </TableRow>
                 ))}
                 {filtered.length === 0 && (
-                  <TableRow><TableCell colSpan={4} className="text-center text-sm text-muted-foreground">Tidak ada data</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={6} className="text-center text-sm text-muted-foreground">Tidak ada data</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>

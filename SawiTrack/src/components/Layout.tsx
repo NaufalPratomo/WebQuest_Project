@@ -2,7 +2,7 @@ import { ReactNode, useState, type ComponentType } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
-import { LayoutDashboard, Users, MapPin, FileText, CheckSquare, BarChart3, Download, LogOut, Menu, Truck, Activity } from 'lucide-react';
+import { LayoutDashboard, Users, MapPin, FileText, CheckSquare, BarChart3, Download, LogOut, Menu, Truck, Activity, Building2, UserCog } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface LayoutProps {
@@ -32,7 +32,9 @@ const Layout = ({ children }: LayoutProps) => {
     {
       label: 'Master Data',
       items: [
-        { path: '/master/employees', icon: Users, label: 'Data Pengguna', roles: ['manager'] },
+        { path: '/master/users', icon: UserCog, label: 'Pengguna (Login)', roles: ['manager'] },
+        { path: '/master/workers', icon: Users, label: 'Pekerja/Pemanen', roles: ['manager'] },
+        { path: '/master/companies', icon: Building2, label: 'Perusahaan', roles: ['manager'] },
         { path: '/master/locations', icon: MapPin, label: 'Data Aresta', roles: ['manager'] },
         { path: '/transactions/closing', icon: FileText, label: 'Periode Closing Transaksi', roles: ['manager'] },
       ],

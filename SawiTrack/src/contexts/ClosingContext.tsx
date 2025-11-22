@@ -7,6 +7,9 @@ interface ClosingPeriod {
   startDate: string;
   endDate: string;
   notes?: string;
+  month?: number;
+  year?: number;
+  status?: 'active' | 'inactive';
 }
 
 interface ClosingContextType {

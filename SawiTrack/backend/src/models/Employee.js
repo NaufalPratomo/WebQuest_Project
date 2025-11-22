@@ -1,15 +1,21 @@
 import mongoose from 'mongoose';
 
-// Use 'users' collection to match existing data; allow extra fields
+// Employee untuk data pekerja/pemanen (bukan akun login)
 const EmployeeSchema = new mongoose.Schema(
   {
     name: { type: String, required: true },
-    email: { type: String, required: true },
-    role: { type: String, enum: ['manager', 'foreman', 'employee'], required: true },
+    nik: { type: String }, // NIK pekerja
+    companyId: { type: String }, // ref to Company
     division_id: { type: mongoose.Schema.Types.Mixed },
     status: { type: String, enum: ['active', 'inactive'], default: 'active' },
+    // Biodata pekerja
+    salary: { type: Number, default: 0 },
+    address: { type: String },
+    phone: { type: String },
+    birthDate: { type: Date },
+    position: { type: String }, // jabatan: pemanen, mandor, dll
   },
-  { timestamps: true, collection: 'users', strict: false }
+  { timestamps: true, collection: 'employees', strict: false }
 );
 
 const Employee = mongoose.model('Employee', EmployeeSchema);

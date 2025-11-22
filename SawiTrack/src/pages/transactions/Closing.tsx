@@ -7,6 +7,8 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { format } from 'date-fns';
@@ -18,6 +20,8 @@ const Closing = () => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [notes, setNotes] = useState('');
+  const [month, setMonth] = useState<number>(new Date().getMonth() + 1);
+  const [year, setYear] = useState<number>(new Date().getFullYear());
   const [loading, setLoading] = useState(false);
 
   const handleClose = async (e: React.FormEvent) => {
@@ -33,7 +37,7 @@ const Closing = () => {
 
     setLoading(true);
     try {
-      await api.createClosingPeriod({ startDate, endDate, notes });
+      await api.createClosingPeriod({ startDate, endDate, notes, month, year });
       toast.success('Periode berhasil ditutup.');
       setStartDate('');
       setEndDate('');
@@ -73,6 +77,31 @@ const Closing = () => {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleClose} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="month">Bulan</Label>
+                  <Select value={String(month)} onValueChange={(v) => setMonth(Number(v))}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'].map((m, i) => (
+                        <SelectItem key={i+1} value={String(i+1)}>{m}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="year">Tahun</Label>
+                  <Input
+                    id="year"
+                    type="number"
+                    value={year}
+                    onChange={(e) => setYear(Number(e.target.value))}
+                    required
+                  />
+                </div>
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="startDate">Tanggal Mulai</Label>
@@ -128,6 +157,9 @@ const Closing = () => {
               <TableHeader>
                 <TableRow>
                   <TableHead>Periode</TableHead>
+                  <TableHead>Tanggal Mulai</TableHead>
+                  <TableHead>Tanggal Akhir</TableHead>
+                  <TableHead>Status</TableHead>
                   <TableHead>Catatan</TableHead>
                   <TableHead className="w-[50px]"></TableHead>
                 </TableRow>
@@ -135,32 +167,37 @@ const Closing = () => {
               <TableBody>
                 {closingPeriods.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={3} className="text-center text-muted-foreground">
+                    <TableCell colSpan={6} className="text-center text-muted-foreground">
                       Belum ada periode yang ditutup.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  closingPeriods.map((period) => (
-                    <TableRow key={period._id}>
-                      <TableCell>
-                        {format(new Date(period.startDate), 'dd MMM yyyy')} - {format(new Date(period.endDate), 'dd MMM yyyy')}
-                      </TableCell>
-                      <TableCell>{period.notes || '-'}</TableCell>
-                      <TableCell>
-                        {user?.role === 'manager' && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                            onClick={() => handleReopen(period._id)}
-                            title="Buka Kembali Periode"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))
+                  closingPeriods.map((period) => {
+                    const monthName = period.month ? ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'][period.month - 1] : '';
+                    const periodeLabel = monthName && period.year ? `${monthName} ${period.year}` : '-';
+                    return (
+                      <TableRow key={period._id}>
+                        <TableCell className="font-medium">{periodeLabel}</TableCell>
+                        <TableCell>{format(new Date(period.startDate), 'dd MMM yyyy')}</TableCell>
+                        <TableCell>{format(new Date(period.endDate), 'dd MMM yyyy')}</TableCell>
+                        <TableCell><Badge variant={period.status === 'active' ? 'default' : 'secondary'}>{period.status === 'active' ? 'Aktif' : 'Nonaktif'}</Badge></TableCell>
+                        <TableCell>{period.notes || '-'}</TableCell>
+                        <TableCell>
+                          {user?.role === 'manager' && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                              onClick={() => handleReopen(period._id)}
+                              title="Buka Kembali Periode"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
                 )}
               </TableBody>
             </Table>

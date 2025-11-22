@@ -10,6 +10,8 @@ const PanenSchema = new mongoose.Schema(
     weightKg: { type: Number, required: true, min: 0 },
     employeeId: { type: String },
     employeeName: { type: String },
+    mandorId: { type: String },
+    mandorName: { type: String },
     jobCode: { type: String },
     notes: { type: String },
   },

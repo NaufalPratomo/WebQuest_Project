@@ -76,34 +76,38 @@ export default function TaksasiPerBlock() {
     URL.revokeObjectURL(url);
   };
 
-  function load() {
+  async function load() {
     setLoading(true);
     setError(null);
     try {
-      // Load from localStorage (where detailed taksasi data is stored)
-      const storageKey = `taksasi_rows_${date}`;
-      const raw = localStorage.getItem(storageKey);
-      if (!raw) {
-        setRows([]);
-        setLoading(false);
-        return;
-      }
-      const parsed = JSON.parse(raw) as TaksasiRow[];
-      if (Array.isArray(parsed)) {
-        // Filter by date and sort
-        const filtered = parsed.filter(r => r.date === date);
-        setRows(filtered);
-      } else {
-        setRows([]);
-      }
+      const list = await api.taksasiList({ date });
+      const mapped: TaksasiRow[] = (list || []).map(doc => ({
+        timestamp: doc._id || '',
+        date: (doc.date || '').split('T')[0] || date,
+        estateId: doc.estateId,
+        estateName: estates.find(e => e._id === doc.estateId)?.estate_name || doc.estateId,
+        divisionId: String(doc.division_id),
+        blockLabel: doc.block_no,
+        totalPokok: doc.totalPokok ?? 0,
+        samplePokok: doc.samplePokok ?? 0,
+        bm: doc.bm ?? 0,
+        ptb: doc.ptb ?? 0,
+        bmbb: doc.bmbb ?? 0,
+        bmm: doc.bmm ?? 0,
+        avgWeightKg: doc.avgWeightKg ?? 15,
+        basisJanjangPerPemanen: doc.basisJanjangPerPemanen ?? 120,
+        akpPercent: doc.akpPercent ?? 0,
+        taksasiJanjang: doc.taksasiJanjang ?? Math.round((doc.weightKg || 0) / (doc.avgWeightKg || 15)),
+        taksasiTon: doc.taksasiTon ?? (doc.weightKg || 0) / 1000,
+        kebutuhanPemanen: doc.kebutuhanPemanen ?? 0,
+      }));
+      setRows(mapped);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Gagal memuat data taksasi';
       setError(msg);
       setRows([]);
       toast.error(msg);
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }
 
   useEffect(() => {

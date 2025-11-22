@@ -97,16 +97,28 @@ export default function Statement() {
       const days = enumerateDates(startDate, endDate);
       const all: RealRow[] = [];
       for (const d of days) {
-        const key = `realharvest_rows_${d}`;
         try {
-          const raw = localStorage.getItem(key);
-          if (raw) {
-            const arr = JSON.parse(raw);
-            if (Array.isArray(arr)) all.push(...(arr as RealRow[]));
+          const panen = await api.panenList({ date_panen: d });
+          for (const p of panen || []) {
+            all.push({
+              id: String(p._id || `${d}_${p.employeeId || ''}_${p.block_no || ''}`),
+              timestamp: p._id ? String(p._id) : new Date(d).toISOString(),
+              date: d,
+              estateId: p.estateId,
+              estateName: p.estateId,
+              division: String(p.division_id ?? ''),
+              block: p.block_no,
+              noTPH: p.notes ? p.notes.split(';').find(x => x.startsWith('notph='))?.split('=')[1] : undefined,
+              mandor: '',
+              pemanen: p.employeeName || p.employeeId || '',
+              jobType: p.jobCode || '',
+              hasilJjg: Number(p.janjangTBS ?? 0),
+              upahBasis: Number(p.upahBasis ?? 0),
+              premi: Number(p.premi ?? 0),
+              kgAngkut: Number(p.weightKg ?? 0),
+            });
           }
-        } catch {
-          // ignore per-day parse errors
-        }
+        } catch { /* ignore day failure */ }
       }
       if (all.length === 0) {
         setRows([]);

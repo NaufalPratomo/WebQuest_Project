@@ -61,7 +61,6 @@ export default function TaksasiPanen() {
     kebutuhanPemanen: number;
   };
   const [rows, setRows] = useState<TaksasiRow[]>([]);
-  const storageKey = useMemo(() => `taksasi_rows_${date}`, [date]);
 
   // Page 2 inputs
   const [bm, setBm] = useState<number>(0); // Buah Mentah
@@ -74,10 +73,8 @@ export default function TaksasiPanen() {
   // Employee selection for capacity
   type Emp = { _id: string; name: string; division?: string; role?: string };
   const [employees, setEmployees] = useState<Emp[]>([]);
-  const selectionKey = useMemo(() => `taksasi_selection_${date}`, [date]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  // Custom ("Other") employees added ad-hoc for the day
-  const customKey = useMemo(() => `taksasi_custom_${date}`, [date]);
+  // Custom ("Other") employees persisted in server collection
   const [customEmployees, setCustomEmployees] = useState<Emp[]>([]);
   const [otherName, setOtherName] = useState<string>('');
   const allEmployees = useMemo(() => [...employees, ...customEmployees], [employees, customEmployees]);
@@ -105,41 +102,82 @@ export default function TaksasiPanen() {
       .catch((e) => toast.error(e instanceof Error ? e.message : 'Gagal memuat blok'));
   }, [estateId, divisionId]);
 
-  // load today's rows from localStorage whenever date changes
+  // Load persisted taksasi rows from server when date changes
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(storageKey);
-      if (!raw) { setRows([]); return; }
-      const parsed = JSON.parse(raw) as TaksasiRow[];
-      setRows(Array.isArray(parsed) ? parsed : []);
-    } catch {
-      setRows([]);
-    }
-  }, [storageKey]);
+    if (!date) { setRows([]); return; }
+    api.taksasiList({ date })
+      .then((list) => {
+        const mapped: TaksasiRow[] = (list || []).map((doc) => {
+          const estateName = estates.find(e => e._id === doc.estateId)?.estate_name || '-';
+          return {
+            timestamp: doc._id || '',
+            date: doc.date ? doc.date.split('T')[0] : date,
+            estateId: doc.estateId,
+            estateName,
+            divisionId: String(doc.division_id),
+            blockLabel: doc.block_no,
+            totalPokok: doc.totalPokok ?? 0,
+            samplePokok: doc.samplePokok ?? 0,
+            bm: doc.bm ?? 0,
+            ptb: doc.ptb ?? 0,
+            bmbb: doc.bmbb ?? 0,
+            bmm: doc.bmm ?? 0,
+            avgWeightKg: doc.avgWeightKg ?? 15,
+            basisJanjangPerPemanen: doc.basisJanjangPerPemanen ?? 120,
+            akpPercent: doc.akpPercent ?? 0,
+            taksasiJanjang: doc.taksasiJanjang ?? Math.round((doc.weightKg || 0) / (doc.avgWeightKg || 15)),
+            taksasiTon: doc.taksasiTon ?? (doc.weightKg || 0) / 1000,
+            kebutuhanPemanen: doc.kebutuhanPemanen ?? 0,
+          };
+        });
+        setRows(mapped);
+      })
+      .catch(() => setRows([]));
+  }, [date, estates]);
 
-  // load employees and existing selection
+  // load employees & custom workers (server persisted)
   useEffect(() => {
     api.employees()
       .then((list) => {
-        // Assume API employee shape includes 'role'; narrow via predicate
         const onlyKaryawan: Emp[] = (list || []).filter((e: unknown): e is Emp => {
           return typeof e === 'object' && e !== null && (e as { role?: string }).role === 'karyawan';
         });
         setEmployees(onlyKaryawan);
       })
       .catch(() => setEmployees([]));
+    api.customWorkers()
+      .then((list) => {
+        const mapped: Emp[] = (list || []).map(w => ({ _id: String(w._id), name: w.name, role: 'karyawan' }));
+        setCustomEmployees(mapped);
+      })
+      .catch(() => setCustomEmployees([]));
+  }, []);
+
+  // load selection for current context (date + estate + division + block)
+  useEffect(() => {
+    const blk = (() => { const i = Number(blockIndex); if (Number.isNaN(i) || i < 0 || i >= blocks.length) return undefined; return blocks[i]; })();
+    if (!date || !estateId || !divisionId || !blk) { setSelectedIds([]); return; }
+    const blockLabel = blk.no_blok || blk.id_blok || '-';
+    api.taksasiSelections({ date, estateId, division_id: Number(divisionId), block_no: blockLabel })
+      .then((docs) => { if (docs && docs.length > 0) setSelectedIds(docs[0].employeeIds || []); else setSelectedIds([]); })
+      .catch(() => setSelectedIds([]));
+  }, [date, estateId, divisionId, blockIndex, blocks]);
+
+  async function persistSelection(next: string[]) {
+    if (!date || !estateId || !divisionId || !selectedBlock) return;
+    const blockLabel = selectedBlock.no_blok || selectedBlock.id_blok || '-';
     try {
-      const raw = localStorage.getItem(selectionKey);
-      const arr = raw ? (JSON.parse(raw) as string[]) : [];
-      setSelectedIds(Array.isArray(arr) ? arr : []);
-    } catch { setSelectedIds([]); }
-    // load custom employees for date
-    try {
-      const rawC = localStorage.getItem(customKey);
-      const arrC = rawC ? (JSON.parse(rawC) as Emp[]) : [];
-      setCustomEmployees(Array.isArray(arrC) ? arrC : []);
-    } catch { setCustomEmployees([]); }
-  }, [selectionKey, customKey]);
+      await api.upsertTaksasiSelection({
+        date,
+        estateId,
+        division_id: Number(divisionId),
+        block_no: blockLabel,
+        employeeIds: next
+      });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Gagal simpan seleksi pemanen');
+    }
+  }
 
   const selectedBlock: Block | undefined = useMemo(() => {
     const i = Number(blockIndex);
@@ -170,48 +208,37 @@ export default function TaksasiPanen() {
   function toggleSelect(empId: string) {
     setSelectedIds((prev) => {
       const exists = prev.includes(empId);
+      let next: string[];
       if (exists) {
-        const next = prev.filter((id) => id !== empId);
-        try { localStorage.setItem(selectionKey, JSON.stringify(next)); } catch (e) { /* ignore */ }
-        return next;
+        next = prev.filter(id => id !== empId);
+      } else {
+        if (prev.length >= kebutuhanPemanen && kebutuhanPemanen > 0) {
+          toast.error(`Kapasitas penuh (${prev.length}/${kebutuhanPemanen})`);
+          return prev;
+        }
+        next = [...prev, empId];
       }
-      // capacity guard
-      if (prev.length >= kebutuhanPemanen && kebutuhanPemanen > 0) {
-        toast.error(`Kapasitas penuh (${prev.length}/${kebutuhanPemanen})`);
-        return prev;
-      }
-      const next = [...prev, empId];
-      try { localStorage.setItem(selectionKey, JSON.stringify(next)); } catch (e) { /* ignore */ }
+      persistSelection(next);
       return next;
     });
   }
 
-  function addOtherEmployee() {
+  async function addOtherEmployee() {
     const name = otherName.trim();
-    if (!name) {
-      toast.error('Isi nama karyawan lainnya');
-      return;
+    if (!name) { toast.error('Isi nama karyawan lainnya'); return; }
+    if (kebutuhanPemanen > 0 && selectedIds.length >= kebutuhanPemanen) { toast.error('Kapasitas penuh, tidak bisa menambah'); return; }
+    try {
+      const created = await api.createCustomWorker(name);
+      const newEmp: Emp = { _id: String(created._id), name: created.name, role: 'karyawan' };
+      setCustomEmployees(prev => [...prev, newEmp]);
+      const next = [...selectedIds, newEmp._id];
+      setSelectedIds(next);
+      persistSelection(next);
+      setOtherName('');
+      toast.success('Karyawan lainnya ditambahkan');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Gagal tambah karyawan lainnya');
     }
-    if (kebutuhanPemanen > 0 && selectedIds.length >= kebutuhanPemanen) {
-      toast.error('Kapasitas penuh, tidak bisa menambah');
-      return;
-    }
-    const id = `other_${Date.now()}`;
-    const division = divisionId || (employees[0]?.division ?? undefined);
-    const newEmp: Emp = { _id: id, name, division, role: 'karyawan' };
-    setCustomEmployees(prev => {
-      const next = [...prev, newEmp];
-      try { localStorage.setItem(customKey, JSON.stringify(next)); } catch {/* ignore */ }
-      return next;
-    });
-    // auto-select it
-    setSelectedIds(prev => {
-      const next = [...prev, id];
-      try { localStorage.setItem(selectionKey, JSON.stringify(next)); } catch {/* ignore */ }
-      return next;
-    });
-    setOtherName('');
-    toast.success('Karyawan lainnya ditambahkan');
   }
 
   async function saveRow() {
@@ -254,6 +281,15 @@ export default function TaksasiPanen() {
         division_id: Number(divisionId),
         block_no: blockLabel,
         weightKg: Math.round(taksasiTon * 1000),
+        totalPokok,
+        samplePokok,
+        bm, ptb, bmbb, bmm,
+        avgWeightKg,
+        basisJanjangPerPemanen,
+        akpPercent: row.akpPercent,
+        taksasiJanjang,
+        taksasiTon: row.taksasiTon,
+        kebutuhanPemanen,
         notes: `AKP=${row.akpPercent}%; BM=${bm}; PTB=${ptb}`,
       });
 
@@ -277,11 +313,7 @@ export default function TaksasiPanen() {
       }
 
       setRows(newRows);
-      try {
-        localStorage.setItem(storageKey, JSON.stringify(newRows));
-      } catch {
-        // ignore localStorage failure
-      }
+      // Server is source of truth; no longer persisting to localStorage
 
       // reset for next input
       setStep(1);

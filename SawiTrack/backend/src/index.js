@@ -1,14 +1,18 @@
 // backend/src/index.js
 import express from "express";
+import cookieParser from "cookie-parser";
 import cors from "cors";
 import dotenv from "dotenv";
 import mongoose from "mongoose";
 import Estate from "./models/Estate.js";
 import Company from "./models/Company.js";
 import Employee from "./models/Employee.js";
+import User from "./models/User.js";
 import Target from "./models/Target.js";
 import Report from "./models/Report.js";
 import Taksasi from "./models/Taksasi.js";
+import TaksasiSelection from "./models/TaksasiSelection.js";
+import CustomWorker from "./models/CustomWorker.js";
 import Panen from "./models/Panen.js";
 import Angkut from "./models/Angkut.js";
 import Attendance from "./models/Attendance.js";
@@ -29,6 +33,7 @@ if (!process.env.MONGO_ATLAS_URI && !process.env.MONGO_URI) {
 
 const app = express();
 app.use(express.json({ limit: "50mb" })); // Increase limit for large imports
+app.use(cookieParser());
 
 const PORT = process.env.PORT || 5000;
 const API_BASE_PATH = process.env.API_BASE_PATH || "/api";
@@ -134,7 +139,7 @@ app.post(`${API_BASE_PATH}/auth/login`, async (req, res) => {
     const { email, password } = req.body || {};
     if (!email || !password)
       return res.status(400).json({ error: "Email and password are required" });
-    const doc = await Employee.findOne(
+    const doc = await User.findOne(
       { email },
       { name: 1, email: 1, role: 1, division_id: 1, status: 1, password: 1 }
     ).lean();
@@ -168,7 +173,15 @@ app.post(`${API_BASE_PATH}/auth/login`, async (req, res) => {
       division: doc.division_id ?? null,
       status: doc.status,
     };
-    // Log login
+    // Set secure HTTP-only cookie for session persistence
+    const cookieDomain = process.env.COOKIE_DOMAIN || undefined; // set in .env for production
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      domain: cookieDomain
+    });
     logActivity(req, "LOGIN", { email }, user);
     return res.json({ token, user });
   } catch (err) {
@@ -179,7 +192,8 @@ app.post(`${API_BASE_PATH}/auth/login`, async (req, res) => {
 app.get(`${API_BASE_PATH}/auth/me`, async (req, res) => {
   try {
     const auth = req.headers.authorization || "";
-    const [, token] = auth.split(" ");
+    let token = auth.split(" ")[1];
+    if (!token && req.cookies?.token) token = req.cookies.token; // fallback to cookie
     if (!token) return res.status(401).json({ error: "Missing token" });
     let payload;
     try {
@@ -187,7 +201,7 @@ app.get(`${API_BASE_PATH}/auth/me`, async (req, res) => {
     } catch {
       return res.status(401).json({ error: "Invalid token" });
     }
-    const d = await Employee.findById(payload.sub, {
+    const d = await User.findById(payload.sub, {
       name: 1,
       email: 1,
       role: 1,
@@ -381,14 +395,14 @@ app.get(
   }
 );
 
-// Employees
-app.get(`${API_BASE_PATH}/employees`, async (_req, res) => {
+// Users (Web Accounts)
+app.get(`${API_BASE_PATH}/users`, async (_req, res) => {
   try {
-    const docs = await Employee.find(
+    const docs = await User.find(
       {},
       { name: 1, email: 1, role: 1, division_id: 1, status: 1 }
     ).lean();
-    const employees = docs.map((d) => ({
+    const users = docs.map((d) => ({
       _id: d._id,
       name: d.name,
       email: d.email,
@@ -396,15 +410,15 @@ app.get(`${API_BASE_PATH}/employees`, async (_req, res) => {
       division: d.division_id ?? null,
       status: d.status,
     }));
-    res.json(employees);
+    res.json(users);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
-// Get employee by id
-app.get(`${API_BASE_PATH}/employees/:id`, async (req, res) => {
+
+app.get(`${API_BASE_PATH}/users/:id`, async (req, res) => {
   try {
-    const d = await Employee.findById(req.params.id, {
+    const d = await User.findById(req.params.id, {
       name: 1,
       email: 1,
       role: 1,
@@ -424,91 +438,159 @@ app.get(`${API_BASE_PATH}/employees/:id`, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-// Create employee
-app.post(`${API_BASE_PATH}/employees`, async (req, res) => {
+
+app.post(`${API_BASE_PATH}/users`, async (req, res) => {
   try {
     const { name, email, role, division, status, password } = req.body;
-    if (!name || !email || !role)
+    if (!name || !email || !role || !password)
       return res.status(400).json({ error: "Missing required fields" });
-    // Store division into division_id field to match existing schema; additional fields allowed via strict:false
     let hashed;
-    if (typeof password === "string" && password.trim()) {
-      try {
-        hashed = await bcrypt.hash(password, 10);
-      } catch (e) {
-        return res.status(500).json({ error: "Failed to hash password" });
-      }
+    try {
+      hashed = await bcrypt.hash(password, 10);
+    } catch (e) {
+      return res.status(500).json({ error: "Failed to hash password" });
     }
-    const created = await Employee.create({
+    const user = await User.create({
       name,
       email,
       role,
-      division_id: division ?? null,
-      status,
-      ...(hashed ? { password: hashed } : {}),
+      division_id: division || null,
+      status: status || "active",
+      password: hashed,
     });
-    const safe = {
-      _id: created._id,
-      name,
-      email,
-      role,
-      division: division ?? null,
-      status: created.status,
-    };
-    logActivity(req, "CREATE_EMPLOYEE", { new_employee_name: name, new_employee_email: email });
-    res.status(201).json(safe);
+    logActivity(req, "CREATE_USER", { name, email, role });
+    const result = await User.findById(user._id, {
+      name: 1,
+      email: 1,
+      role: 1,
+      division_id: 1,
+      status: 1,
+    }).lean();
+    res.status(201).json({
+      _id: result._id,
+      name: result.name,
+      email: result.email,
+      role: result.role,
+      division: result.division_id ?? null,
+      status: result.status,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
-// Update employee
-app.put(`${API_BASE_PATH}/employees/:id`, async (req, res) => {
+
+app.put(`${API_BASE_PATH}/users/:id`, async (req, res) => {
   try {
     const { name, email, role, division, status, password } = req.body;
-    const update = {};
-    if (name !== undefined) update.name = name;
-    if (email !== undefined) update.email = email;
-    if (role !== undefined) update.role = role;
-    if (division !== undefined) update.division_id = division;
-    if (status !== undefined) update.status = status;
-    if (typeof password === "string" && password.trim()) {
-      try {
-        update.password = await bcrypt.hash(password, 10);
-      } catch (e) {
-        return res.status(500).json({ error: "Failed to hash password" });
-      }
+    const update = { name, email, role, division_id: division, status };
+    if (password && password.trim()) {
+      update.password = await bcrypt.hash(password, 10);
     }
-    const updated = await Employee.findByIdAndUpdate(req.params.id, update, {
-      new: true,
-    }).lean();
+    const updated = await User.findByIdAndUpdate(
+      req.params.id,
+      { $set: update },
+      { new: true, projection: { name: 1, email: 1, role: 1, division_id: 1, status: 1 } }
+    ).lean();
     if (!updated) return res.status(404).json({ error: "Not found" });
-    const safe = {
+    logActivity(req, "UPDATE_USER", { id: req.params.id, name });
+    res.json({
       _id: updated._id,
       name: updated.name,
       email: updated.email,
       role: updated.role,
       division: updated.division_id ?? null,
       status: updated.status,
-    };
-
-    logActivity(req, "UPDATE_EMPLOYEE", { employee_id: req.params.id, updates: update });
-    res.json(safe);
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
-// Delete employee
+
+app.delete(`${API_BASE_PATH}/users/:id`, async (req, res) => {
+  try {
+    const deleted = await User.findByIdAndDelete(req.params.id);
+    if (!deleted) return res.status(404).json({ error: "Not found" });
+    logActivity(req, "DELETE_USER", { id: req.params.id, name: deleted.name });
+    res.status(204).send();
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Employees (Workers/Pemanen - no login)
+app.get(`${API_BASE_PATH}/employees`, async (_req, res) => {
+  try {
+    const docs = await Employee.find(
+      {},
+      { nik: 1, name: 1, companyId: 1, position: 1, salary: 1, address: 1, phone: 1, birthDate: 1, status: 1 }
+    ).lean();
+    res.json(docs);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get(`${API_BASE_PATH}/employees/:id`, async (req, res) => {
+  try {
+    const d = await Employee.findById(req.params.id).lean();
+    if (!d) return res.status(404).json({ error: "Not found" });
+    res.json(d);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post(`${API_BASE_PATH}/employees`, async (req, res) => {
+  try {
+    const { nik, name, companyId, position, salary, address, phone, birthDate } = req.body;
+    if (!nik || !name)
+      return res.status(400).json({ error: "Missing required fields (NIK, name)" });
+    const employee = await Employee.create({
+      nik,
+      name,
+      companyId: companyId || null,
+      position: position || null,
+      salary: salary || null,
+      address: address || null,
+      phone: phone || null,
+      birthDate: birthDate || null,
+      status: "active",
+    });
+    logActivity(req, "CREATE_EMPLOYEE", { nik, name });
+    res.status(201).json(employee);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put(`${API_BASE_PATH}/employees/:id`, async (req, res) => {
+  try {
+    const { nik, name, companyId, position, salary, address, phone, birthDate, status } = req.body;
+    const updated = await Employee.findByIdAndUpdate(
+      req.params.id,
+      { $set: { nik, name, companyId, position, salary, address, phone, birthDate, status } },
+      { new: true }
+    ).lean();
+    if (!updated) return res.status(404).json({ error: "Not found" });
+    logActivity(req, "UPDATE_EMPLOYEE", { id: req.params.id, nik, name });
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.delete(`${API_BASE_PATH}/employees/:id`, async (req, res) => {
   try {
-    const deleted = await Employee.findByIdAndDelete(req.params.id).lean();
+    const deleted = await Employee.findByIdAndDelete(req.params.id);
     if (!deleted) return res.status(404).json({ error: "Not found" });
-    logActivity(req, "DELETE_EMPLOYEE", { employee_id: req.params.id, employee_name: deleted.name });
-    res.json({ ok: true });
+    logActivity(req, "DELETE_EMPLOYEE", { id: req.params.id, nik: deleted.nik, name: deleted.name });
+    res.status(204).send();
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
+// JobCodes
 // Targets
 app.get(`${API_BASE_PATH}/targets`, async (_req, res) => {
   try {
@@ -902,6 +984,78 @@ app.get(`${API_BASE_PATH}/taksasi`, async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// ---- Taksasi Selections (list of selected employees per block/day) ----
+app.get(`${API_BASE_PATH}/taksasi-selections`, async (req, res) => {
+  try {
+    const { date, estateId, division_id, block_no } = req.query;
+    const q = {};
+    if (date) q.date = new Date(String(date));
+    if (estateId) q.estateId = String(estateId);
+    if (division_id !== undefined) q.division_id = Number(division_id);
+    if (block_no) q.block_no = String(block_no);
+    const docs = await TaksasiSelection.find(q).lean();
+    res.json(docs);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+// Upsert selection (merge employeeIds)
+app.post(`${API_BASE_PATH}/taksasi-selections`, async (req, res) => {
+  try {
+    const { date, estateId, division_id, block_no, employeeIds, notes } = req.body || {};
+    if (!date || !estateId || division_id == null || !block_no) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+    const key = {
+      date: new Date(String(date)),
+      estateId: String(estateId),
+      division_id: Number(division_id),
+      block_no: String(block_no)
+    };
+    const incoming = Array.isArray(employeeIds) ? employeeIds.map(String) : [];
+    const uniqueIncoming = [...new Set(incoming)];
+    const existing = await TaksasiSelection.findOne(key);
+    if (existing) {
+      existing.employeeIds = uniqueIncoming; // replace rather than merge
+      existing.notes = notes ?? existing.notes;
+      existing.updatedAt = new Date();
+      await existing.save();
+      return res.json(existing.toObject());
+    } else {
+      const created = await TaksasiSelection.create({ ...key, employeeIds: uniqueIncoming, notes });
+      return res.status(201).json(created.toObject());
+    }
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+app.delete(`${API_BASE_PATH}/taksasi-selections/:id`, async (req, res) => {
+  try {
+    const deleted = await TaksasiSelection.findByIdAndDelete(req.params.id).lean();
+    if (!deleted) return res.status(404).json({ error: 'Not found' });
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ---- Custom Workers (temporary employees) ----
+app.get(`${API_BASE_PATH}/custom-workers`, async (_req, res) => {
+  try {
+    const docs = await CustomWorker.find({ active: true }).lean();
+    res.json(docs);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+app.post(`${API_BASE_PATH}/custom-workers`, async (req, res) => {
+  try {
+    const { name } = req.body || {};
+    if (!name) return res.status(400).json({ error: 'name required' });
+    const created = await CustomWorker.create({ name });
+    res.status(201).json(created.toObject());
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+app.delete(`${API_BASE_PATH}/custom-workers/:id`, async (req, res) => {
+  try {
+    const updated = await CustomWorker.findByIdAndUpdate(req.params.id, { active: false }, { new: true }).lean();
+    if (!updated) return res.status(404).json({ error: 'Not found' });
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // Panen (Realisasi)

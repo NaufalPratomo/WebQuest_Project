@@ -36,12 +36,12 @@ const RealHarvest = () => {
   const [rows, setRows] = useState<RealRow[]>([]);
   const [attendance, setAttendance] = useState<Array<{ employeeId: string; status: string }>>([]);
   const [employees, setEmployees] = useState<Array<{ _id: string; name: string }>>([]);
-  const selectionKey = useMemo(() => `taksasi_selection_${date}`, [date]);
+  // selection now server-driven (taksasi-selections); legacy key removed
   const [estates, setEstates] = useState<Array<{ _id: string; estate_name: string }>>([]);
   const [estateId, setEstateId] = useState<string | undefined>(undefined);
   const [divisions, setDivisions] = useState<Array<{ division_id: number }>>([]);
   const [blocks, setBlocks] = useState<Array<{ id_blok?: string; no_blok?: string }>>([]);
-  const storageKey = useMemo(() => `realharvest_rows_${date}`, [date]);
+  // localStorage removed; use server panenList for persistence
 
   // dialog form state
   const [form, setForm] = useState({
@@ -77,22 +77,35 @@ const RealHarvest = () => {
   }, []);
 
   useEffect(() => {
-    // when date changes, (re)load local rows
-    try {
-      const raw = localStorage.getItem(storageKey);
-      setRows(raw ? (JSON.parse(raw) as RealRow[]) : []);
-    } catch {
-      setRows([]);
-    }
-    // load attendance hadir
-    api.attendanceList({ date })
-      .then(list => {
-        // normalize backend enum to UI-local filter helper
-        const norm = list.map(r => ({ employeeId: r.employeeId, status: r.status }));
-        setAttendance(norm);
-      })
-      .catch(()=> setAttendance([]));
-  }, [storageKey, date]);
+    (async () => {
+      try {
+        const panen = await api.panenList({ date_panen: date });
+        const mapped: RealRow[] = (panen || []).map(p => ({
+          id: String(p._id || `${date}_${p.employeeId || ''}_${p.block_no || ''}`),
+          timestamp: p._id ? String(p._id) : new Date(date).toISOString(),
+          date,
+          estateId: p.estateId,
+          estateName: p.estateId,
+          division: String(p.division_id ?? ''),
+          block: p.block_no,
+          noTPH: p.notes ? p.notes.split(';').find(x=>x.startsWith('notph='))?.split('=')[1] : undefined,
+          mandor: p.mandorName || '',
+          pemanenId: p.employeeId || '',
+          pemanenName: p.employeeName || p.employeeId || '',
+          jobCode: p.jobCode || 'panen',
+          janjangTBS: Number(p.janjangTBS ?? 0),
+          janjangKosong: 0,
+          upahBasis: Number(p.upahBasis ?? 0),
+          premi: Number(p.premi ?? 0),
+          totalUpah: Number(p.totalUpah ?? (Number(p.upahBasis ?? 0) + Number(p.premi ?? 0))),
+        }));
+        setRows(mapped);
+      } catch { setRows([]); }
+      api.attendanceList({ date })
+        .then(list => setAttendance(list.map(r => ({ employeeId: r.employeeId, status: r.status }))))
+        .catch(()=> setAttendance([]));
+    })();
+  }, [date]);
 
   useEffect(() => {
     if (!estateId) { setDivisions([]); return; }
@@ -119,29 +132,25 @@ const RealHarvest = () => {
     return { janjangTBS, janjangKosong };
   }, [filteredRows]);
 
-  // Load taksasi rows from localStorage to compare
-  const taksasiKey = useMemo(() => `taksasi_rows_${date}`, [date]);
-  const taksasiTotals = useMemo(() => {
-    try {
-      const raw = localStorage.getItem(taksasiKey);
-      const list: Array<{ taksasiJanjang: number; taksasiTon: number }> = raw ? JSON.parse(raw) : [];
-      const taksasiJanjang = list.reduce((s, r) => s + (r.taksasiJanjang || 0), 0);
-      const taksasiTon = list.reduce((s, r) => s + (r.taksasiTon || 0), 0);
-      const taksasiKg = Math.round(taksasiTon * 1000);
-      return { taksasiJanjang, taksasiTon, taksasiKg };
-    } catch {
-      return { taksasiJanjang: 0, taksasiTon: 0, taksasiKg: 0 };
-    }
-  }, [taksasiKey]);
+  const [taksasiTotals, setTaksasiTotals] = useState({ taksasiJanjang: 0, taksasiTon: 0, taksasiKg: 0 });
+  useEffect(() => {
+    (async () => {
+      try {
+        const list = await api.taksasiList({ date });
+        const janjang = list.reduce((s, r) => {
+          const avgW = (r.avgWeightKg && r.avgWeightKg > 0) ? r.avgWeightKg : 15;
+          const est = Math.round((r.weightKg || 0) / avgW);
+          return s + (r.taksasiJanjang || est);
+        }, 0);
+        const ton = list.reduce((s, r) => s + (r.taksasiTon || (r.weightKg || 0)/1000), 0);
+        setTaksasiTotals({ taksasiJanjang: janjang, taksasiTon: ton, taksasiKg: Math.round(ton*1000) });
+      } catch { setTaksasiTotals({ taksasiJanjang: 0, taksasiTon: 0, taksasiKg: 0 }); }
+    })();
+  }, [date]);
 
   function persist(next: RealRow[]) {
+    // Local optimistic update only; server is source of truth
     setRows(next);
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(next));
-    } catch (e) {
-      // non-fatal persistence error (e.g., quota exceeded)
-      console.error('Gagal menyimpan ke localStorage', e);
-    }
   }
 
   async function handleSave() {
@@ -199,6 +208,7 @@ const RealHarvest = () => {
             weightKg: upahBasis, // placeholder mapping; adjust backend meaning later
             employeeId: form.pemanenId,
             employeeName: pemanenName,
+            mandorName: form.mandor,
             jobCode: form.jobCode,
             notes: `edit:${new Date().toISOString()}`,
             janjangTBS,
@@ -244,6 +254,7 @@ const RealHarvest = () => {
           weightKg: upahBasis, // placeholder mapping
           employeeId: form.pemanenId,
           employeeName: pemanenName,
+          mandorName: form.mandor,
           jobCode: form.jobCode,
           notes: `create:${new Date().toISOString()}`,
           janjangTBS,
@@ -456,7 +467,11 @@ const RealHarvest = () => {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>Estate</TableHead>
+                <TableHead>Div</TableHead>
                 <TableHead>Blok</TableHead>
+                <TableHead>No TPH</TableHead>
+                <TableHead>Pekerjaan</TableHead>
                 <TableHead>Pemanen</TableHead>
                 <TableHead className="text-right">JJG TBS</TableHead>
                 <TableHead className="text-right">JJG Kosong</TableHead>
@@ -471,7 +486,11 @@ const RealHarvest = () => {
                 const isComplete = Boolean(r.jobCode && r.noTPH && r.janjangTBS > 0);
                 return (
                   <TableRow key={r.id}>
+                    <TableCell>{r.estateName || r.estateId || '-'}</TableCell>
+                    <TableCell>{r.division || '-'}</TableCell>
                     <TableCell>{r.block || '-'}</TableCell>
+                    <TableCell>{r.noTPH || '-'}</TableCell>
+                    <TableCell>{r.jobCode || '-'}</TableCell>
                     <TableCell>{r.pemanenName}</TableCell>
                     <TableCell className="text-right">{r.janjangTBS}</TableCell>
                     <TableCell className="text-right">{r.janjangKosong}</TableCell>
@@ -500,6 +519,17 @@ const RealHarvest = () => {
                   </TableRow>
                 );
               })}
+              {filteredRows.length > 0 && (
+                <TableRow className="font-bold bg-muted/50">
+                  <TableCell colSpan={6} className="text-right">Total</TableCell>
+                  <TableCell className="text-right">{filteredRows.reduce((s, r) => s + (r.janjangTBS || 0), 0)}</TableCell>
+                  <TableCell className="text-right">{filteredRows.reduce((s, r) => s + (r.janjangKosong || 0), 0)}</TableCell>
+                  <TableCell className="text-right">{filteredRows.reduce((s, r) => s + (r.upahBasis || 0), 0)}</TableCell>
+                  <TableCell className="text-right">{filteredRows.reduce((s, r) => s + (r.premi || 0), 0)}</TableCell>
+                  <TableCell className="text-right">{filteredRows.reduce((s, r) => s + (r.totalUpah || 0), 0)}</TableCell>
+                  <TableCell></TableCell>
+                </TableRow>
+              )}
             </TableBody>
           </Table>
         </CardContent>

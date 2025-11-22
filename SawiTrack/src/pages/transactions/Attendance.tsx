@@ -67,78 +67,63 @@ export default function Attendance() {
   const [status, setStatus] = useState<string>('hadir');
   const [notes] = useState<string>('');
   const [rows, setRows] = useState<AttendanceRow[]>([]);
-  const selectionKey = `taksasi_selection_${date}`;
-  const taksasiKey = `taksasi_rows_${date}`;
-  const customKey = `taksasi_custom_${date}`;
+  // Removed legacy localStorage keys; data now fully server-driven
 
   // compute taksasi context for the date (use the latest entry for that day)
-  const taksasiContext = useMemo(() => {
-    try {
-      const raw = localStorage.getItem(taksasiKey);
-      if (!raw) return null;
-      const arr = JSON.parse(raw) as Array<{
-        timestamp: string;
-        date: string;
-        estateId: string;
-        estateName: string;
-        divisionId: string; // saved as string in taksasi page
-        blockLabel: string;
-      }>;
-      if (!Array.isArray(arr) || arr.length === 0) return null;
-      // pick the latest by timestamp
-      const latest = [...arr].sort((a, b) => (a.timestamp > b.timestamp ? 1 : -1)).at(-1)!;
-      const mandorId = (user?.id || user?._id) as string | undefined;
-      return {
-        estateId: latest.estateId,
-        estateName: latest.estateName,
-        division_id: Number(latest.divisionId),
-        block_no: latest.blockLabel,
-        mandorId,
-      } as Pick<AttendanceRow, 'estateId' | 'estateName' | 'division_id' | 'block_no' | 'mandorId'>;
-    } catch {
-      return null;
-    }
-  }, [taksasiKey, user?.id, user?._id]);
+  const [taksasiContext, setTaksasiContext] = useState<Pick<AttendanceRow, 'estateId' | 'estateName' | 'division_id' | 'block_no' | 'mandorId'> | null>(null);
+  useEffect(() => {
+    (async () => {
+      try {
+        const list = await api.taksasiList({ date });
+        if (list && list.length > 0) {
+          // pick latest by updatedAt or _id order
+            const sorted = [...list].sort((a,b)=> String(a._id).localeCompare(String(b._id)));
+            const latest = sorted.at(-1)!;
+            setTaksasiContext({
+              estateId: latest.estateId,
+              estateName: latest.estateId,
+              division_id: latest.division_id,
+              block_no: latest.block_no,
+              mandorId: (user?.id || user?._id) as string | undefined,
+            });
+        } else setTaksasiContext(null);
+      } catch { setTaksasiContext(null); }
+    })();
+  }, [date, user?.id, user?._id]);
 
   useEffect(() => {
-    // Load master employees and merge with custom (Other) employees for this date
-    let base: Employee[] = [];
-    const loadCustom = () => {
-      try {
-        const raw = localStorage.getItem(customKey);
-        const custom = raw ? (JSON.parse(raw) as Array<Pick<Employee, '_id' | 'name'>>) : [];
-        setEmployees([...(base || []), ...(Array.isArray(custom) ? (custom as Employee[]) : [])]);
-      } catch {
-        setEmployees(base || []);
-      }
-    };
-    api
-      .employees()
-      .then((list) => { base = list || []; loadCustom(); })
-      .catch(() => { base = []; loadCustom(); });
-  }, [customKey]);
+    api.employees()
+      .then(base => {
+        api.customWorkers()
+          .then(custom => {
+            const merged: Employee[] = [ ...(base||[]), ...((custom||[]).map(c => ({ _id: c._id, nik: '', name: c.name, status: 'active' as const })) ) ];
+            setEmployees(merged);
+          })
+          .catch(() => setEmployees(base||[]));
+      })
+      .catch(() => setEmployees([]));
+  }, [date]);
 
   useEffect(() => {
     // load existing entries for the date and merge with taksasi selection
-    api.attendanceList({ date })
-      .then((list) => {
+    (async () => {
+      try {
+        const list = await api.attendanceList({ date });
         const serverRows = (list.map(r => ({
           ...r,
-          // attach taksasi context if not present
           estateId: taksasiContext?.estateId,
           estateName: taksasiContext?.estateName,
           division_id: r.division_id ?? taksasiContext?.division_id,
           block_no: taksasiContext?.block_no,
           mandorId: taksasiContext?.mandorId,
-          // normalize status for UI select
           status: toLocalStatus(r.status),
         })) as AttendanceRow[]);
-        // merge with taksasi-selected employees for this date
+        // fetch taksasi selection employeeIds
         let selected: string[] = [];
-        try {
-          const raw = localStorage.getItem(selectionKey);
-          selected = raw ? (JSON.parse(raw) as string[]) : [];
-        } catch { selected = []; }
+        if (taksasiContext) {
+          const selDocs = await api.taksasiSelections({ date, estateId: taksasiContext.estateId, division_id: taksasiContext.division_id, block_no: taksasiContext.block_no });
+          if (selDocs && selDocs.length > 0) selected = selDocs[0].employeeIds || [];
+        }
         const missing: AttendanceRow[] = selected
           .filter(empId => !serverRows.some(sr => sr.employeeId === empId))
           .map(empId => ({
@@ -152,25 +137,9 @@ export default function Attendance() {
             mandorId: taksasiContext?.mandorId,
           }));
         setRows([...serverRows, ...missing]);
-      })
-      .catch(() => {
-        // if server fails, still show selection as placeholder rows
-        try {
-          const raw = localStorage.getItem(selectionKey);
-          const selected = raw ? (JSON.parse(raw) as string[]) : [];
-          setRows(selected.map(empId => ({
-            date,
-            employeeId: empId,
-            status: '',
-            estateId: taksasiContext?.estateId,
-            estateName: taksasiContext?.estateName,
-            division_id: taksasiContext?.division_id,
-            block_no: taksasiContext?.block_no,
-            mandorId: taksasiContext?.mandorId,
-          })));
-        } catch { setRows([]); }
-      });
-  }, [date, selectionKey, taksasiContext]);
+      } catch { setRows([]); }
+    })();
+  }, [date, taksasiContext]);
 
   // Attendance now only records presence status; wages handled in Upah page
 
@@ -200,45 +169,35 @@ export default function Attendance() {
       toast.success('Absensi tersimpan');
       logActivity({ action: 'attendance_create', category: 'attendance', level: 'info', details: { date, employeeId, status: map.backend } });
       // if present/hadir, auto-generate placeholder in Real Harvest storage
-      if (map.backend === 'present') {
+      if (map.backend === 'present' && taksasiContext) {
+        const emp = employees.find(e => e._id === employeeId);
         try {
-          const realKey = `realharvest_rows_${date}`;
-          const raw = localStorage.getItem(realKey);
-          const existing: Array<{
-            pemanenId: string;
-          }> = raw ? JSON.parse(raw) : [];
-          const emp = employees.find(e => e._id === employeeId);
-          const already = existing.some(r => r.pemanenId === employeeId);
-          if (!already) {
-            const placeholder = {
-              id: `${Date.now()}_${employeeId}`,
-              timestamp: new Date().toISOString(),
-              date,
-              estateId: taksasiContext?.estateId,
-              estateName: taksasiContext?.estateName,
-              division: taksasiContext?.division_id ? String(taksasiContext.division_id) : '',
-              block: taksasiContext?.block_no,
-              mandor: user?.name || user?.id || user?._id || '-',
-              pemanenId: employeeId,
-              pemanenName: emp?.name || employeeId,
-              jobCode: '',
-              noTPH: '',
-              janjangTBS: 0,
-              janjangKosong: 0,
-              upahBasis: 0,
-              premi: 0,
-              totalUpah: 0,
-            };
-            const next = [...existing, placeholder];
-            localStorage.setItem(realKey, JSON.stringify(next));
-          }
-        } catch {/* ignore */ }
+          await api.panenCreate({
+            date_panen: date,
+            estateId: taksasiContext.estateId,
+            division_id: taksasiContext.division_id,
+            block_no: taksasiContext.block_no,
+            weightKg: 0,
+            employeeId,
+            employeeName: emp?.name || employeeId,
+            mandorId: taksasiContext.mandorId,
+            mandorName: user?.name,
+            janjangTBS: 0,
+            jobCode: 'panen',
+            notes: 'placeholder=1'
+          });
+        } catch { /* ignore placeholder failure */ }
       }
       // reload list
       const latest = await api.attendanceList({ date });
       // re-merge with selection
       let selected: string[] = [];
-      try { const raw = localStorage.getItem(selectionKey); selected = raw ? JSON.parse(raw) : []; } catch { selected = []; }
+      try {
+        if (taksasiContext) {
+          const selDocs = await api.taksasiSelections({ date, estateId: taksasiContext.estateId, division_id: taksasiContext.division_id, block_no: taksasiContext.block_no });
+          if (selDocs && selDocs.length > 0) selected = selDocs[0].employeeIds || [];
+        }
+      } catch { selected = []; }
       const serverRows = (latest as AttendanceRow[]).map(r => ({
         ...r,
         estateId: taksasiContext?.estateId,
@@ -286,43 +245,33 @@ export default function Attendance() {
       const map = toBackendStatus(r.status);
       await api.attendanceCreate({ date, employeeId: r.employeeId, status: map.backend, division_id: r.division_id ?? taksasiContext?.division_id, notes: map.note });
       // if present/hadir, auto-generate placeholder in Real Harvest storage
-      if (map.backend === 'present') {
+      if (map.backend === 'present' && taksasiContext) {
+        const emp = employees.find(e => e._id === r.employeeId);
         try {
-          const realKey = `realharvest_rows_${date}`;
-          const raw = localStorage.getItem(realKey);
-          const existing: Array<{
-            pemanenId: string;
-          }> = raw ? JSON.parse(raw) : [];
-          const emp = employees.find(e => e._id === r.employeeId);
-          const already = existing.some(x => x.pemanenId === r.employeeId);
-          if (!already) {
-            const placeholder = {
-              id: `${Date.now()}_${r.employeeId}`,
-              timestamp: new Date().toISOString(),
-              date,
-              estateId: taksasiContext?.estateId,
-              estateName: taksasiContext?.estateName,
-              division: taksasiContext?.division_id ? String(taksasiContext.division_id) : '',
-              block: taksasiContext?.block_no,
-              mandor: user?.name || user?.id || user?._id || '-',
-              pemanenId: r.employeeId,
-              pemanenName: emp?.name || r.employeeId,
-              jobCode: '',
-              noTPH: '',
-              janjangTBS: 0,
-              janjangKosong: 0,
-              upahBasis: 0,
-              premi: 0,
-              totalUpah: 0,
-            };
-            const next = [...existing, placeholder];
-            localStorage.setItem(realKey, JSON.stringify(next));
-          }
-        } catch {/* ignore */ }
+          await api.panenCreate({
+            date_panen: date,
+            estateId: taksasiContext.estateId,
+            division_id: taksasiContext.division_id,
+            block_no: taksasiContext.block_no,
+            weightKg: 0,
+            employeeId: r.employeeId,
+            employeeName: emp?.name || r.employeeId,
+            mandorId: taksasiContext.mandorId,
+            mandorName: user?.name,
+            janjangTBS: 0,
+            jobCode: 'panen',
+            notes: 'placeholder=1'
+          });
+        } catch { /* ignore */ }
       }
       const latest = await api.attendanceList({ date });
       let selected: string[] = [];
-      try { const raw = localStorage.getItem(selectionKey); selected = raw ? JSON.parse(raw) : []; } catch { selected = []; }
+      if (taksasiContext) {
+        try {
+          const selDocs = await api.taksasiSelections({ date, estateId: taksasiContext.estateId, division_id: taksasiContext.division_id, block_no: taksasiContext.block_no });
+          if (selDocs && selDocs.length > 0) selected = selDocs[0].employeeIds || [];
+        } catch { /* ignore */ }
+      }
       const serverRows = (latest as AttendanceRow[]).map(r0 => ({
         ...r0,
         estateId: taksasiContext?.estateId,

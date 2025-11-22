@@ -1,5 +1,5 @@
 // src/lib/api.ts
-import { logActivity } from './activityLogger';
+import { getToken } from './authStore';
 // Resolve API base; allow relative '/api' to be expanded to current origin
 const RAW_API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api";
 export const API_BASE = RAW_API_BASE.startsWith('/') && typeof window !== 'undefined'
@@ -11,13 +11,26 @@ export type EmpStatus = "active" | "inactive";
 export type TargetStatus = "active" | "done";
 export type ReportStatus = "pending" | "approved" | "rejected";
 
-export interface Employee {
+export interface User {
   _id: string;
   name: string;
   email: string;
   role: Role;
   division?: string;
-  status: EmpStatus;
+  status: string;
+}
+
+export interface Employee {
+  _id: string;
+  nik: string;
+  name: string;
+  companyId?: string;
+  position?: string;
+  salary?: number;
+  address?: string;
+  phone?: string;
+  birthDate?: string;
+  status: string;
 }
 
 export interface Target {
@@ -72,6 +85,19 @@ export type TaksasiRow = {
   block_id?: string;
   weightKg: number;
   notes?: string;
+  // Extended analytical fields (optional)
+  totalPokok?: number;
+  samplePokok?: number;
+  bm?: number;
+  ptb?: number;
+  bmbb?: number;
+  bmm?: number;
+  avgWeightKg?: number;
+  basisJanjangPerPemanen?: number;
+  akpPercent?: number;
+  taksasiJanjang?: number;
+  taksasiTon?: number;
+  kebutuhanPemanen?: number;
 };
 
 export type PanenRow = {
@@ -84,6 +110,8 @@ export type PanenRow = {
   weightKg: number;
   employeeId?: string;
   employeeName?: string;
+  mandorId?: string;
+  mandorName?: string;
   jobCode?: string;
   notes?: string;
   // extended real harvest fields
@@ -115,13 +143,6 @@ function toQS(params?: Record<string, string | number | undefined>): string {
   return "?" + new URLSearchParams(entries).toString();
 }
 
-function getToken(): string | null {
-  try {
-    return localStorage.getItem("token");
-  } catch {
-    return null;
-  }
-}
 
 async function http<T>(path: string, init?: (RequestInit & { disableLog?: boolean })): Promise<T> {
   const token = getToken();
@@ -130,49 +151,75 @@ async function http<T>(path: string, init?: (RequestInit & { disableLog?: boolea
   };
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const started = performance.now();
-  const method = (init?.method || 'GET').toUpperCase();
   const fullUrl = `${API_BASE}${path}`;
   const res = await fetch(fullUrl, {
     headers,
+    credentials: 'include', // allow cookie-based session fallback
     ...init,
   });
 
   if (!res.ok) {
     const text = await res.text();
-    if (!init?.disableLog && !/activity-logs|activitylogs/.test(path)) {
-      logActivity({
-        action: `HTTP ${method} ${path}`,
-        category: 'api',
-        level: 'error',
-        durationMs: performance.now() - started,
-        details: { status: res.status, body: init?.body, error: text || res.statusText }
-      });
-    }
     throw new Error(text || res.statusText);
   }
   const json = await res.json();
-  if (!init?.disableLog && !/activity-logs|activitylogs/.test(path)) {
-    logActivity({
-      action: `HTTP ${method} ${path}`,
-      category: 'api',
-      level: 'info',
-      durationMs: performance.now() - started,
-      details: { status: res.status, method, path, responseKeys: json && typeof json === 'object' ? Object.keys(json).slice(0,6) : json }
-    });
-  }
   return json;
 }
 
 export const api = {
   // Auth
   login: (body: { email: string; password: string }) =>
-    http<{ token: string; user: Employee }>(`/auth/login`, {
+    http<{ token: string; user: User }>(`/auth/login`, {
       method: "POST",
       body: JSON.stringify(body),
     }),
-  me: () => http<Employee>(`/auth/me`),
+  me: () => http<User>(`/auth/me`),
   health: () => http<{ ok: boolean; uptime: number }>(`/health`),
+  // Users (Web Accounts)
+  users: () => http<User[]>(`/users`),
+  user: (id: string) => http<User>(`/users/${id}`),
+  createUser: (body: {
+    name: string;
+    email: string;
+    role: Role;
+    password: string;
+    division?: string | null;
+    status?: string;
+  }) => http<User>(`/users`, { method: "POST", body: JSON.stringify(body) }),
+  updateUser: (id: string, body: Partial<{
+    name: string;
+    email: string;
+    role: Role;
+    password: string;
+    division: string | null;
+    status: string;
+  }>) => http<User>(`/users/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+  deleteUser: (id: string) => http<void>(`/users/${id}`, { method: "DELETE" }),
+  // Employees (Workers/Pemanen)
+  employees: () => http<Employee[]>(`/employees`),
+  employee: (id: string) => http<Employee>(`/employees/${id}`),
+  createEmployee: (body: {
+    nik: string;
+    name: string;
+    companyId?: string;
+    position?: string;
+    salary?: number;
+    address?: string;
+    phone?: string;
+    birthDate?: string;
+  }) => http<Employee>(`/employees`, { method: "POST", body: JSON.stringify(body) }),
+  updateEmployee: (id: string, body: Partial<{
+    nik: string;
+    name: string;
+    companyId: string;
+    position: string;
+    salary: number;
+    address: string;
+    phone: string;
+    birthDate: string;
+    status: string;
+  }>) => http<Employee>(`/employees/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+  deleteEmployee: (id: string) => http<void>(`/employees/${id}`, { method: "DELETE" }),
   // Companies
   companies: () => http<Company[]>(`/companies`),
   company: (id: string) => http<Company>(`/companies/${id}`),
@@ -210,44 +257,13 @@ export const api = {
   }) => http(`/estates`, { method: "POST", body: JSON.stringify(body) }),
   updateEstate: (
     id: string,
-    body: Partial<{ estate_name: string; divisions: unknown[] }>
+    body: Partial<{ estate_name: string; divisions: unknown[]; status: string }>
   ) => http(`/estates/${id}`, { method: "PUT", body: JSON.stringify(body) }),
   deleteEstate: (id: string) => http(`/estates/${id}`, { method: "DELETE" }),
   divisions: (estateId: string) =>
     http<Array<{ division_id: number }>>(`/estates/${estateId}/divisions`),
   blocks: (estateId: string, divisionId: number | string) =>
     http(`/estates/${estateId}/divisions/${divisionId}/blocks`),
-  employees: () => http<Employee[]>(`/employees`),
-  employee: (id: string) => http<Employee>(`/employees/${id}`),
-  createEmployee: (body: {
-    name: string;
-    email: string;
-    role: Role;
-    division?: string | null;
-    status?: EmpStatus;
-    password?: string;
-  }) =>
-    http<Employee>(`/employees`, {
-      method: "POST",
-      body: JSON.stringify(body),
-    }),
-  updateEmployee: (
-    id: string,
-    body: Partial<{
-      name: string;
-      email: string;
-      role: Role;
-      division: string | null;
-      status: EmpStatus;
-      password: string;
-    }>
-  ) =>
-    http<Employee>(`/employees/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(body),
-    }),
-  deleteEmployee: (id: string) =>
-    http<{ ok: boolean }>(`/employees/${id}`, { method: "DELETE" }),
   targets: () => http<Target[]>(`/targets`),
   target: (id: string) => http<Target>(`/targets/${id}`),
   createTarget: (body: {
@@ -308,12 +324,7 @@ export const api = {
       pendingCount: number;
       targetsPercent: number;
     }>(`/stats`),
-  // New endpoints per client request
-  taksasiList: (params?: {
-    date?: string;
-    estateId?: string;
-    division_id?: number;
-  }) => {
+  taksasiList: (params?: { date?: string; estateId?: string; division_id?: number }) => {
     const search = toQS(params as Record<string, string | number | undefined>);
     return http<Array<TaksasiRow>>(`/taksasi${search}`);
   },
@@ -322,6 +333,16 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  taksasiSelections: (params?: { date?: string; estateId?: string; division_id?: number; block_no?: string }) => {
+    const search = toQS(params as Record<string, string | number | undefined>);
+    return http<Array<{ _id: string; date: string; estateId: string; division_id: number; block_no: string; employeeIds: string[]; notes?: string }>>(`/taksasi-selections${search}`);
+  },
+  upsertTaksasiSelection: (body: { date: string; estateId: string; division_id: number; block_no: string; employeeIds: string[]; notes?: string }) =>
+    http(`/taksasi-selections`, { method: 'POST', body: JSON.stringify(body) }),
+  deleteTaksasiSelection: (id: string) => http<{ ok: boolean }>(`/taksasi-selections/${id}`, { method: 'DELETE' }),
+  customWorkers: () => http<Array<{ _id: string; name: string; active: boolean }>>(`/custom-workers`),
+  createCustomWorker: (name: string) => http<{ _id: string; name: string; active: boolean }>(`/custom-workers`, { method: 'POST', body: JSON.stringify({ name }) }),
+  deleteCustomWorker: (id: string) => http<{ ok: boolean }>(`/custom-workers/${id}`, { method: 'DELETE' }),
   panenList: (params?: {
     date_panen?: string;
     estateId?: string;
@@ -335,6 +356,7 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  panenBatch: (rows: Array<PanenRow>) => http<Array<PanenRow>>(`/panen`, { method: 'POST', body: JSON.stringify(rows) }),
   angkutList: (params?: {
     date_panen?: string;
     date_angkut?: string;
@@ -453,7 +475,7 @@ export const api = {
   // Closing endpoints
   closingPeriods: () =>
     http<Array<{ _id: string; startDate: string; endDate: string; notes?: string }>>(`/closing-periods`),
-  createClosingPeriod: (body: { startDate: string; endDate: string; notes?: string }) =>
+  createClosingPeriod: (body: { startDate: string; endDate: string; notes?: string; month?: number; year?: number }) =>
     http<{ _id: string }>(`/closing-periods`, {
       method: "POST",
       body: JSON.stringify(body),

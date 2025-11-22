@@ -35,34 +35,25 @@ export default function Transport() {
 
   // Aggregate Real Harvest by TPH for the selected datePanen
   const harvestTotalsByTPH = useMemo(() => {
-    try {
-      const raw = localStorage.getItem(harvestStorageKey);
-      const list: Array<{
-        date: string;
-        estateId?: string;
-        division?: string;
-        block?: string;
-        noTPH?: string;
-        janjangTBS: number;
-      }> = raw ? JSON.parse(raw) : [];
-      const map = new Map<string, { estateId: string; division_id: number; block_no: string; notph: string; totalJJG: number }>();
-      for (const r of list) {
-        if (!r || !String(r.date).startsWith(datePanen)) continue;
-        const estateId = r.estateId || '';
-        const division_id = Number(r.division || 0) || 0;
-        const block_no = r.block || '';
-        const notph = r.noTPH || '';
-        if (!notph) continue; // group only when TPH available
-        const key = `${estateId}|${division_id}|${block_no}|${notph}`;
-        const prev = map.get(key) || { estateId, division_id, block_no, notph, totalJJG: 0 };
-        prev.totalJJG += Number(r.janjangTBS || 0);
-        map.set(key, prev);
-      }
-      return map;
-    } catch {
-      return new Map<string, { estateId: string; division_id: number; block_no: string; notph: string; totalJJG: number }>();
+    // This memo now depends on rows fetched from server; grouping handled after load
+    const map = new Map<string, { estateId: string; division_id: number; block_no: string; notph: string; totalJJG: number }>();
+    for (const r of rows) {
+      if (!r || !String(r.date_panen).startsWith(datePanen)) continue;
+      const estateId = r.estateId || '';
+      const division_id = Number(r.division_id || 0) || 0;
+      const block_no = r.block_no || '';
+      const notph = noteVal(r.notes, 'notph') || '';
+      if (!notph) continue;
+      const key = `${estateId}|${division_id}|${block_no}|${notph}`;
+      const prev = map.get(key) || { estateId, division_id, block_no, notph, totalJJG: 0 };
+      // janjangTBS may not be stored; approximate via weight if available (assuming 15kg avg)
+      // AngkutRow does not carry janjangTBS; approximate from weightKg
+      const approxJanjang = Math.round((r.weightKg || 0) / 15);
+      prev.totalJJG += Number(approxJanjang || 0);
+      map.set(key, prev);
     }
-  }, [harvestStorageKey, datePanen]);
+    return map;
+  }, [rows, datePanen]);
   const exportCsv = () => {
     const header = ['date_panen', 'date_angkut', 'estateId', 'division_id', 'block_no', 'weightKg'];
     const escape = (v: unknown) => {

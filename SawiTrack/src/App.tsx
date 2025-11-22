@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { ClosingProvider } from "@/contexts/ClosingContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import Layout from "@/components/Layout";
 import Login from "./pages/Login";
@@ -22,6 +23,7 @@ import Harvest from "./pages/transactions/Harvest";
 import Transport from "./pages/transactions/Transport";
 import Attendance from "./pages/transactions/Attendance";
 import Upah from "./pages/transactions/Upah";
+import Closing from "./pages/transactions/Closing";
 import TaksasiPerBlock from "./pages/reports/TaksasiPerBlock";
 import Trend from "./pages/reports/Trend";
 import Statement from "./pages/reports/Statement";
@@ -32,6 +34,7 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <AuthProvider>
+        <ClosingProvider>
         <Toaster />
         <Sonner />
         <BrowserRouter>
@@ -80,6 +83,11 @@ const App = () => (
             <Route path="/transactions/upah" element={
               <ProtectedRoute allowedRoles={['manager', 'foreman']}>
                 <Layout><Upah /></Layout>
+              </ProtectedRoute>
+            } />
+            <Route path="/transactions/closing" element={
+              <ProtectedRoute allowedRoles={['manager']}>
+                <Layout><Closing /></Layout>
               </ProtectedRoute>
             } />
 
@@ -139,6 +147,7 @@ const App = () => (
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
+        </ClosingProvider>
       </AuthProvider>
     </TooltipProvider>
   </QueryClientProvider>

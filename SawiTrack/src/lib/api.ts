@@ -370,4 +370,12 @@ export const api = {
       }>
     >(`/reports/statement${search}`);
   },
+  // Closing endpoints
+  closedMonths: () =>
+    http<Array<{ year: number; month: number }>>(`/closed-months`),
+  closeMonth: (body?: { year: number; month: number }) =>
+    http<{ success: boolean; message?: string }>(`/close-month`, {
+      method: "POST",
+      body: body ? JSON.stringify(body) : undefined,
+    }),
 };

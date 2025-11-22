@@ -12,6 +12,7 @@ import Panen from "./models/Panen.js";
 import Angkut from "./models/Angkut.js";
 import Attendance from "./models/Attendance.js";
 import JobCode from "./models/JobCode.js";
+import ClosingMonth from "./models/ClosingMonth.js";
 import path from "path";
 import { fileURLToPath } from "url";
 import bcrypt from "bcryptjs";
@@ -33,7 +34,7 @@ const CORS_ORIGIN = process.env.CORS_ORIGIN;
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
 
 // Support multiple origins via comma-separated list, or '*' to allow all (dev only)
-const allowedOrigins = CORS_ORIGIN.split(",")
+const allowedOrigins = (CORS_ORIGIN || "").split(",")
   .map((s) => s.trim())
   .filter(Boolean);
 const corsOptions = {
@@ -430,6 +431,49 @@ app.delete(`${API_BASE_PATH}/targets/:id`, async (req, res) => {
   }
 });
 
+// Closing: list closed months
+app.get(`${API_BASE_PATH}/closed-months`, async (_req, res) => {
+  try {
+    const docs = await ClosingMonth.find({}, { _id: 0, year: 1, month: 1 })
+      .sort({ year: 1, month: 1 })
+      .lean();
+    res.json(docs);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Closing: close current month
+app.post(`${API_BASE_PATH}/close-month`, async (req, res) => {
+  try {
+    let { year, month } = req.body || {};
+    if (!year || !month) {
+      const now = new Date();
+      year = now.getFullYear();
+      month = now.getMonth() + 1;
+    }
+    // Ensure valid range
+    year = Number(year);
+    month = Number(month);
+    if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
+      return res.status(400).json({ success: false, message: "Parameter bulan/tahun tidak valid." });
+    }
+    // Ensure idempotency
+    const exists = await ClosingMonth.findOne({ year, month }).lean();
+    if (exists) {
+      return res.json({ success: false, message: "Bulan ini sudah ditutup." });
+    }
+    await ClosingMonth.create({ year, month });
+    res.json({ success: true });
+  } catch (err) {
+    // Handle unique index violation nicely
+    if (err && err.code === 11000) {
+      return res.json({ success: false, message: "Bulan ini sudah ditutup." });
+    }
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Reports
 app.get(`${API_BASE_PATH}/reports`, async (req, res) => {
   try {
@@ -451,7 +495,6 @@ app.get(`${API_BASE_PATH}/reports`, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-// Get report by id
 app.get(`${API_BASE_PATH}/reports/:id`, async (req, res) => {
   try {
     const doc = await Report.findById(req.params.id).lean();
@@ -600,10 +643,10 @@ app.get(`${API_BASE_PATH}/stats`, async (_req, res) => {
 
     const percent = targets.length
       ? Math.round(
-          (targets.reduce((sum, t) => sum + (t.achieved || 0), 0) /
-            targets.reduce((sum, t) => sum + (t.target || 0), 0)) *
-            100
-        )
+        (targets.reduce((sum, t) => sum + (t.achieved || 0), 0) /
+          targets.reduce((sum, t) => sum + (t.target || 0), 0)) *
+        100
+      )
       : 0;
 
     res.json({
@@ -831,8 +874,8 @@ app.get(`${API_BASE_PATH}/reports/trend`, async (req, res) => {
       String(type) === "taksasi"
         ? Taksasi
         : String(type) === "angkut"
-        ? Angkut
-        : Panen;
+          ? Angkut
+          : Panen;
     const key = String(type) === "angkut" ? "weightKg" : "weightKg";
     const order = String(sort) === "asc" ? 1 : -1;
     const rows = await col

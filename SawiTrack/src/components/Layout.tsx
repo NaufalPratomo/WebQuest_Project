@@ -47,6 +47,7 @@ const Layout = ({ children }: LayoutProps) => {
         // Transaksi Panen dihilangkan sesuai permintaan
         // { path: '/transactions/panen', icon: FileText, label: 'Transaksi Panen', roles: ['manager', 'foreman'] },
         { path: '/transactions/angkut', icon: Truck, label: 'Angkutan', roles: ['manager', 'foreman'] },
+        { path: '/transactions/closing', icon: FileText, label: 'Data Closing Transaksi', roles: ['manager'] },
       ],
     },
     {

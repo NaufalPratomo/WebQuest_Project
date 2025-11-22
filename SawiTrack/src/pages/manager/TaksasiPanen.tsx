@@ -285,15 +285,15 @@ export default function TaksasiPanen() {
       setEditingKey(null);
       setPendingEditBlockLabel('');
 
-    } catch (e: any) {
+    } catch (e: unknown) {
       let msg = e instanceof Error ? e.message : 'Gagal simpan taksasi ke server';
-      // Clean up JSON error message if present
       try {
         const parsed = JSON.parse(msg);
-        if (parsed.error) msg = parsed.error;
-      } catch {
-        // not JSON, use as is
-      }
+        if (parsed && typeof parsed === 'object' && 'error' in parsed) {
+          const maybeError = (parsed as { error?: string }).error;
+          if (maybeError) msg = maybeError;
+        }
+      } catch { /* ignore */ }
       toast.error(msg);
     }
   }

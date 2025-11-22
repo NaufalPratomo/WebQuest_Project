@@ -39,8 +39,9 @@ const Closing = () => {
       setEndDate('');
       setNotes('');
       await fetchClosingPeriods();
-    } catch (error: any) {
-      toast.error(error.message || 'Gagal menutup periode.');
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : 'Gagal menutup periode.';
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -52,8 +53,9 @@ const Closing = () => {
       await api.deleteClosingPeriod(id);
       toast.success('Periode berhasil dibuka kembali.');
       await fetchClosingPeriods();
-    } catch (error: any) {
-      toast.error(error.message || 'Gagal membuka periode.');
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : 'Gagal membuka periode.';
+      toast.error(msg);
     }
   };
 

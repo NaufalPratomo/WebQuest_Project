@@ -173,12 +173,15 @@ export default function Transport() {
       toast.success('Tersimpan');
       setRows(prev => Array.isArray(created) ? [...prev, ...created] : [...prev, created as AngkutRow]);
       setBlockNo(''); setNoTPH(''); setJjgAngkut(''); setNoMobil(''); setNamaSupir('');
-    } catch (e: any) {
+    } catch (e: unknown) {
       let msg = e instanceof Error ? e.message : 'Gagal menyimpan';
       try {
         const parsed = JSON.parse(msg);
-        if (parsed.error) msg = parsed.error;
-      } catch { }
+        if (parsed && typeof parsed === 'object' && 'error' in parsed) {
+          const maybeError = (parsed as { error?: string }).error;
+          if (maybeError) msg = maybeError;
+        }
+      } catch { /* ignore */ }
       toast.error(msg);
     }
   };
@@ -212,12 +215,15 @@ export default function Transport() {
       const latest = await api.angkutList({ date_panen: datePanen });
       setRows(latest);
       toast.success('JJG angkut diperbarui');
-    } catch (e: any) {
+    } catch (e: unknown) {
       let msg = e instanceof Error ? e.message : 'Gagal memperbarui JJG angkut';
       try {
         const parsed = JSON.parse(msg);
-        if (parsed.error) msg = parsed.error;
-      } catch { }
+        if (parsed && typeof parsed === 'object' && 'error' in parsed) {
+          const maybeError = (parsed as { error?: string }).error;
+          if (maybeError) msg = maybeError;
+        }
+      } catch { /* ignore */ }
       toast.error(msg);
     }
   };
@@ -256,12 +262,15 @@ export default function Transport() {
       toast.success('Data angkut diperbarui');
       setCompleteOpen(false);
       setCompleteTarget(null);
-    } catch (e: any) {
+    } catch (e: unknown) {
       let msg = e instanceof Error ? e.message : 'Gagal menyimpan';
       try {
         const parsed = JSON.parse(msg);
-        if (parsed.error) msg = parsed.error;
-      } catch { }
+        if (parsed && typeof parsed === 'object' && 'error' in parsed) {
+          const maybeError = (parsed as { error?: string }).error;
+          if (maybeError) msg = maybeError;
+        }
+      } catch { /* ignore */ }
       toast.error(msg);
     }
   };
@@ -312,12 +321,15 @@ export default function Transport() {
       }
       const latest = await api.angkutList({ date_panen: datePanen });
       setRows(latest);
-    } catch (e: any) {
+    } catch (e: unknown) {
       let msg = e instanceof Error ? e.message : 'Gagal import CSV';
       try {
         const parsed = JSON.parse(msg);
-        if (parsed.error) msg = parsed.error;
-      } catch { }
+        if (parsed && typeof parsed === 'object' && 'error' in parsed) {
+          const maybeError = (parsed as { error?: string }).error;
+          if (maybeError) msg = maybeError;
+        }
+      } catch { /* ignore */ }
       toast.error(msg);
     } finally {
       setUploading(false);

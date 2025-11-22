@@ -55,12 +55,15 @@ export default function Harvest() {
       toast.success('Tersimpan');
       setRows(prev => Array.isArray(created) ? [...prev, ...created] : [...prev, created as PanenRow]);
       setBlockNo(''); setWeightKg('');
-    } catch (e: any) {
+    } catch (e: unknown) {
       let msg = e instanceof Error ? e.message : 'Gagal menyimpan';
       try {
         const parsed = JSON.parse(msg);
-        if (parsed.error) msg = parsed.error;
-      } catch { }
+        if (parsed && typeof parsed === 'object' && 'error' in parsed) {
+          const maybeError = (parsed as { error?: string }).error;
+          if (maybeError) msg = maybeError;
+        }
+      } catch { /* ignore */ }
       toast.error(msg);
     }
   };
@@ -113,12 +116,15 @@ export default function Harvest() {
       // reload list
       const latest = await api.panenList({ date_panen: date });
       setRows(latest);
-    } catch (e: any) {
+    } catch (e: unknown) {
       let msg = e instanceof Error ? e.message : 'Gagal import CSV';
       try {
         const parsed = JSON.parse(msg);
-        if (parsed.error) msg = parsed.error;
-      } catch { }
+        if (parsed && typeof parsed === 'object' && 'error' in parsed) {
+          const maybeError = (parsed as { error?: string }).error;
+          if (maybeError) msg = maybeError;
+        }
+      } catch { /* ignore */ }
       toast.error(msg);
     } finally {
       setUploading(false);

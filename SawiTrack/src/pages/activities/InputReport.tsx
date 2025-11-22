@@ -89,12 +89,15 @@ const InputReport = () => {
       toast.success('Laporan berhasil disubmit');
       // reset minimal
       setNotes('');
-    } catch (err: any) {
+    } catch (err: unknown) {
       let message = err instanceof Error ? err.message : 'Gagal submit laporan';
       try {
         const parsed = JSON.parse(message);
-        if (parsed.error) message = parsed.error;
-      } catch { }
+        if (parsed && typeof parsed === 'object' && 'error' in parsed) {
+          const maybeError = (parsed as { error?: string }).error;
+          if (maybeError) message = maybeError;
+        }
+      } catch { /* ignore JSON parse */ }
       toast.error(message);
     }
   };

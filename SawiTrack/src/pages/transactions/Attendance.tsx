@@ -262,12 +262,15 @@ export default function Attendance() {
       // reset some inputs
       setEmployeeId('');
       setStatus('hadir');
-    } catch (e: any) {
+    } catch (e: unknown) {
       let msg = e instanceof Error ? e.message : 'Gagal menyimpan';
       try {
         const parsed = JSON.parse(msg);
-        if (parsed.error) msg = parsed.error;
-      } catch { }
+        if (parsed && typeof parsed === 'object' && 'error' in parsed) {
+          const maybeError = (parsed as { error?: string }).error;
+          if (maybeError) msg = maybeError;
+        }
+      } catch { /* ignore */ }
       toast.error(msg);
     }
   };
@@ -341,12 +344,15 @@ export default function Attendance() {
         }));
       setRows([...serverRows, ...missing]);
       toast.success('Status diperbarui');
-    } catch (e: any) {
+    } catch (e: unknown) {
       let msg = e instanceof Error ? e.message : 'Gagal memperbarui';
       try {
         const parsed = JSON.parse(msg);
-        if (parsed.error) msg = parsed.error;
-      } catch { }
+        if (parsed && typeof parsed === 'object' && 'error' in parsed) {
+          const maybeError = (parsed as { error?: string }).error;
+          if (maybeError) msg = maybeError;
+        }
+      } catch { /* ignore */ }
       toast.error(msg);
     }
   };

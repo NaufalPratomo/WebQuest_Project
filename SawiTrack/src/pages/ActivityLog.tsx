@@ -17,7 +17,8 @@ interface Log {
     user_name: string;
     role: string;
     action: string;
-    details: any;
+    // details can be arbitrary JSON or primitive
+    details: unknown;
     ip_address: string;
     timestamp: string;
 }
@@ -97,8 +98,16 @@ export default function ActivityLog() {
                                                         {log.action}
                                                     </span>
                                                 </TableCell>
-                                                <TableCell className="max-w-xs truncate" title={JSON.stringify(log.details)}>
-                                                    {typeof log.details === 'object' ? JSON.stringify(log.details) : log.details}
+                                                <TableCell className="max-w-xs truncate" title={(() => {
+                                                    try { return JSON.stringify(log.details); } catch { return String(log.details); }
+                                                })()}>
+                                                    {(() => {
+                                                        if (log.details == null) return '';
+                                                        if (typeof log.details === 'object') {
+                                                            try { return JSON.stringify(log.details); } catch { return '[Object]'; }
+                                                        }
+                                                        return String(log.details);
+                                                    })()}
                                                 </TableCell>
                                                 <TableCell>{log.ip_address}</TableCell>
                                             </TableRow>

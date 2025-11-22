@@ -71,12 +71,15 @@ const Verification = () => {
       await api.approveReport(id);
       setReports(prev => prev.map(r => (r.id === id ? { ...r, status: 'approved' } : r)));
       toast.success('Laporan berhasil disetujui');
-    } catch (e: any) {
+    } catch (e: unknown) {
       let msg = e instanceof Error ? e.message : 'Gagal menyetujui laporan';
       try {
         const parsed = JSON.parse(msg);
-        if (parsed.error) msg = parsed.error;
-      } catch { }
+        if (parsed && typeof parsed === 'object' && 'error' in parsed) {
+          const maybeError = (parsed as { error?: string }).error;
+          if (maybeError) msg = maybeError;
+        }
+      } catch { /* ignore */ }
       toast.error(msg);
     }
   };
@@ -86,12 +89,15 @@ const Verification = () => {
       await api.rejectReport(id);
       setReports(prev => prev.map(r => (r.id === id ? { ...r, status: 'rejected' } : r)));
       toast.success('Laporan berhasil ditolak');
-    } catch (e: any) {
+    } catch (e: unknown) {
       let msg = e instanceof Error ? e.message : 'Gagal menolak laporan';
       try {
         const parsed = JSON.parse(msg);
-        if (parsed.error) msg = parsed.error;
-      } catch { }
+        if (parsed && typeof parsed === 'object' && 'error' in parsed) {
+          const maybeError = (parsed as { error?: string }).error;
+          if (maybeError) msg = maybeError;
+        }
+      } catch { /* ignore */ }
       toast.error(msg);
     }
   };

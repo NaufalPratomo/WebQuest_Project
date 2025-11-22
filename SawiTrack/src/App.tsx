@@ -3,6 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import RouteLogger from '@/components/RouteLogger';
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ClosingProvider } from "@/contexts/ClosingContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
@@ -39,6 +40,7 @@ const App = () => (
           <Toaster />
           <Sonner />
           <BrowserRouter>
+            <RouteLogger />
             <Routes>
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="/login" element={<Login />} />

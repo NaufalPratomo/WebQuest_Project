@@ -1,6 +1,10 @@
 // src/lib/api.ts
-export const API_BASE =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api";
+import { logActivity } from './activityLogger';
+// Resolve API base; allow relative '/api' to be expanded to current origin
+const RAW_API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api";
+export const API_BASE = RAW_API_BASE.startsWith('/') && typeof window !== 'undefined'
+  ? `${window.location.origin}${RAW_API_BASE}`
+  : RAW_API_BASE;
 
 export type Role = "manager" | "foreman" | "employee";
 export type EmpStatus = "active" | "inactive";
@@ -119,24 +123,45 @@ function getToken(): string | null {
   }
 }
 
-async function http<T>(path: string, init?: RequestInit): Promise<T> {
+async function http<T>(path: string, init?: (RequestInit & { disableLog?: boolean })): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const res = await fetch(`${API_BASE}${path}`, {
+  const started = performance.now();
+  const method = (init?.method || 'GET').toUpperCase();
+  const fullUrl = `${API_BASE}${path}`;
+  const res = await fetch(fullUrl, {
     headers,
     ...init,
   });
 
   if (!res.ok) {
     const text = await res.text();
+    if (!init?.disableLog && !/activity-logs|activitylogs/.test(path)) {
+      logActivity({
+        action: `HTTP ${method} ${path}`,
+        category: 'api',
+        level: 'error',
+        durationMs: performance.now() - started,
+        details: { status: res.status, body: init?.body, error: text || res.statusText }
+      });
+    }
     throw new Error(text || res.statusText);
   }
-
-  return res.json();
+  const json = await res.json();
+  if (!init?.disableLog && !/activity-logs|activitylogs/.test(path)) {
+    logActivity({
+      action: `HTTP ${method} ${path}`,
+      category: 'api',
+      level: 'info',
+      durationMs: performance.now() - started,
+      details: { status: res.status, method, path, responseKeys: json && typeof json === 'object' ? Object.keys(json).slice(0,6) : json }
+    });
+  }
+  return json;
 }
 
 export const api = {
@@ -408,6 +433,21 @@ export const api = {
         blockCount: number;
       }>
     >(`/reports/statement${search}`);
+  },
+  // Activity Logs
+  activityLogs: (params?: { page?: number; limit?: number }) => {
+    const search = toQS(params as Record<string, string | number | undefined>);
+    type ActivityLogsResponse = { data?: unknown; pagination?: { pages?: number }; } | unknown[];
+    return http<ActivityLogsResponse>(`/activity-logs${search}`).catch(err => {
+      // Fallback logic: if 404 or Not Found message, try alias without dash
+      if (err instanceof Error && (/404|not\s*found/i).test(err.message)) {
+        return http<ActivityLogsResponse>(`/activitylogs${search}`, { disableLog: true }).catch(inner => {
+          // Provide a clearer combined error
+          throw new Error(`Activity logs endpoint tidak ditemukan. Coba cek backend routes /activity-logs & /activitylogs. Asli: ${err.message}; Alias: ${inner instanceof Error ? inner.message : String(inner)}`);
+        });
+      }
+      throw err;
+    });
   },
   // Closing endpoints
   // Closing endpoints

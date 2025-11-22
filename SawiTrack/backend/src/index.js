@@ -1170,33 +1170,64 @@ app.get(`${API_BASE_PATH}/reports/statement`, async (req, res) => {
   }
 });
 
-// Activity Logs
-app.get(`${API_BASE_PATH}/activity-logs`, async (req, res) => {
+// ============ Activity Logs - Simplified Unified Handler ============
+const handleActivityLogPost = async (req, res) => {
   try {
-    const { limit = 50, page = 1 } = req.query;
-    const skip = (page - 1) * limit;
-
-    const logs = await ActivityLog.find({})
-      .sort({ timestamp: -1 })
-      .skip(skip)
-      .limit(Number(limit))
-      .lean();
-
-    const total = await ActivityLog.countDocuments({});
-
-    res.json({
-      data: logs,
-      pagination: {
-        total,
-        page: Number(page),
-        limit: Number(limit),
-        pages: Math.ceil(total / limit)
-      }
-    });
+    const payload = req.body;
+    const entries = Array.isArray(payload) ? payload : [payload];
+    if (entries.length === 0) return res.status(400).json({ error: 'Empty payload' });
+    
+    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '0.0.0.0';
+    const docs = entries.map(e => ({
+      user_id: e.userId && /^[0-9a-fA-F]{24}$/.test(e.userId) ? e.userId : undefined,
+      user_name: e.user_name || e.userName || 'System',
+      role: e.role || 'system',
+      action: e.action || 'UNKNOWN',
+      details: e.details || e.meta || {},
+      ip_address: ip,
+      timestamp: e.ts ? new Date(e.ts) : new Date(),
+    }));
+    
+    await ActivityLog.insertMany(docs, { ordered: false });
+    res.json({ ok: true, count: docs.length });
   } catch (err) {
+    console.error('Activity log POST error:', err);
     res.status(500).json({ error: err.message });
   }
-});
+};
+
+const handleActivityLogGet = async (req, res) => {
+  try {
+    const limit = Math.min(Number(req.query.limit) || 50, 100);
+    const page = Math.max(Number(req.query.page) || 1, 1);
+    const skip = (page - 1) * limit;
+    
+    const [logs, total] = await Promise.all([
+      ActivityLog.find({}).sort({ timestamp: -1 }).skip(skip).limit(limit).lean(),
+      ActivityLog.countDocuments({})
+    ]);
+    
+    res.json({
+      data: logs,
+      pagination: { total, page, limit, pages: Math.ceil(total / limit) }
+    });
+  } catch (err) {
+    console.error('Activity log GET error:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Register all variants
+app.post(`${API_BASE_PATH}/activity-logs`, handleActivityLogPost);
+app.get(`${API_BASE_PATH}/activity-logs`, handleActivityLogGet);
+app.post(`${API_BASE_PATH}/activitylogs`, handleActivityLogPost);
+app.get(`${API_BASE_PATH}/activitylogs`, handleActivityLogGet);
+app.post('/activity-logs', handleActivityLogPost);
+app.get('/activity-logs', handleActivityLogGet);
+app.post('/activitylogs', handleActivityLogPost);
+app.get('/activitylogs', handleActivityLogGet);
+
+console.log('✓ Activity log routes registered (all variants)');
 
 connectMongo()
   .then(() => {

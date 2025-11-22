@@ -1,146 +1,144 @@
-import { useEffect, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
-import { format } from "date-fns";
-import { Loader2 } from "lucide-react";
+import { useEffect, useState } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
+import { format } from 'date-fns';
+import { API_BASE } from '@/lib/api';
+import { toast } from 'sonner';
+import { Loader2 } from 'lucide-react';
 
-interface Log {
-    _id: string;
-    user_name: string;
-    role: string;
-    action: string;
-    // details can be arbitrary JSON or primitive
-    details: unknown;
-    ip_address: string;
-    timestamp: string;
+interface ActivityLog {
+  _id: string;
+  user_name: string;
+  role: string;
+  action: string;
+  details: Record<string, unknown>;
+  ip_address: string;
+  timestamp: string;
 }
 
-export default function ActivityLog() {
-    const [logs, setLogs] = useState<Log[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [page, setPage] = useState(1);
-    const [totalPages, setTotalPages] = useState(1);
+export default function ActivityLogPage() {
+  const [logs, setLogs] = useState<ActivityLog[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const limit = 20;
 
-    const fetchLogs = async (pageNum: number) => {
-        setLoading(true);
-        const token = localStorage.getItem('token');
-        try {
-            const res = await fetch(`${import.meta.env.VITE_API_URL}/activity-logs?page=${pageNum}&limit=20`, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            const data = await res.json();
-            if (data.data) {
-                setLogs(data.data);
-                setTotalPages(data.pagination.pages);
-            }
-        } catch (error) {
-            console.error("Failed to fetch logs", error);
-        } finally {
-            setLoading(false);
-        }
+  useEffect(() => {
+    const fetchLogs = async () => {
+      setLoading(true);
+      try {
+        const res = await fetch(`${API_BASE}/activity-logs?page=${page}&limit=${limit}`);
+        if (!res.ok) throw new Error('Failed to fetch');
+        
+        const json = await res.json();
+        setLogs(json.data || []);
+        setTotal(json.pagination?.pages || 1);
+      } catch (err) {
+        toast.error('Gagal memuat log aktivitas');
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
     };
+    
+    fetchLogs();
+  }, [page]);
 
-    useEffect(() => {
-        fetchLogs(page);
-    }, [page]);
+  const formatDetails = (details: unknown): string => {
+    if (!details || typeof details !== 'object') return '';
+    try {
+      return JSON.stringify(details, null, 2);
+    } catch {
+      return String(details);
+    }
+  };
 
-    return (
-        <div className="space-y-6">
-            <h1 className="text-3xl font-bold tracking-tight">Log Aktivitas</h1>
+  return (
+    <div className="space-y-6">
+      <h1 className="text-3xl font-bold">Log Aktivitas</h1>
 
-            <Card>
-                <CardHeader>
-                    <CardTitle>Aktivitas Sistem</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    {loading ? (
-                        <div className="flex justify-center p-8">
-                            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                        </div>
-                    ) : (
-                        <>
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Waktu</TableHead>
-                                        <TableHead>Pengguna</TableHead>
-                                        <TableHead>Role</TableHead>
-                                        <TableHead>Aksi</TableHead>
-                                        <TableHead>Detail</TableHead>
-                                        <TableHead>IP</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {logs.length === 0 ? (
-                                        <TableRow>
-                                            <TableCell colSpan={6} className="text-center">
-                                                Tidak ada log aktivitas ditemukan.
-                                            </TableCell>
-                                        </TableRow>
-                                    ) : (
-                                        logs.map((log) => (
-                                            <TableRow key={log._id}>
-                                                <TableCell className="whitespace-nowrap">
-                                                    {format(new Date(log.timestamp), "dd MMM yyyy HH:mm:ss")}
-                                                </TableCell>
-                                                <TableCell className="font-medium">{log.user_name}</TableCell>
-                                                <TableCell className="capitalize">{log.role}</TableCell>
-                                                <TableCell>
-                                                    <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80">
-                                                        {log.action}
-                                                    </span>
-                                                </TableCell>
-                                                <TableCell className="max-w-xs truncate" title={(() => {
-                                                    try { return JSON.stringify(log.details); } catch { return String(log.details); }
-                                                })()}>
-                                                    {(() => {
-                                                        if (log.details == null) return '';
-                                                        if (typeof log.details === 'object') {
-                                                            try { return JSON.stringify(log.details); } catch { return '[Object]'; }
-                                                        }
-                                                        return String(log.details);
-                                                    })()}
-                                                </TableCell>
-                                                <TableCell>{log.ip_address}</TableCell>
-                                            </TableRow>
-                                        ))
-                                    )}
-                                </TableBody>
-                            </Table>
+      <Card>
+        <CardHeader>
+          <CardTitle>Aktivitas Sistem</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="flex justify-center p-8">
+              <Loader2 className="h-8 w-8 animate-spin" />
+            </div>
+          ) : (
+            <>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Waktu</TableHead>
+                    <TableHead>User</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead>Aksi</TableHead>
+                    <TableHead>Detail</TableHead>
+                    <TableHead>IP</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {logs.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center text-muted-foreground">
+                        Tidak ada log
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    logs.map(log => (
+                      <TableRow key={log._id}>
+                        <TableCell className="whitespace-nowrap">
+                          {format(new Date(log.timestamp), 'dd MMM yyyy HH:mm:ss')}
+                        </TableCell>
+                        <TableCell>{log.user_name}</TableCell>
+                        <TableCell className="capitalize">{log.role}</TableCell>
+                        <TableCell>
+                          <code className="text-xs bg-secondary px-2 py-1 rounded">
+                            {log.action}
+                          </code>
+                        </TableCell>
+                        <TableCell className="max-w-xs">
+                          <div className="truncate text-xs" title={formatDetails(log.details)}>
+                            {formatDetails(log.details)}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {log.ip_address}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
 
-                            <div className="flex items-center justify-end space-x-2 py-4">
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                                    disabled={page === 1}
-                                >
-                                    Sebelumnya
-                                </Button>
-                                <div className="text-sm text-muted-foreground">
-                                    Halaman {page} dari {totalPages}
-                                </div>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                                    disabled={page === totalPages}
-                                >
-                                    Selanjutnya
-                                </Button>
-                            </div>
-                        </>
-                    )}
-                </CardContent>
-            </Card>
-        </div>
-    );
+              <div className="flex items-center justify-between mt-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page === 1}
+                  onClick={() => setPage(p => p - 1)}
+                >
+                  Sebelumnya
+                </Button>
+                <span className="text-sm text-muted-foreground">
+                  Halaman {page} dari {total}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page >= total}
+                  onClick={() => setPage(p => p + 1)}
+                >
+                  Selanjutnya
+                </Button>
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
 }

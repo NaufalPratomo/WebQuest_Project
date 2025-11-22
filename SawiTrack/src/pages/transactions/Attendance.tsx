@@ -8,6 +8,7 @@ import { Plus } from 'lucide-react';
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api, Employee } from '@/lib/api';
+import { logActivity } from '@/lib/activityLogger';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -197,6 +198,7 @@ export default function Attendance() {
       const body = { date, employeeId, status: map.backend, division_id: taksasiContext?.division_id, notes: map.note } as const;
       await api.attendanceCreate(body);
       toast.success('Absensi tersimpan');
+      logActivity({ action: 'attendance_create', category: 'attendance', level: 'info', details: { date, employeeId, status: map.backend } });
       // if present/hadir, auto-generate placeholder in Real Harvest storage
       if (map.backend === 'present') {
         try {
@@ -344,6 +346,7 @@ export default function Attendance() {
         }));
       setRows([...serverRows, ...missing]);
       toast.success('Status diperbarui');
+      logActivity({ action: 'attendance_update', category: 'attendance', level: 'info', details: { date, employeeId: r.employeeId, status: map.backend } });
     } catch (e: unknown) {
       let msg = e instanceof Error ? e.message : 'Gagal memperbarui';
       try {

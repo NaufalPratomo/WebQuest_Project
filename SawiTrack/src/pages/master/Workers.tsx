@@ -69,6 +69,7 @@ const Workers = () => {
         })
       )
       .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const filteredWorkers = useMemo(
@@ -168,7 +169,7 @@ const Workers = () => {
         const data = await file.arrayBuffer();
         const wb = XLSX.read(data);
         const ws = wb.Sheets[wb.SheetNames[0]];
-        const json = XLSX.utils.sheet_to_json<any>(ws);
+        const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws);
 
         const imported: Employee[] = [];
         for (const row of json) {

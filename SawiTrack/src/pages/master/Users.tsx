@@ -10,13 +10,13 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Toaster } from "@/components/ui/toaster";
-import { api } from "@/lib/api";
+import { api, type Role } from "@/lib/api";
 
 type UserRow = {
   id: string;
   name: string;
   email: string;
-  role: string;
+  role: Role | "";
   division?: string | null;
   status: string;
 };
@@ -32,7 +32,7 @@ const Users = () => {
   const [form, setForm] = useState({
     name: "",
     email: "",
-    role: "" as "manager" | "foreman" | "employee" | "",
+    role: "" as Role | "",
     division: "",
     status: "active",
     password: "",
@@ -48,6 +48,7 @@ const Users = () => {
         variant: "destructive"
       }))
       .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const filteredUsers = useMemo(() => rows.filter((u) => u.name.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase())), [rows, search]);
@@ -78,10 +79,17 @@ const Users = () => {
         return;
       }
 
-      const updateData: any = {
+      const updateData: {
+        name: string;
+        email: string;
+        role: Role;
+        division: string | null;
+        status: string;
+        password?: string;
+      } = {
         name: form.name,
         email: form.email,
-        role: form.role,
+        role: form.role as Role,
         division: form.division || null,
         status: form.status,
       };

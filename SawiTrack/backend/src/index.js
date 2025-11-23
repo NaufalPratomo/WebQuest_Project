@@ -667,7 +667,7 @@ app.get(`${API_BASE_PATH}/closing-periods`, async (_req, res) => {
 
 app.post(`${API_BASE_PATH}/closing-periods`, async (req, res) => {
   try {
-    const { startDate, endDate, notes } = req.body;
+    const { startDate, endDate, notes, month, year } = req.body;
     if (!startDate || !endDate) {
       return res.status(400).json({ error: "Start date and End date are required" });
     }
@@ -688,7 +688,7 @@ app.post(`${API_BASE_PATH}/closing-periods`, async (req, res) => {
       return res.status(400).json({ error: "Periode ini bertabrakan dengan periode yang sudah ditutup." });
     }
 
-    const created = await ClosingPeriod.create({ startDate: start, endDate: end, notes });
+    const created = await ClosingPeriod.create({ startDate: start, endDate: end, notes, month, year });
     logActivity(req, "CLOSE_PERIOD", { startDate, endDate });
     res.status(201).json(created);
   } catch (err) {
@@ -1330,7 +1330,7 @@ const handleActivityLogPost = async (req, res) => {
     const payload = req.body;
     const entries = Array.isArray(payload) ? payload : [payload];
     if (entries.length === 0) return res.status(400).json({ error: 'Empty payload' });
-    
+
     const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '0.0.0.0';
     const docs = entries.map(e => ({
       user_id: e.userId && /^[0-9a-fA-F]{24}$/.test(e.userId) ? e.userId : undefined,
@@ -1341,7 +1341,7 @@ const handleActivityLogPost = async (req, res) => {
       ip_address: ip,
       timestamp: e.ts ? new Date(e.ts) : new Date(),
     }));
-    
+
     await ActivityLog.insertMany(docs, { ordered: false });
     res.json({ ok: true, count: docs.length });
   } catch (err) {
@@ -1355,12 +1355,12 @@ const handleActivityLogGet = async (req, res) => {
     const limit = Math.min(Number(req.query.limit) || 50, 100);
     const page = Math.max(Number(req.query.page) || 1, 1);
     const skip = (page - 1) * limit;
-    
+
     const [logs, total] = await Promise.all([
       ActivityLog.find({}).sort({ timestamp: -1 }).skip(skip).limit(limit).lean(),
       ActivityLog.countDocuments({})
     ]);
-    
+
     res.json({
       data: logs,
       pagination: { total, page, limit, pages: Math.ceil(total / limit) }

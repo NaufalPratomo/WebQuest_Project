@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useClosing } from '@/contexts/ClosingContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -23,6 +23,26 @@ const Closing = () => {
   const [month, setMonth] = useState<number>(new Date().getMonth() + 1);
   const [year, setYear] = useState<number>(new Date().getFullYear());
   const [loading, setLoading] = useState(false);
+
+  // Auto-populate dates when month/year changes
+  useEffect(() => {
+    if (month && year) {
+      // Create dates in local time to avoid timezone issues with ISOString
+      const start = new Date(year, month - 1, 1);
+      const end = new Date(year, month, 0);
+
+      // Format: YYYY-MM-DD
+      const formatDate = (d: Date) => {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+      };
+
+      setStartDate(formatDate(start));
+      setEndDate(formatDate(end));
+    }
+  }, [month, year]);
 
   const handleClose = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -85,8 +105,8 @@ const Closing = () => {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'].map((m, i) => (
-                        <SelectItem key={i+1} value={String(i+1)}>{m}</SelectItem>
+                      {['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'].map((m, i) => (
+                        <SelectItem key={i + 1} value={String(i + 1)}>{m}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -173,7 +193,7 @@ const Closing = () => {
                   </TableRow>
                 ) : (
                   closingPeriods.map((period) => {
-                    const monthName = period.month ? ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'][period.month - 1] : '';
+                    const monthName = period.month ? ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'][period.month - 1] : '';
                     const periodeLabel = monthName && period.year ? `${monthName} ${period.year}` : '-';
                     return (
                       <TableRow key={period._id}>

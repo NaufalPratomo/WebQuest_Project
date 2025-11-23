@@ -65,7 +65,7 @@ const Users = () => {
 
   const handleUpdateUser = async () => {
     if (!editingUser) return;
-    
+
     try {
       if (!form.name || !form.email || !form.role) {
         toast({
@@ -75,30 +75,30 @@ const Users = () => {
         });
         return;
       }
-      
+
       const updateData: any = {
         name: form.name,
         email: form.email,
         role: form.role,
         division: form.division || undefined,
       };
-      
+
       if (form.password) {
         updateData.password = form.password;
       }
-      
+
       await api.updateUser(editingUser.id, updateData);
-      
-      setRows(prev => prev.map(u => 
-        u.id === editingUser.id 
+
+      setRows(prev => prev.map(u =>
+        u.id === editingUser.id
           ? { ...u, name: form.name, email: form.email, role: form.role, division: form.division }
           : u
       ));
-      
+
       setOpenEdit(false);
       setEditingUser(null);
       setForm({ name: "", email: "", role: "", division: "", password: "" });
-      
+
       toast({
         title: "Berhasil",
         description: "Pengguna berhasil diperbarui"
@@ -246,6 +246,16 @@ const Users = () => {
                   <SelectItem value="manager">Manager</SelectItem>
                   <SelectItem value="foreman">Foreman</SelectItem>
                   <SelectItem value="employee">Employee</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Status</Label>
+              <Select value={form.status} onValueChange={(v) => setForm((f) => ({ ...f, status: v }))}>
+                <SelectTrigger><SelectValue placeholder="Pilih status" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Aktif</SelectItem>
+                  <SelectItem value="inactive">Nonaktif</SelectItem>
                 </SelectContent>
               </Select>
             </div>

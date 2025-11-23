@@ -140,6 +140,7 @@ const Locations = () => {
     estateId: string;
     estateName: string;
     newBlocks: Array<{ division: string; block: Partial<Block> }>;
+    updatedBlocks: Array<{ division: string; block: Partial<Block>; oldBlock: Block }>;
     existingBlocks: Array<{ division: string; block: Partial<Block> }>;
     groupedData: Record<string, Partial<Block>[]>;
   } | null>(null);
@@ -689,9 +690,40 @@ const Locations = () => {
           };
           const existingDivisions = existingEstate.divisions || [];
 
+          // Helper function to compare blocks deeply
+          const areBlocksEqual = (block1: Partial<Block>, block2: Block): boolean => {
+            // Compare key fields
+            const fields = [
+              'no_blok', 'id_blok', 'no_tph', 'luas_blok', 'jumlak_pokok', 'SPH',
+              'jenis_tanah', 'topografi', 'tahun_', 'jenis_bibit', 'luas_nursery',
+              'luas_lain___lain', 'luas_garapan', 'luas_rawa', 'luas_area_non_efektif',
+              'luas_konservasi', 'luas_tanggul', 'luas_lebungan', 'luas_pks',
+              'luas_jalan', 'luas_drainase', 'luas_perumahan', 'luas_sarana_prasanara'
+            ];
+
+            for (const field of fields) {
+              const val1 = (block1 as Record<string, unknown>)[field];
+              const val2 = (block2 as Record<string, unknown>)[field];
+              
+              // Normalize values (treat null/undefined/0/"" as equivalent for comparison)
+              const norm1 = val1 == null || val1 === '' || val1 === 0 ? null : val1;
+              const norm2 = val2 == null || val2 === '' || val2 === 0 ? null : val2;
+              
+              // If both are numbers, compare with tolerance for floating point
+              if (typeof norm1 === 'number' && typeof norm2 === 'number') {
+                if (Math.abs(norm1 - norm2) > 0.001) return false;
+              } else if (norm1 !== norm2) {
+                return false;
+              }
+            }
+            
+            return true;
+          };
+
           // Compare new vs existing data
           const newBlocks: Array<{ division: string; block: Partial<Block> }> = [];
           const existingBlocks: Array<{ division: string; block: Partial<Block> }> = [];
+          const updatedBlocks: Array<{ division: string; block: Partial<Block>; oldBlock: Block }> = [];
 
           for (const [divisionName, blocks] of Object.entries(groupedData)) {
             const divisionId = parseInt(
@@ -704,15 +736,24 @@ const Locations = () => {
             const existingDivBlocks: Block[] = (existingDivision?.blocks || []) as Block[];
 
             blocks.forEach((newBlock) => {
-              const exists = existingDivBlocks.some(
+              // Find matching block by ID or No Blok
+              const matchingBlock = existingDivBlocks.find(
                 (b) =>
                   (b.id_blok && b.id_blok === newBlock.id_blok) ||
                   (b.no_blok && b.no_blok === newBlock.no_blok)
               );
 
-              if (exists) {
-                existingBlocks.push({ division: divisionName, block: newBlock });
+              if (matchingBlock) {
+                // Block exists, check if data is different
+                if (areBlocksEqual(newBlock, matchingBlock)) {
+                  // Data sama persis, skip
+                  existingBlocks.push({ division: divisionName, block: newBlock });
+                } else {
+                  // Data berbeda, akan di-update
+                  updatedBlocks.push({ division: divisionName, block: newBlock, oldBlock: matchingBlock });
+                }
               } else {
+                // Block baru
                 newBlocks.push({ division: divisionName, block: newBlock });
               }
             });
@@ -723,6 +764,7 @@ const Locations = () => {
             estateId,
             estateName: estate.estate_name,
             newBlocks,
+            updatedBlocks,
             existingBlocks,
             groupedData,
           });
@@ -746,7 +788,7 @@ const Locations = () => {
   const handleConfirmImport = async () => {
     if (!importPreviewData) return;
 
-    const { estateId, estateName, groupedData } = importPreviewData;
+    const { estateId, estateName, groupedData, newBlocks, updatedBlocks } = importPreviewData;
 
     try {
       setLoading(true);
@@ -777,18 +819,24 @@ const Locations = () => {
             blocks: blocks,
           });
         } else {
-          // Add new blocks to existing division (tidak menimpa)
+          // Merge blocks: add new blocks and update existing blocks
           const existingBlocks: Block[] = (updatedDivisions[divisionIndex]
             .blocks || []) as Block[];
           const mergedBlocks: Block[] = [...existingBlocks];
+          
           blocks.forEach((newBlock) => {
             const existingIndex = mergedBlocks.findIndex(
               (b) =>
                 (b.id_blok && b.id_blok === newBlock.id_blok) ||
                 (b.no_blok && b.no_blok === newBlock.no_blok)
             );
+            
             if (existingIndex === -1) {
+              // Add new block
               mergedBlocks.push(newBlock as Block);
+            } else {
+              // Update existing block with new data
+              mergedBlocks[existingIndex] = { ...mergedBlocks[existingIndex], ...newBlock } as Block;
             }
           });
           updatedDivisions[divisionIndex].blocks = mergedBlocks;
@@ -798,10 +846,22 @@ const Locations = () => {
       // Update estate with new divisions data
       await api.updateEstate(estateId, { divisions: updatedDivisions });
 
-      const totalNew = importPreviewData.newBlocks.length;
+      const totalNew = newBlocks.length;
+      const totalUpdated = updatedBlocks.length;
+      const totalProcessed = totalNew + totalUpdated;
+      
+      let description = '';
+      if (totalNew > 0 && totalUpdated > 0) {
+        description = `${totalNew} blok baru ditambahkan dan ${totalUpdated} blok diperbarui di Estate "${estateName}"`;
+      } else if (totalNew > 0) {
+        description = `${totalNew} blok baru berhasil ditambahkan ke Estate "${estateName}"`;
+      } else if (totalUpdated > 0) {
+        description = `${totalUpdated} blok berhasil diperbarui di Estate "${estateName}"`;
+      }
+      
       toast({
         title: "Berhasil import!",
-        description: `${totalNew} blok baru berhasil ditambahkan ke Estate "${estateName}"`,
+        description,
       });
 
       // Refresh data - reload meta untuk estate yang diupdate
@@ -1828,14 +1888,14 @@ const Locations = () => {
             
             <div className="space-y-4">
               {/* Summary */}
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-4 gap-4">
                 <Card>
                   <CardHeader className="pb-3">
                     <p className="text-sm text-muted-foreground">Total Data</p>
                   </CardHeader>
                   <CardContent>
                     <p className="text-2xl font-bold">
-                      {(importPreviewData?.newBlocks.length || 0) + (importPreviewData?.existingBlocks.length || 0)}
+                      {(importPreviewData?.newBlocks.length || 0) + (importPreviewData?.updatedBlocks.length || 0) + (importPreviewData?.existingBlocks.length || 0)}
                     </p>
                   </CardContent>
                 </Card>
@@ -1851,10 +1911,20 @@ const Locations = () => {
                 </Card>
                 <Card>
                   <CardHeader className="pb-3">
-                    <p className="text-sm text-muted-foreground">Sudah Ada (Diabaikan)</p>
+                    <p className="text-sm text-muted-foreground">Data Diubah</p>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-2xl font-bold text-orange-600">
+                    <p className="text-2xl font-bold text-blue-600">
+                      {importPreviewData?.updatedBlocks.length || 0}
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-3">
+                    <p className="text-sm text-muted-foreground">Sama (Diabaikan)</p>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold text-gray-600">
                       {importPreviewData?.existingBlocks.length || 0}
                     </p>
                   </CardContent>
@@ -1899,6 +1969,84 @@ const Locations = () => {
                 </div>
               )}
 
+              {/* Updated Blocks Table */}
+              {importPreviewData && importPreviewData.updatedBlocks.length > 0 && (
+                <div>
+                  <h3 className="font-semibold text-lg mb-2">Data yang Akan Diubah</h3>
+                  <div className="border rounded-lg overflow-auto max-h-80">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Divisi</TableHead>
+                          <TableHead>No Blok</TableHead>
+                          <TableHead>ID Blok</TableHead>
+                          <TableHead>Perubahan</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {importPreviewData.updatedBlocks.slice(0, 20).map((item, idx) => {
+                          const changedFields: string[] = [];
+                          const oldBlock = item.oldBlock;
+                          const newBlock = item.block;
+                          
+                          // Check which fields changed
+                          const fieldsToCheck = [
+                            'no_tph', 'luas_blok', 'jumlak_pokok', 'SPH', 'jenis_tanah',
+                            'topografi', 'tahun_tanam', 'tahun_bongkar', 'umur', 'kemiringan_lahan',
+                            'target_brondolan', 'target_janjang', 'target_tonase', 'target_pokok',
+                            'target_janjang_std', 'target_brondolan_std', 'bjr'
+                          ];
+                          
+                          fieldsToCheck.forEach(field => {
+                            const oldVal = (oldBlock as Record<string, unknown>)[field] ?? null;
+                            const newVal = (newBlock as Record<string, unknown>)[field] ?? null;
+                            
+                            // Normalize for comparison
+                            const normalizeVal = (v: unknown) => {
+                              if (v === null || v === undefined || v === '' || v === 0) return null;
+                              if (typeof v === 'number') return v;
+                              if (typeof v === 'string') return v.trim() || null;
+                              return v;
+                            };
+                            
+                            const normOld = normalizeVal(oldVal);
+                            const normNew = normalizeVal(newVal);
+                            
+                            if (normOld !== normNew) {
+                              if (typeof normOld === 'number' && typeof normNew === 'number') {
+                                if (Math.abs(normOld - normNew) > 0.001) {
+                                  changedFields.push(field);
+                                }
+                              } else {
+                                changedFields.push(field);
+                              }
+                            }
+                          });
+                          
+                          return (
+                            <TableRow key={idx} className="bg-blue-50">
+                              <TableCell>{item.division}</TableCell>
+                              <TableCell>{item.block.no_blok || '-'}</TableCell>
+                              <TableCell>{item.block.id_blok || '-'}</TableCell>
+                              <TableCell className="text-xs">
+                                {changedFields.length > 0 ? changedFields.join(', ') : 'Perubahan lainnya'}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                        {importPreviewData.updatedBlocks.length > 20 && (
+                          <TableRow>
+                            <TableCell colSpan={4} className="text-center text-muted-foreground">
+                              ... dan {importPreviewData.updatedBlocks.length - 20} data lainnya
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              )}
+
               {/* Existing Blocks Info */}
               {importPreviewData && importPreviewData.existingBlocks.length > 0 && (
                 <div>
@@ -1933,9 +2081,9 @@ const Locations = () => {
                 </div>
               )}
 
-              {importPreviewData && importPreviewData.newBlocks.length === 0 && (
+              {importPreviewData && importPreviewData.newBlocks.length === 0 && importPreviewData.updatedBlocks.length === 0 && (
                 <div className="text-center py-8 text-muted-foreground">
-                  Tidak ada data baru untuk ditambahkan. Semua data sudah ada di database.
+                  Tidak ada data baru atau perubahan untuk ditambahkan. Semua data sudah sama dengan database.
                 </div>
               )}
             </div>
@@ -1952,10 +2100,22 @@ const Locations = () => {
               </Button>
               <Button 
                 onClick={handleConfirmImport}
-                disabled={!importPreviewData || importPreviewData.newBlocks.length === 0}
+                disabled={!importPreviewData || (importPreviewData.newBlocks.length === 0 && importPreviewData.updatedBlocks.length === 0)}
                 className="bg-green-600 hover:bg-green-700"
               >
-                OK, Import {importPreviewData?.newBlocks.length || 0} Data Baru
+                {importPreviewData ? (
+                  <>
+                    OK, Import {importPreviewData.newBlocks.length + importPreviewData.updatedBlocks.length} Data
+                    {importPreviewData.newBlocks.length > 0 && importPreviewData.updatedBlocks.length > 0 
+                      ? ` (${importPreviewData.newBlocks.length} Baru, ${importPreviewData.updatedBlocks.length} Diubah)`
+                      : importPreviewData.newBlocks.length > 0
+                      ? ' Baru'
+                      : ' Diubah'
+                    }
+                  </>
+                ) : (
+                  'OK, Import Data'
+                )}
               </Button>
             </DialogFooter>
           </DialogContent>

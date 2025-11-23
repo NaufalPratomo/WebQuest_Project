@@ -41,7 +41,7 @@ export default function TaksasiPerBlock() {
   }, []);
 
   const exportCsv = () => {
-    const header = ['Estate','Divisi','Blok','Pokok','Sample','BM','PTB','BMBB','BMM','AKP %','Ton','Perkiraan Kg','Pemanen'];
+    const header = ['Estate','Divisi','Blok','Pokok','Sample','BH','PTB','BMBB','BMM','AKP %','Ton','Perkiraan Kg','Pemanen'];
     const escape = (v: unknown) => {
       const s = v === undefined || v === null ? '' : String(v);
       if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
@@ -149,7 +149,7 @@ export default function TaksasiPerBlock() {
                   <TableHead className="text-center">Blok</TableHead>
                   <TableHead className="text-center">Pokok</TableHead>
                   <TableHead className="text-center">Sample</TableHead>
-                  <TableHead className="text-center">BM</TableHead>
+                  <TableHead className="text-center">BH</TableHead>
                   <TableHead className="text-center">PTB</TableHead>
                   <TableHead className="text-center">BMBB</TableHead>
                   <TableHead className="text-center">BMM</TableHead>

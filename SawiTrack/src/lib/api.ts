@@ -211,12 +211,12 @@ export const api = {
   updateEmployee: (id: string, body: Partial<{
     nik: string;
     name: string;
-    companyId: string | null;
-    position: string | null;
-    salary: number | null;
-    address: string | null;
-    phone: string | null;
-    birthDate: string | null;
+    companyId: string;
+    position: string;
+    salary: number;
+    address: string;
+    phone: string;
+    birthDate: string;
     status: string;
   }>) => http<Employee>(`/employees/${id}`, { method: "PUT", body: JSON.stringify(body) }),
   deleteEmployee: (id: string) => http<void>(`/employees/${id}`, { method: "DELETE" }),

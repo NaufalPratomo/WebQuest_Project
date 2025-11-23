@@ -63,7 +63,7 @@ export default function TaksasiPanen() {
   const [rows, setRows] = useState<TaksasiRow[]>([]);
 
   // Page 2 inputs
-  const [bm, setBm] = useState<number>(0); // Buah Mentah
+  const [bm, setBm] = useState<number>(0); // Buah Hitam (BH)
   const [ptb, setPtb] = useState<number>(0); // Pokok Tidak Berbuah
   const [bmbb, setBmbb] = useState<number>(0); // Buah Merah Belum Brondol
   const [bmm, setBmm] = useState<number>(0); // Buah Merah Membrodol
@@ -290,7 +290,7 @@ export default function TaksasiPanen() {
         taksasiJanjang,
         taksasiTon: row.taksasiTon,
         kebutuhanPemanen,
-        notes: `AKP=${row.akpPercent}%; BM=${bm}; PTB=${ptb}`,
+        notes: `AKP=${row.akpPercent}%; BH=${bm}; PTB=${ptb}`,
       });
 
       // Jika sukses, baru update local state
@@ -472,11 +472,21 @@ export default function TaksasiPanen() {
         <Card>
           <CardHeader>
             <CardTitle>Langkah 2: Input Observasi & Parameter</CardTitle>
+            <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-md">
+              <p className="text-sm font-semibold text-blue-900 mb-1">Keterangan Singkatan:</p>
+              <ul className="text-xs text-blue-800 space-y-1">
+                <li><strong>BH</strong> = Buah Hitam</li>
+                <li><strong>PTB</strong> = Pokok Tidak Berbuah</li>
+                <li><strong>BMBB</strong> = Buah Merah Belum Brondol</li>
+                <li><strong>BMM</strong> = Buah Merah Membrodol</li>
+                <li><strong>AKP</strong> = Angka Kerapatan Panen</li>
+              </ul>
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-4 md:grid-cols-3">
               <div className="space-y-2">
-                <Label>Buah Mentah (BM)</Label>
+                <Label>Buah Hitam (BH)</Label>
                 <Input type="number" min={0} value={bm} onChange={(e) => setBm(Number(e.target.value || 0))} />
               </div>
               <div className="space-y-2">
@@ -613,7 +623,7 @@ export default function TaksasiPanen() {
                   <TableHead>Blok</TableHead>
                   <TableHead className="text-right">Pokok</TableHead>
                   <TableHead className="text-right">Sample</TableHead>
-                  <TableHead className="text-right">BM</TableHead>
+                  <TableHead className="text-right">BH</TableHead>
                   <TableHead className="text-right">PTB</TableHead>
                   <TableHead className="text-right">BMBB</TableHead>
                   <TableHead className="text-right">BMM</TableHead>

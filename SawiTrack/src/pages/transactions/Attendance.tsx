@@ -71,6 +71,12 @@ export default function Attendance() {
 
   // compute taksasi context for the date (use the latest entry for that day)
   const [taksasiContext, setTaksasiContext] = useState<Pick<AttendanceRow, 'estateId' | 'estateName' | 'division_id' | 'block_no' | 'mandorId'> | null>(null);
+  const [estates, setEstates] = useState<Array<{ _id: string; estate_name: string }>>([]);
+  
+  useEffect(() => {
+    api.estates().then(setEstates).catch(() => setEstates([]));
+  }, []);
+  
   useEffect(() => {
     (async () => {
       try {
@@ -79,9 +85,10 @@ export default function Attendance() {
           // pick latest by updatedAt or _id order
             const sorted = [...list].sort((a,b)=> String(a._id).localeCompare(String(b._id)));
             const latest = sorted.at(-1)!;
+            const estateName = estates.find(e => e._id === latest.estateId)?.estate_name || latest.estateId;
             setTaksasiContext({
               estateId: latest.estateId,
-              estateName: latest.estateId,
+              estateName: estateName,
               division_id: latest.division_id,
               block_no: latest.block_no,
               mandorId: (user?.id || user?._id) as string | undefined,
@@ -89,7 +96,7 @@ export default function Attendance() {
         } else setTaksasiContext(null);
       } catch { setTaksasiContext(null); }
     })();
-  }, [date, user?.id, user?._id]);
+  }, [date, user?.id, user?._id, estates]);
 
   useEffect(() => {
     api.employees()
@@ -416,7 +423,7 @@ export default function Attendance() {
                   }
                   return (
                     <TableRow key={r._id || idx}>
-                      <TableCell>{r.date}</TableCell>
+                      <TableCell>{r.date ? new Date(r.date).toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'}</TableCell>
                       <TableCell>{r.estateName ?? '-'}</TableCell>
                       <TableCell>{r.division_id ? `Divisi ${r.division_id}` : '-'}</TableCell>
                       <TableCell>{r.block_no ?? '-'}</TableCell>

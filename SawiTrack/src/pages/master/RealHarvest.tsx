@@ -80,12 +80,14 @@ const RealHarvest = () => {
     (async () => {
       try {
         const panen = await api.panenList({ date_panen: date });
-        const mapped: RealRow[] = (panen || []).map(p => ({
+        const mapped: RealRow[] = (panen || []).map(p => {
+          const estateName = estates.find(e => e._id === p.estateId)?.estate_name || p.estateId;
+          return {
           id: String(p._id || `${date}_${p.employeeId || ''}_${p.block_no || ''}`),
           timestamp: p._id ? String(p._id) : new Date(date).toISOString(),
           date,
           estateId: p.estateId,
-          estateName: p.estateId,
+          estateName: estateName,
           division: String(p.division_id ?? ''),
           block: p.block_no,
           noTPH: p.notes ? p.notes.split(';').find(x=>x.startsWith('notph='))?.split('=')[1] : undefined,
@@ -98,14 +100,15 @@ const RealHarvest = () => {
           upahBasis: Number(p.upahBasis ?? 0),
           premi: Number(p.premi ?? 0),
           totalUpah: Number(p.totalUpah ?? (Number(p.upahBasis ?? 0) + Number(p.premi ?? 0))),
-        }));
+        };
+        });
         setRows(mapped);
       } catch { setRows([]); }
       api.attendanceList({ date })
         .then(list => setAttendance(list.map(r => ({ employeeId: r.employeeId, status: r.status }))))
         .catch(()=> setAttendance([]));
     })();
-  }, [date]);
+  }, [date, estates]);
 
   useEffect(() => {
     if (!estateId) { setDivisions([]); return; }
@@ -149,7 +152,7 @@ const RealHarvest = () => {
   }, [date]);
 
   function persist(next: RealRow[]) {
-    // Local optimistic update only; server is source of truth
+    // Local optimistic update; server is source of truth but UI updated immediately
     setRows(next);
   }
 
@@ -195,17 +198,17 @@ const RealHarvest = () => {
       }) : r);
       persist(next);
       // attempt backend update if _id stored previously
-  // find existing row that has backend id stored transiently on object
-  const backendTarget = rows.find(r => (r as unknown as { _backendId?: string })._backendId && r.id === editingId) as (RealRow & { _backendId?: string }) | undefined;
-      if (backendTarget) {
+      // find existing row that has backend id stored transiently on object
+      const backendTarget = rows.find(r => (r as unknown as { _backendId?: string })._backendId && r.id === editingId) as (RealRow & { _backendId?: string }) | undefined;
+      if (backendTarget && backendTarget._backendId) {
         try {
           await api.panenCreate({
-            _id: backendTarget._backendId!,
+            _id: backendTarget._backendId,
             date_panen: date,
             estateId: form.estateId || '',
             division_id: Number(form.division),
             block_no: form.blockNo,
-            weightKg: upahBasis, // placeholder mapping; adjust backend meaning later
+            weightKg: upahBasis,
             employeeId: form.pemanenId,
             employeeName: pemanenName,
             mandorName: form.mandor,

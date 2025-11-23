@@ -134,6 +134,16 @@ const Locations = () => {
   } | null>(null);
   const [editFormData, setEditFormData] = useState<Partial<Block>>({});
 
+  // Import preview state
+  const [isImportPreviewOpen, setIsImportPreviewOpen] = useState(false);
+  const [importPreviewData, setImportPreviewData] = useState<{
+    estateId: string;
+    estateName: string;
+    newBlocks: Array<{ division: string; block: Partial<Block> }>;
+    existingBlocks: Array<{ division: string; block: Partial<Block> }>;
+    groupedData: Record<string, Partial<Block>[]>;
+  } | null>(null);
+
   // Helper function to format numbers: 0 stays as "0", whole numbers without decimals, decimals with 3 digits
   const formatNumber = (value: number | null | undefined): string => {
     if (value == null) return "-";
@@ -663,110 +673,61 @@ const Locations = () => {
             groupedData[divisi].push(blockData);
           });
 
-          // Import data to selected estate
-          try {
-            setLoading(true);
-
-            const estate = estates.find((e) => e._id === estateId);
-            if (!estate) {
-              toast({
-                title: "Gagal import",
-                description: "Estate tidak ditemukan!",
-                variant: "destructive",
-              });
-              return;
-            }
-
-            // Get existing estate data
-            const existingEstate = (await api.estate(estateId)) as {
-              divisions?: Array<{ division_id: number; blocks?: Block[] }>;
-            };
-            const existingDivisions = existingEstate.divisions || [];
-
-            // Build divisions array with blocks
-            const updatedDivisions = [...existingDivisions];
-
-            for (const [divisionName, blocks] of Object.entries(groupedData)) {
-              const divisionId = parseInt(
-                divisionName.replace("Divisi ", "").trim()
-              );
-
-              // Find existing division or create new
-              const divisionIndex = updatedDivisions.findIndex(
-                (d) => d.division_id === divisionId
-              );
-
-              if (divisionIndex === -1) {
-                // Add new division
-                updatedDivisions.push({
-                  division_id: divisionId,
-                  blocks: blocks,
-                });
-              } else {
-                // Add new blocks to existing division (tidak menimpa)
-                const existingBlocks: Block[] = (updatedDivisions[divisionIndex]
-                  .blocks || []) as Block[];
-                const mergedBlocks: Block[] = [...existingBlocks];
-                blocks.forEach((newBlock) => {
-                  const existingIndex = mergedBlocks.findIndex(
-                    (b) =>
-                      (b.id_blok && b.id_blok === newBlock.id_blok) ||
-                      (b.no_blok && b.no_blok === newBlock.no_blok)
-                  );
-                  if (existingIndex === -1) {
-                    mergedBlocks.push(newBlock as Block);
-                  }
-                });
-                updatedDivisions[divisionIndex].blocks = mergedBlocks;
-              }
-            }
-
-            // Update estate with new divisions data
-            await api.updateEstate(estateId, { divisions: updatedDivisions });
-
-            const totalBlocks = jsonData.length;
+          // Get existing estate data untuk compare
+          const estate = estates.find((e) => e._id === estateId);
+          if (!estate) {
             toast({
-              title: "Berhasil import!",
-              description: `${totalBlocks} blok berhasil diimport ke Estate "${estate.estate_name}"`,
-            });
-
-            // Refresh data - reload meta untuk estate yang diupdate
-            setLoading(true);
-            const updatedEstates = await api.estates();
-            setEstates(updatedEstates || []);
-
-            // Force reload meta for this specific estate
-            try {
-              const divs: Division[] = await api.divisions(estateId);
-              const blocksByDivision: Record<number, Block[]> = {};
-              for (const d of divs || []) {
-                try {
-                  const blocks = await api.blocks(estateId, d.division_id);
-                  blocksByDivision[d.division_id] = Array.isArray(blocks)
-                    ? (blocks as Block[])
-                    : [];
-                } catch {
-                  blocksByDivision[d.division_id] = [];
-                }
-              }
-              setMeta((prev) => ({
-                ...prev,
-                [estateId]: { divisions: divs || [], blocksByDivision },
-              }));
-            } catch (e) {
-              console.error("Error refreshing meta:", e);
-            }
-          } catch (error) {
-            console.error("Error importing:", error);
-            toast({
-              title: "Gagal import data",
-              description:
-                error instanceof Error ? error.message : String(error),
+              title: "Gagal import",
+              description: "Estate tidak ditemukan!",
               variant: "destructive",
             });
-          } finally {
-            setLoading(false);
+            return;
           }
+
+          const existingEstate = (await api.estate(estateId)) as {
+            divisions?: Array<{ division_id: number; blocks?: Block[] }>;
+          };
+          const existingDivisions = existingEstate.divisions || [];
+
+          // Compare new vs existing data
+          const newBlocks: Array<{ division: string; block: Partial<Block> }> = [];
+          const existingBlocks: Array<{ division: string; block: Partial<Block> }> = [];
+
+          for (const [divisionName, blocks] of Object.entries(groupedData)) {
+            const divisionId = parseInt(
+              divisionName.replace("Divisi ", "").trim()
+            );
+
+            const existingDivision = existingDivisions.find(
+              (d) => d.division_id === divisionId
+            );
+            const existingDivBlocks: Block[] = (existingDivision?.blocks || []) as Block[];
+
+            blocks.forEach((newBlock) => {
+              const exists = existingDivBlocks.some(
+                (b) =>
+                  (b.id_blok && b.id_blok === newBlock.id_blok) ||
+                  (b.no_blok && b.no_blok === newBlock.no_blok)
+              );
+
+              if (exists) {
+                existingBlocks.push({ division: divisionName, block: newBlock });
+              } else {
+                newBlocks.push({ division: divisionName, block: newBlock });
+              }
+            });
+          }
+
+          // Show preview dialog
+          setImportPreviewData({
+            estateId,
+            estateName: estate.estate_name,
+            newBlocks,
+            existingBlocks,
+            groupedData,
+          });
+          setIsImportPreviewOpen(true);
+
         } catch (error) {
           console.error("Error importing Excel:", error);
           toast({
@@ -780,6 +741,109 @@ const Locations = () => {
       reader.readAsArrayBuffer(file);
     };
     input.click();
+  };
+
+  const handleConfirmImport = async () => {
+    if (!importPreviewData) return;
+
+    const { estateId, estateName, groupedData } = importPreviewData;
+
+    try {
+      setLoading(true);
+
+      // Get existing estate data
+      const existingEstate = (await api.estate(estateId)) as {
+        divisions?: Array<{ division_id: number; blocks?: Block[] }>;
+      };
+      const existingDivisions = existingEstate.divisions || [];
+
+      // Build divisions array with blocks
+      const updatedDivisions = [...existingDivisions];
+
+      for (const [divisionName, blocks] of Object.entries(groupedData)) {
+        const divisionId = parseInt(
+          divisionName.replace("Divisi ", "").trim()
+        );
+
+        // Find existing division or create new
+        const divisionIndex = updatedDivisions.findIndex(
+          (d) => d.division_id === divisionId
+        );
+
+        if (divisionIndex === -1) {
+          // Add new division
+          updatedDivisions.push({
+            division_id: divisionId,
+            blocks: blocks,
+          });
+        } else {
+          // Add new blocks to existing division (tidak menimpa)
+          const existingBlocks: Block[] = (updatedDivisions[divisionIndex]
+            .blocks || []) as Block[];
+          const mergedBlocks: Block[] = [...existingBlocks];
+          blocks.forEach((newBlock) => {
+            const existingIndex = mergedBlocks.findIndex(
+              (b) =>
+                (b.id_blok && b.id_blok === newBlock.id_blok) ||
+                (b.no_blok && b.no_blok === newBlock.no_blok)
+            );
+            if (existingIndex === -1) {
+              mergedBlocks.push(newBlock as Block);
+            }
+          });
+          updatedDivisions[divisionIndex].blocks = mergedBlocks;
+        }
+      }
+
+      // Update estate with new divisions data
+      await api.updateEstate(estateId, { divisions: updatedDivisions });
+
+      const totalNew = importPreviewData.newBlocks.length;
+      toast({
+        title: "Berhasil import!",
+        description: `${totalNew} blok baru berhasil ditambahkan ke Estate "${estateName}"`,
+      });
+
+      // Refresh data - reload meta untuk estate yang diupdate
+      const updatedEstates = await api.estates();
+      setEstates(updatedEstates || []);
+
+      // Force reload meta for this specific estate
+      try {
+        const divs: Division[] = await api.divisions(estateId);
+        const blocksByDivision: Record<number, Block[]> = {};
+        for (const d of divs || []) {
+          try {
+            const blocks = await api.blocks(estateId, d.division_id);
+            blocksByDivision[d.division_id] = Array.isArray(blocks)
+              ? (blocks as Block[])
+              : [];
+          } catch {
+            blocksByDivision[d.division_id] = [];
+          }
+        }
+        setMeta((prev) => ({
+          ...prev,
+          [estateId]: { divisions: divs || [], blocksByDivision },
+        }));
+      } catch (e) {
+        console.error("Error refreshing meta:", e);
+      }
+
+      // Close preview dialog
+      setIsImportPreviewOpen(false);
+      setImportPreviewData(null);
+    } catch (error) {
+      console.error("Error importing:", error);
+      toast({
+        title: "Gagal import data",
+        description:
+          error instanceof Error ? error.message : String(error),
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -1748,6 +1812,151 @@ const Locations = () => {
                 Batal
               </Button>
               <Button onClick={handleSaveEdit}>Simpan</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Dialog Import Preview */}
+        <Dialog open={isImportPreviewOpen} onOpenChange={setIsImportPreviewOpen}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Preview Import Data</DialogTitle>
+              <DialogDescription>
+                Estate: {importPreviewData?.estateName}
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-4">
+              {/* Summary */}
+              <div className="grid grid-cols-3 gap-4">
+                <Card>
+                  <CardHeader className="pb-3">
+                    <p className="text-sm text-muted-foreground">Total Data</p>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold">
+                      {(importPreviewData?.newBlocks.length || 0) + (importPreviewData?.existingBlocks.length || 0)}
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-3">
+                    <p className="text-sm text-muted-foreground">Data Baru</p>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold text-green-600">
+                      {importPreviewData?.newBlocks.length || 0}
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-3">
+                    <p className="text-sm text-muted-foreground">Sudah Ada (Diabaikan)</p>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold text-orange-600">
+                      {importPreviewData?.existingBlocks.length || 0}
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* New Blocks Table */}
+              {importPreviewData && importPreviewData.newBlocks.length > 0 && (
+                <div>
+                  <h3 className="font-semibold text-lg mb-2">Data Baru yang Akan Ditambahkan</h3>
+                  <div className="border rounded-lg overflow-auto max-h-60">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Divisi</TableHead>
+                          <TableHead>No Blok</TableHead>
+                          <TableHead>ID Blok</TableHead>
+                          <TableHead>Luas Blok</TableHead>
+                          <TableHead>Jumlah Pokok</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {importPreviewData.newBlocks.slice(0, 20).map((item, idx) => (
+                          <TableRow key={idx}>
+                            <TableCell>{item.division}</TableCell>
+                            <TableCell>{item.block.no_blok || '-'}</TableCell>
+                            <TableCell>{item.block.id_blok || '-'}</TableCell>
+                            <TableCell>{formatNumber(item.block.luas_blok)}</TableCell>
+                            <TableCell>{formatNumber(item.block.jumlak_pokok)}</TableCell>
+                          </TableRow>
+                        ))}
+                        {importPreviewData.newBlocks.length > 20 && (
+                          <TableRow>
+                            <TableCell colSpan={5} className="text-center text-muted-foreground">
+                              ... dan {importPreviewData.newBlocks.length - 20} data lainnya
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              )}
+
+              {/* Existing Blocks Info */}
+              {importPreviewData && importPreviewData.existingBlocks.length > 0 && (
+                <div>
+                  <h3 className="font-semibold text-lg mb-2">Data yang Sudah Ada (Tidak Akan Diubah)</h3>
+                  <div className="border rounded-lg overflow-auto max-h-40">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Divisi</TableHead>
+                          <TableHead>No Blok</TableHead>
+                          <TableHead>ID Blok</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {importPreviewData.existingBlocks.slice(0, 10).map((item, idx) => (
+                          <TableRow key={idx} className="bg-orange-50">
+                            <TableCell>{item.division}</TableCell>
+                            <TableCell>{item.block.no_blok || '-'}</TableCell>
+                            <TableCell>{item.block.id_blok || '-'}</TableCell>
+                          </TableRow>
+                        ))}
+                        {importPreviewData.existingBlocks.length > 10 && (
+                          <TableRow>
+                            <TableCell colSpan={3} className="text-center text-muted-foreground">
+                              ... dan {importPreviewData.existingBlocks.length - 10} data lainnya
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              )}
+
+              {importPreviewData && importPreviewData.newBlocks.length === 0 && (
+                <div className="text-center py-8 text-muted-foreground">
+                  Tidak ada data baru untuk ditambahkan. Semua data sudah ada di database.
+                </div>
+              )}
+            </div>
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIsImportPreviewOpen(false);
+                  setImportPreviewData(null);
+                }}
+              >
+                Batal
+              </Button>
+              <Button 
+                onClick={handleConfirmImport}
+                disabled={!importPreviewData || importPreviewData.newBlocks.length === 0}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                OK, Import {importPreviewData?.newBlocks.length || 0} Data Baru
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

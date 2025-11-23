@@ -115,10 +115,7 @@ const Locations = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isAddEstateOpen, setIsAddEstateOpen] = useState(false);
-  const [isAddCompanyOpen, setIsAddCompanyOpen] = useState(false);
   const [newEstateName, setNewEstateName] = useState("");
-  const [newCompanyName, setNewCompanyName] = useState("");
-  const [newCompanyAddress, setNewCompanyAddress] = useState("");
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>("");
   const [companies, setCompanies] = useState<Company[]>([]);
   const [estates, setEstates] = useState<EstateLite[]>([]);
@@ -285,53 +282,6 @@ const Locations = () => {
       ),
     [estates, search]
   );
-
-  const handleAddCompany = async () => {
-    if (!newCompanyName.trim()) {
-      toast({
-        title: "Gagal menambahkan perusahaan",
-        description: "Nama perusahaan tidak boleh kosong",
-        variant: "destructive",
-      });
-      return;
-    }
-    if (!newCompanyAddress.trim()) {
-      toast({
-        title: "Gagal menambahkan perusahaan",
-        description: "Alamat perusahaan tidak boleh kosong",
-        variant: "destructive",
-      });
-      return;
-    }
-    try {
-      console.log("Creating company:", {
-        company_name: newCompanyName,
-        address: newCompanyAddress,
-      });
-      const newCompany = await api.createCompany({
-        company_name: newCompanyName,
-        address: newCompanyAddress,
-      });
-      console.log("Company created:", newCompany);
-      setCompanies([...companies, newCompany]);
-      toast({
-        title: "Berhasil",
-        description: `Perusahaan "${newCompanyName}" berhasil ditambahkan`,
-      });
-      setNewCompanyName("");
-      setNewCompanyAddress("");
-      setIsAddCompanyOpen(false);
-    } catch (error) {
-      console.error("Error creating company:", error);
-      toast({
-        title: "Gagal",
-        description:
-          "Gagal menambahkan perusahaan: " +
-          (error instanceof Error ? error.message : String(error)),
-        variant: "destructive",
-      });
-    }
-  };
 
   const handleAddEstate = async () => {
     if (!newEstateName.trim()) {
@@ -844,56 +794,6 @@ const Locations = () => {
               <p className="text-sm text-muted-foreground">Memuat data...</p>
             )}
           </div>
-          <div className="flex gap-2">
-            <Dialog open={isAddCompanyOpen} onOpenChange={setIsAddCompanyOpen}>
-              <DialogTrigger asChild>
-                <Button
-                  variant="default"
-                  className="bg-orange-500 hover:bg-orange-600"
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  Tambah Perusahaan
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Tambah Perusahaan Baru</DialogTitle>
-                  <DialogDescription>
-                    Masukkan nama perusahaan yang ingin ditambahkan
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="company-name">Nama Perusahaan</Label>
-                    <Input
-                      id="company-name"
-                      placeholder="Contoh: PT. ABC"
-                      value={newCompanyName}
-                      onChange={(e) => setNewCompanyName(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="company-address">Alamat</Label>
-                    <Input
-                      id="company-address"
-                      placeholder="Contoh: Jl. Perkebunan No. 1, Jakarta"
-                      value={newCompanyAddress}
-                      onChange={(e) => setNewCompanyAddress(e.target.value)}
-                    />
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button
-                    variant="outline"
-                    onClick={() => setIsAddCompanyOpen(false)}
-                  >
-                    Batal
-                  </Button>
-                  <Button onClick={handleAddCompany}>Simpan</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          </div>
         </div>
 
         {companies.map((company) => {
@@ -959,7 +859,13 @@ const Locations = () => {
                               Tambah Estate
                             </Button>
                           </DialogTrigger>
-                          <DialogContent>
+                          <DialogContent
+                            className="bg-white border-gray-200"
+                            style={{
+                              backgroundColor: "#ffffff",
+                              color: "#000000",
+                            }}
+                          >
                             <DialogHeader>
                               <DialogTitle>Tambah Estate Baru</DialogTitle>
                               <DialogDescription>
@@ -1057,7 +963,8 @@ const Locations = () => {
                                     {es.estate_name}
                                   </span>
                                   <span className="text-sm text-muted-foreground">
-                                    {metaEs?.divisions?.length ?? 0} divisi — {blocksFlat.length} blok
+                                    {metaEs?.divisions?.length ?? 0} divisi —{" "}
+                                    {blocksFlat.length} blok
                                   </span>
                                 </div>
                               </AccordionTrigger>
@@ -1248,31 +1155,69 @@ const Locations = () => {
                                             </TableCell>
                                             <TableCell>
                                               <Select
-                                                value={block.status || 'active'}
-                                                onValueChange={async (newStatus) => {
+                                                value={block.status || "active"}
+                                                onValueChange={async (
+                                                  newStatus
+                                                ) => {
                                                   try {
-                                                    const updatedBlocks = metaEs.blocksByDivision[division_id].map(b => 
-                                                      b.no_blok === block.no_blok ? { ...b, status: newStatus } : b
+                                                    const updatedBlocks =
+                                                      metaEs.blocksByDivision[
+                                                        division_id
+                                                      ].map((b) =>
+                                                        b.no_blok ===
+                                                        block.no_blok
+                                                          ? {
+                                                              ...b,
+                                                              status: newStatus,
+                                                            }
+                                                          : b
+                                                      );
+                                                    await api.updateEstate(
+                                                      es._id,
+                                                      {
+                                                        divisions:
+                                                          metaEs.divisions.map(
+                                                            (d) => ({
+                                                              division_id:
+                                                                d.division_id,
+                                                              blocks:
+                                                                d.division_id ===
+                                                                division_id
+                                                                  ? updatedBlocks
+                                                                  : metaEs
+                                                                      .blocksByDivision[
+                                                                      d
+                                                                        .division_id
+                                                                    ],
+                                                            })
+                                                          ),
+                                                      }
                                                     );
-                                                    await api.updateEstate(es._id, {
-                                                      divisions: metaEs.divisions.map(d => ({
-                                                        division_id: d.division_id,
-                                                        blocks: d.division_id === division_id ? updatedBlocks : metaEs.blocksByDivision[d.division_id]
-                                                      }))
-                                                    });
-                                                    setMeta(prev => ({
+                                                    setMeta((prev) => ({
                                                       ...prev,
                                                       [es._id]: {
                                                         ...prev[es._id],
                                                         blocksByDivision: {
-                                                          ...prev[es._id].blocksByDivision,
-                                                          [division_id]: updatedBlocks
-                                                        }
-                                                      }
+                                                          ...prev[es._id]
+                                                            .blocksByDivision,
+                                                          [division_id]:
+                                                            updatedBlocks,
+                                                        },
+                                                      },
                                                     }));
-                                                    toast({ title: 'Status blok berhasil diubah' });
+                                                    toast({
+                                                      title:
+                                                        "Status blok berhasil diubah",
+                                                    });
                                                   } catch (e) {
-                                                    toast({ title: 'Gagal', description: e instanceof Error ? e.message : 'Gagal mengubah status', variant: 'destructive' });
+                                                    toast({
+                                                      title: "Gagal",
+                                                      description:
+                                                        e instanceof Error
+                                                          ? e.message
+                                                          : "Gagal mengubah status",
+                                                      variant: "destructive",
+                                                    });
                                                   }
                                                 }}
                                               >
@@ -1280,8 +1225,12 @@ const Locations = () => {
                                                   <SelectValue />
                                                 </SelectTrigger>
                                                 <SelectContent>
-                                                  <SelectItem value="active">Aktif</SelectItem>
-                                                  <SelectItem value="inactive">Nonaktif</SelectItem>
+                                                  <SelectItem value="active">
+                                                    Aktif
+                                                  </SelectItem>
+                                                  <SelectItem value="inactive">
+                                                    Nonaktif
+                                                  </SelectItem>
                                                 </SelectContent>
                                               </Select>
                                             </TableCell>
@@ -1455,7 +1404,7 @@ const Locations = () => {
                                                 {formatNumber(totalKonservasi)}
                                               </TableCell>
                                               <TableCell
-                                                colSpan={2}
+                                                colSpan={3}
                                               ></TableCell>
                                             </TableRow>
                                           );
@@ -1549,23 +1498,38 @@ const Locations = () => {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="edit-no-tph">No TPH (Pilih satu atau lebih)</Label>
+                <Label htmlFor="edit-no-tph">
+                  No TPH (Pilih satu atau lebih)
+                </Label>
                 <div className="flex flex-wrap gap-2 p-3 border rounded-md">
                   {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => {
-                    const selected = editFormData.no_tph?.split(',').map(s => s.trim()).includes(String(num)) || false;
+                    const selected =
+                      editFormData.no_tph
+                        ?.split(",")
+                        .map((s) => s.trim())
+                        .includes(String(num)) || false;
                     return (
-                      <label key={num} className="flex items-center gap-2 cursor-pointer">
+                      <label
+                        key={num}
+                        className="flex items-center gap-2 cursor-pointer"
+                      >
                         <input
                           type="checkbox"
                           checked={selected}
                           onChange={(e) => {
-                            const currentTphs = editFormData.no_tph?.split(',').map(s => s.trim()).filter(Boolean) || [];
+                            const currentTphs =
+                              editFormData.no_tph
+                                ?.split(",")
+                                .map((s) => s.trim())
+                                .filter(Boolean) || [];
                             const newTphs = e.target.checked
                               ? [...currentTphs, String(num)]
-                              : currentTphs.filter(t => t !== String(num));
+                              : currentTphs.filter((t) => t !== String(num));
                             setEditFormData({
                               ...editFormData,
-                              no_tph: newTphs.sort((a, b) => Number(a) - Number(b)).join(', '),
+                              no_tph: newTphs
+                                .sort((a, b) => Number(a) - Number(b))
+                                .join(", "),
                             });
                           }}
                           className="w-4 h-4"

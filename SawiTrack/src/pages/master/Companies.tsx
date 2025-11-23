@@ -2,19 +2,39 @@ import { useEffect, useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Plus, Search, Edit, Trash2 } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { toast } from "sonner";
+import { useToast } from "@/hooks/use-toast";
+import { Toaster } from "@/components/ui/toaster";
 import { api, type Company } from "@/lib/api";
 import { TooltipButton } from "@/components/ui/TooltipButton";
 
 const Companies = () => {
+  const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState<Company[]>([]);
   const [openAdd, setOpenAdd] = useState(false);
+  const [openEdit, setOpenEdit] = useState(false);
+  const [openDelete, setOpenDelete] = useState(false);
+  const [editingCompany, setEditingCompany] = useState<Company | null>(null);
+  const [deletingCompany, setDeletingCompany] = useState<Company | null>(null);
   const [form, setForm] = useState({
     company_name: "",
     address: "",
@@ -24,13 +44,122 @@ const Companies = () => {
 
   useEffect(() => {
     setLoading(true);
-    api.companies()
+    api
+      .companies()
       .then((list) => setRows(list))
-      .catch(() => toast.error("Gagal memuat perusahaan"))
+      .catch(() =>
+        toast({
+          title: "Gagal",
+          description: "Gagal memuat perusahaan",
+          variant: "destructive",
+        })
+      )
       .finally(() => setLoading(false));
-  }, []);
+  }, [toast]);
 
-  const filtered = useMemo(() => rows.filter((c) => c.company_name.toLowerCase().includes(search.toLowerCase())), [rows, search]);
+  const handleEdit = (company: Company) => {
+    setEditingCompany(company);
+    setForm({
+      company_name: company.company_name,
+      address: company.address,
+      phone: company.phone || "",
+      email: company.email || "",
+    });
+    setOpenEdit(true);
+  };
+
+  const handleUpdateCompany = async () => {
+    if (!editingCompany) return;
+
+    try {
+      console.log("Updating company:", editingCompany._id, form);
+
+      if (!form.company_name || !form.address) {
+        toast({
+          title: "Gagal",
+          description: "Nama dan Alamat wajib diisi",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      await api.updateCompany(editingCompany._id, {
+        company_name: form.company_name,
+        address: form.address,
+        phone: form.phone || undefined,
+        email: form.email || undefined,
+      });
+
+      // Update local state
+      setRows((prev) =>
+        prev.map((c) =>
+          c._id === editingCompany._id
+            ? {
+                ...c,
+                ...form,
+                phone: form.phone || undefined,
+                email: form.email || undefined,
+              }
+            : c
+        )
+      );
+
+      setOpenEdit(false);
+      setEditingCompany(null);
+      setForm({ company_name: "", address: "", phone: "", email: "" });
+
+      toast({
+        title: "Berhasil",
+        description: "Perusahaan berhasil diperbarui",
+      });
+    } catch (e) {
+      console.error("Error updating company:", e);
+      toast({
+        title: "Gagal",
+        description: e instanceof Error ? e.message : "Gagal memperbarui",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDelete = (company: Company) => {
+    setDeletingCompany(company);
+    setOpenDelete(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!deletingCompany) return;
+
+    try {
+      console.log("Deleting company:", deletingCompany._id);
+      await api.deleteCompany(deletingCompany._id);
+
+      setRows((prev) => prev.filter((c) => c._id !== deletingCompany._id));
+
+      setOpenDelete(false);
+      setDeletingCompany(null);
+
+      toast({
+        title: "Berhasil",
+        description: "Perusahaan berhasil dihapus",
+      });
+    } catch (e) {
+      console.error("Error deleting company:", e);
+      toast({
+        title: "Gagal",
+        description: e instanceof Error ? e.message : "Gagal menghapus",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const filtered = useMemo(
+    () =>
+      rows.filter((c) =>
+        c.company_name.toLowerCase().includes(search.toLowerCase())
+      ),
+    [rows, search]
+  );
 
   return (
     <div className="space-y-6">
@@ -41,12 +170,10 @@ const Companies = () => {
         </div>
         <Dialog open={openAdd} onOpenChange={setOpenAdd}>
           <DialogTrigger asChild>
-            <TooltipButton tooltip="Tambahkan perusahaan baru">
-              <Button className="bg-orange-500 hover:bg-orange-600">
-                <Plus className="h-4 w-4 mr-2" />
-                Tambah Perusahaan
-              </Button>
-            </TooltipButton>
+            <Button className="bg-orange-500 hover:bg-orange-600">
+              <Plus className="h-4 w-4 mr-2" />
+              Tambah Perusahaan
+            </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
@@ -55,38 +182,87 @@ const Companies = () => {
             <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
               <div className="space-y-2">
                 <Label>Nama Perusahaan</Label>
-                <Input value={form.company_name} onChange={(e) => setForm((f) => ({ ...f, company_name: e.target.value }))} />
+                <Input
+                  value={form.company_name}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, company_name: e.target.value }))
+                  }
+                />
               </div>
               <div className="space-y-2">
                 <Label>Alamat</Label>
-                <Input value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} />
+                <Input
+                  value={form.address}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, address: e.target.value }))
+                  }
+                />
               </div>
               <div className="space-y-2">
                 <Label>Telepon</Label>
-                <Input value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} />
+                <Input
+                  value={form.phone}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, phone: e.target.value }))
+                  }
+                />
               </div>
               <div className="space-y-2">
                 <Label>Email</Label>
-                <Input type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />
+                <Input
+                  type="email"
+                  value={form.email}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, email: e.target.value }))
+                  }
+                />
               </div>
               <Button
                 type="button"
                 className="w-full"
                 onClick={async () => {
                   try {
-                    if (!form.company_name || !form.address) return toast.error("Nama dan Alamat wajib diisi");
+                    console.log("Form data:", form);
+
+                    if (!form.company_name || !form.address) {
+                      toast({
+                        title: "Gagal",
+                        description: "Nama dan Alamat wajib diisi",
+                        variant: "destructive",
+                      });
+                      return;
+                    }
+
+                    console.log("Creating company...");
                     const created = await api.createCompany({
                       company_name: form.company_name,
                       address: form.address,
                       phone: form.phone || undefined,
                       email: form.email || undefined,
                     });
+
+                    console.log("Company created:", created);
                     setRows((prev) => [created, ...prev]);
                     setOpenAdd(false);
-                    setForm({ company_name: "", address: "", phone: "", email: "" });
-                    toast.success("Perusahaan berhasil ditambahkan");
+                    setForm({
+                      company_name: "",
+                      address: "",
+                      phone: "",
+                      email: "",
+                    });
+
+                    toast({
+                      title: "Berhasil",
+                      description: "Perusahaan berhasil ditambahkan",
+                    });
                   } catch (e) {
-                    toast.error(e instanceof Error ? e.message : "Gagal menyimpan");
+                    console.error("Error creating company:", e);
+                    toast({
+                      title: "Gagal",
+                      description:
+                        e instanceof Error ? e.message : "Gagal menyimpan",
+                      variant: "destructive",
+                    });
                   }
                 }}
               >
@@ -102,7 +278,12 @@ const Companies = () => {
           <div className="flex items-center gap-4">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Cari perusahaan..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" />
+              <Input
+                placeholder="Cari perusahaan..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-10"
+              />
             </div>
           </div>
         </CardHeader>
@@ -118,29 +299,146 @@ const Companies = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {loading && <TableRow><TableCell colSpan={5} className="text-center">Memuat...</TableCell></TableRow>}
-              {!loading && filtered.map((company) => (
-                <TableRow key={company._id}>
-                  <TableCell className="font-medium">{company.company_name}</TableCell>
-                  <TableCell>{company.address}</TableCell>
-                  <TableCell>{company.phone || "-"}</TableCell>
-                  <TableCell>{company.email || "-"}</TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex gap-1 justify-end">
-                      <TooltipButton tooltip="Edit perusahaan">
-                        <Button variant="ghost" size="icon"><Edit className="h-4 w-4" /></Button>
-                      </TooltipButton>
-                      <TooltipButton tooltip="Hapus perusahaan">
-                        <Button variant="ghost" size="icon"><Trash2 className="h-4 w-4" /></Button>
-                      </TooltipButton>
-                    </div>
+              {loading && (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center">
+                    Memuat...
                   </TableCell>
                 </TableRow>
-              ))}
+              )}
+              {!loading &&
+                filtered.map((company) => (
+                  <TableRow key={company._id}>
+                    <TableCell className="font-medium">
+                      {company.company_name}
+                    </TableCell>
+                    <TableCell>{company.address}</TableCell>
+                    <TableCell>{company.phone || "-"}</TableCell>
+                    <TableCell>{company.email || "-"}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex gap-1 justify-end">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleEdit(company)}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDelete(company)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
+
+      {/* Dialog Edit Perusahaan */}
+      <Dialog open={openEdit} onOpenChange={setOpenEdit}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Perusahaan</DialogTitle>
+          </DialogHeader>
+          <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
+            <div className="space-y-2">
+              <Label>Nama Perusahaan</Label>
+              <Input
+                value={form.company_name}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, company_name: e.target.value }))
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Alamat</Label>
+              <Input
+                value={form.address}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, address: e.target.value }))
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Telepon</Label>
+              <Input
+                value={form.phone}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, phone: e.target.value }))
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Email</Label>
+              <Input
+                type="email"
+                value={form.email}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, email: e.target.value }))
+                }
+              />
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setOpenEdit(false);
+                  setEditingCompany(null);
+                  setForm({
+                    company_name: "",
+                    address: "",
+                    phone: "",
+                    email: "",
+                  });
+                }}
+              >
+                Batal
+              </Button>
+              <Button type="button" onClick={handleUpdateCompany}>
+                Simpan
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Konfirmasi Hapus */}
+      <Dialog open={openDelete} onOpenChange={setOpenDelete}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Konfirmasi Hapus</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Apakah Anda yakin ingin menghapus perusahaan{" "}
+            <strong>"{deletingCompany?.company_name}"</strong>? Tindakan ini
+            tidak dapat dibatalkan.
+          </p>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setOpenDelete(false);
+                setDeletingCompany(null);
+              }}
+            >
+              Batal
+            </Button>
+            <Button type="button" variant="destructive" onClick={confirmDelete}>
+              Hapus
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Toaster />
     </div>
   );
 };

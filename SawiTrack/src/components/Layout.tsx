@@ -33,7 +33,7 @@ const Layout = ({ children }: LayoutProps) => {
       label: 'Master Data',
       items: [
         { path: '/master/users', icon: UserCog, label: 'Pengguna (Login)', roles: ['manager'] },
-        { path: '/master/workers', icon: Users, label: 'Pekerja/Pemanen', roles: ['manager'] },
+        { path: '/master/workers', icon: Users, label: 'Karyawan', roles: ['manager'] },
         { path: '/master/companies', icon: Building2, label: 'Perusahaan', roles: ['manager'] },
         { path: '/master/locations', icon: MapPin, label: 'Data Aresta', roles: ['manager'] },
         { path: '/transactions/closing', icon: FileText, label: 'Periode Closing Transaksi', roles: ['manager'] },

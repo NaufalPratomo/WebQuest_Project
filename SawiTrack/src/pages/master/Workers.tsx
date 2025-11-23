@@ -51,6 +51,7 @@ const Workers = () => {
     address: "",
     phone: "",
     birthDate: "",
+    status: "active",
   });
 
   useEffect(() => {
@@ -90,7 +91,8 @@ const Workers = () => {
       salary: worker.salary || 0,
       address: worker.address || "",
       phone: worker.phone || "",
-      birthDate: worker.birthDate || "",
+      birthDate: worker.birthDate ? new Date(worker.birthDate).toISOString().split('T')[0] : "",
+      status: worker.status || "active",
     });
     setOpenEdit(true);
   };
@@ -111,18 +113,19 @@ const Workers = () => {
       await api.updateEmployee(editingWorker._id, {
         nik: form.nik,
         name: form.name,
-        companyId: form.companyId || undefined,
-        position: form.position || undefined,
-        salary: form.salary || undefined,
-        address: form.address || undefined,
-        phone: form.phone || undefined,
-        birthDate: form.birthDate || undefined,
+        companyId: form.companyId || null,
+        position: form.position || null,
+        salary: form.salary || null,
+        address: form.address || null,
+        phone: form.phone || null,
+        birthDate: form.birthDate || null,
+        status: form.status,
       });
 
       setRows((prev) =>
         prev.map((w) =>
           w._id === editingWorker._id
-            ? { ...w, ...form, companyId: form.companyId || undefined }
+            ? { ...w, ...form, companyId: form.companyId || undefined, status: form.status }
             : w
         )
       );
@@ -138,11 +141,12 @@ const Workers = () => {
         address: "",
         phone: "",
         birthDate: "",
+        status: "active",
       });
 
       toast({
         title: "Berhasil",
-        description: "Data pekerja berhasil diperbarui",
+        description: "Data karyawan berhasil diperbarui",
       });
     } catch (e) {
       toast({
@@ -188,7 +192,7 @@ const Workers = () => {
         setRows((prev) => [...imported, ...prev]);
         toast({
           title: "Berhasil",
-          description: `${imported.length} pekerja berhasil diimpor`,
+          description: `${imported.length} karyawan berhasil diimpor`,
         });
       } catch (e) {
         toast({
@@ -220,10 +224,10 @@ const Workers = () => {
 
       const ws = XLSX.utils.json_to_sheet(exportData);
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Pekerja");
+      XLSX.utils.book_append_sheet(wb, ws, "Karyawan");
       XLSX.writeFile(
         wb,
-        `Pekerja_${new Date().toISOString().split("T")[0]}.xlsx`
+        `Karyawan_${new Date().toISOString().split("T")[0]}.xlsx`
       );
 
       toast({
@@ -243,19 +247,19 @@ const Workers = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold">Pekerja (Pemanen)</h1>
+          <h1 className="text-3xl font-bold">Karyawan</h1>
           <p className="text-muted-foreground">
-            Kelola data pekerja/pemanen (bukan akun login)
+            Kelola data karyawan (bukan akun login)
           </p>
         </div>
         <div className="flex gap-2">
-          <TooltipButton tooltip="Import data pekerja dari Excel">
+          <TooltipButton tooltip="Import data karyawan dari Excel">
             <Button variant="outline" onClick={handleImportExcel}>
               <Upload className="h-4 w-4 mr-2" />
               Import
             </Button>
           </TooltipButton>
-          <TooltipButton tooltip="Export data pekerja ke Excel">
+          <TooltipButton tooltip="Export data karyawan ke Excel">
             <Button variant="outline" onClick={handleExportExcel}>
               <Download className="h-4 w-4 mr-2" />
               Export
@@ -265,19 +269,19 @@ const Workers = () => {
             <DialogTrigger asChild>
               <Button className="bg-orange-500 hover:bg-orange-600">
                 <Plus className="h-4 w-4 mr-2" />
-                Tambah Pekerja
+                Tambah Karyawan
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>Tambah Pekerja Baru</DialogTitle>
+                <DialogTitle>Tambah Karyawan Baru</DialogTitle>
               </DialogHeader>
               <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>NIK</Label>
                     <Input
-                      placeholder="Masukkan NIK pekerja"
+                      placeholder="Masukkan NIK karyawan"
                       value={form.nik}
                       onChange={(e) =>
                         setForm((f) => ({ ...f, nik: e.target.value }))
@@ -405,10 +409,11 @@ const Workers = () => {
                         address: "",
                         phone: "",
                         birthDate: "",
+                        status: "active",
                       });
                       toast({
                         title: "Berhasil",
-                        description: "Pekerja berhasil ditambahkan",
+                        description: "Karyawan berhasil ditambahkan",
                       });
                     } catch (e) {
                       toast({
@@ -434,7 +439,7 @@ const Workers = () => {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Cari pekerja..."
+                placeholder="Cari karyawan..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-10"
@@ -511,14 +516,14 @@ const Workers = () => {
       <Dialog open={openEdit} onOpenChange={setOpenEdit}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Edit Data Pekerja</DialogTitle>
+            <DialogTitle>Edit Data Karyawan</DialogTitle>
           </DialogHeader>
           <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>NIK</Label>
                 <Input
-                  placeholder="Masukkan NIK pekerja"
+                  placeholder="Masukkan NIK karyawan"
                   value={form.nik}
                   onChange={(e) =>
                     setForm((f) => ({ ...f, nik: e.target.value }))
@@ -598,6 +603,21 @@ const Workers = () => {
                   }
                 />
               </div>
+              <div className="space-y-2">
+                <Label>Status</Label>
+                <Select
+                  value={form.status}
+                  onValueChange={(v) => setForm((f) => ({ ...f, status: v }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Pilih status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Aktif</SelectItem>
+                    <SelectItem value="inactive">Nonaktif</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="col-span-2 space-y-2">
                 <Label>Alamat</Label>
                 <Input
@@ -625,6 +645,7 @@ const Workers = () => {
                     address: "",
                     phone: "",
                     birthDate: "",
+                    status: "active",
                   });
                 }}
               >

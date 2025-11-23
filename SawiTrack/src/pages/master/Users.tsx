@@ -17,7 +17,7 @@ type UserRow = {
   name: string;
   email: string;
   role: string;
-  division?: string;
+  division?: string | null;
   status: string;
 };
 
@@ -34,6 +34,7 @@ const Users = () => {
     email: "",
     role: "" as "manager" | "foreman" | "employee" | "",
     division: "",
+    status: "active",
     password: "",
   });
 
@@ -58,6 +59,7 @@ const Users = () => {
       email: user.email,
       role: user.role as typeof form.role,
       division: user.division || "",
+      status: user.status || "active",
       password: "",
     });
     setOpenEdit(true);
@@ -80,7 +82,8 @@ const Users = () => {
         name: form.name,
         email: form.email,
         role: form.role,
-        division: form.division || undefined,
+        division: form.division || null,
+        status: form.status,
       };
 
       if (form.password) {
@@ -91,13 +94,13 @@ const Users = () => {
 
       setRows(prev => prev.map(u =>
         u.id === editingUser.id
-          ? { ...u, name: form.name, email: form.email, role: form.role, division: form.division }
+          ? { ...u, name: form.name, email: form.email, role: form.role, division: form.division, status: form.status }
           : u
       ));
 
       setOpenEdit(false);
       setEditingUser(null);
-      setForm({ name: "", email: "", role: "", division: "", password: "" });
+      setForm({ name: "", email: "", role: "", division: "", status: "active", password: "" });
 
       toast({
         title: "Berhasil",
@@ -167,7 +170,7 @@ const Users = () => {
                   const created = await api.createUser({ name: form.name, email: form.email, role: form.role, password: form.password, division: form.division || null });
                   setRows((prev) => [{ id: created._id, name: created.name, email: created.email, role: created.role, division: created.division, status: created.status }, ...prev]);
                   setOpenAdd(false);
-                  setForm({ name: "", email: "", role: "", division: "", password: "" });
+                  setForm({ name: "", email: "", role: "", division: "", status: "active", password: "" });
                   toast({
                     title: "Berhasil",
                     description: "Pengguna berhasil ditambahkan"
@@ -270,7 +273,7 @@ const Users = () => {
                 onClick={() => {
                   setOpenEdit(false);
                   setEditingUser(null);
-                  setForm({ name: "", email: "", role: "", division: "", password: "" });
+                  setForm({ name: "", email: "", role: "", division: "", status: "active", password: "" });
                 }}
               >
                 Batal

@@ -84,20 +84,29 @@ async function connectMongo() {
 async function logActivity(req, action, details = {}, userOverride = null) {
   try {
     let user = userOverride;
-    if (!user && req.headers.authorization) {
-      const token = req.headers.authorization.split(" ")[1];
+
+    if (!user) {
+      let token = null;
+      if (req.headers.authorization) {
+        token = req.headers.authorization.split(" ")[1];
+      } else if (req.cookies && req.cookies.token) {
+        token = req.cookies.token;
+      }
+
       if (token) {
         try {
           const payload = jwt.verify(token, JWT_SECRET);
-          // We might need to fetch user details if not in payload, but payload has role/division/sub
-          // For simplicity, we'll try to use what we have or fetch if critical.
-          // Let's just store the ID and maybe fetch name if not provided.
           if (!user) {
-            // If we really need the name, we might have to fetch it, or rely on the caller passing it.
-            // For now, let's assume the caller passes 'user' object if available, or we use ID.
-            user = { _id: payload.sub, role: payload.role };
+            const foundUser = await User.findById(payload.sub, { name: 1, role: 1 }).lean();
+            if (foundUser) {
+              user = foundUser;
+            } else {
+              user = { _id: payload.sub, role: payload.role };
+            }
           }
-        } catch (e) { }
+        } catch (e) {
+          // console.error(`[ActivityLog] Token error:`, e.message);
+        }
       }
     }
 
@@ -1127,7 +1136,7 @@ app.put(`${API_BASE_PATH}/panen/:id`, async (req, res) => {
   try {
     const existing = await Panen.findById(req.params.id);
     if (!existing) return res.status(404).json({ error: 'Panen record not found' });
-    
+
     // Check if date is closed
     const dateToCheck = req.body.date_panen || existing.date_panen;
     if (await checkDateClosed(dateToCheck)) {
@@ -1139,7 +1148,7 @@ app.put(`${API_BASE_PATH}/panen/:id`, async (req, res) => {
       { $set: req.body },
       { new: true, runValidators: true }
     );
-    
+
     logActivity(req, "UPDATE_PANEN", { panenId: req.params.id });
     res.json(updated);
   } catch (err) {
@@ -1191,7 +1200,7 @@ app.put(`${API_BASE_PATH}/angkut/:id`, async (req, res) => {
   try {
     const existing = await Angkut.findById(req.params.id);
     if (!existing) return res.status(404).json({ error: 'Angkut record not found' });
-    
+
     // Check if date is closed
     const dateToCheck = req.body.date_panen || existing.date_panen;
     if (await checkDateClosed(dateToCheck)) {
@@ -1203,7 +1212,7 @@ app.put(`${API_BASE_PATH}/angkut/:id`, async (req, res) => {
       { $set: req.body },
       { new: true, runValidators: true }
     );
-    
+
     logActivity(req, "UPDATE_ANGKUT", { angkutId: req.params.id });
     res.json(updated);
   } catch (err) {

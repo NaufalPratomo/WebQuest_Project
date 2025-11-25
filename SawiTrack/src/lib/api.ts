@@ -324,7 +324,7 @@ export const api = {
       pendingCount: number;
       targetsPercent: number;
     }>(`/stats`),
-  taksasiList: (params?: { date?: string; estateId?: string; division_id?: number }) => {
+  taksasiList: (params?: { date?: string; startDate?: string; endDate?: string; estateId?: string; division_id?: number }) => {
     const search = toQS(params as Record<string, string | number | undefined>);
     return http<Array<TaksasiRow>>(`/taksasi${search}`);
   },
@@ -345,6 +345,8 @@ export const api = {
   deleteCustomWorker: (id: string) => http<{ ok: boolean }>(`/custom-workers/${id}`, { method: 'DELETE' }),
   panenList: (params?: {
     date_panen?: string;
+    startDate?: string;
+    endDate?: string;
     estateId?: string;
     division_id?: number;
   }) => {

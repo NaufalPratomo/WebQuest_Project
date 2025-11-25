@@ -974,9 +974,15 @@ app.post(`${API_BASE_PATH}/taksasi`, async (req, res) => {
 });
 app.get(`${API_BASE_PATH}/taksasi`, async (req, res) => {
   try {
-    const { date, estateId, division_id } = req.query;
+    const { date, startDate, endDate, estateId, division_id } = req.query;
     const q = restrictByDivision(req, {});
-    if (date) q.date = new Date(String(date));
+    if (date) {
+      q.date = new Date(String(date));
+    } else if (startDate || endDate) {
+      q.date = {};
+      if (startDate) q.date.$gte = new Date(String(startDate));
+      if (endDate) q.date.$lte = new Date(String(endDate));
+    }
     if (estateId) q.estateId = String(estateId);
     if (division_id !== undefined) q.division_id = Number(division_id);
     const rows = await Taksasi.find(q).lean();
@@ -1080,9 +1086,15 @@ app.post(`${API_BASE_PATH}/panen`, async (req, res) => {
 });
 app.get(`${API_BASE_PATH}/panen`, async (req, res) => {
   try {
-    const { date_panen, estateId, division_id } = req.query;
+    const { date_panen, startDate, endDate, estateId, division_id } = req.query;
     const q = restrictByDivision(req, {});
-    if (date_panen) q.date_panen = new Date(String(date_panen));
+    if (date_panen) {
+      q.date_panen = new Date(String(date_panen));
+    } else if (startDate || endDate) {
+      q.date_panen = {};
+      if (startDate) q.date_panen.$gte = new Date(String(startDate));
+      if (endDate) q.date_panen.$lte = new Date(String(endDate));
+    }
     if (estateId) q.estateId = String(estateId);
     if (division_id !== undefined) q.division_id = Number(division_id);
     const rows = await Panen.find(q).lean();

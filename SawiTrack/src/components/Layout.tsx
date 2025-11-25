@@ -82,7 +82,9 @@ const Layout = ({ children }: LayoutProps) => {
       >
         <div className="flex h-16 items-center justify-between px-4 border-b border-border">
           {sidebarOpen && (
-            <h1 className="text-lg font-bold text-primary">Kebun Sawit</h1>
+            <div className="flex items-center gap-2">
+              <img src="/PalmaGroupLogo.png" alt="Palma ROOTS" className="h-20 w-auto" />
+            </div>
           )}
           <Button
             variant="ghost"
@@ -170,9 +172,14 @@ const Layout = ({ children }: LayoutProps) => {
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
         <header className="h-16 bg-card border-b border-border flex items-center justify-between px-6">
-          <h2 className="text-xl font-semibold text-foreground">
-            Sistem Pencatatan Kebun Sawit
-          </h2>
+          <div>
+            <h1 className="text-2xl font-bold text-foreground tracking-tight">
+              Palma <span className="text-primary">ROOTS</span>
+            </h1>
+            <p className="text-xs text-muted-foreground font-medium">
+              Real-time Operation & Organizational Tracking System
+            </p>
+          </div>
           <div className="flex items-center gap-4">
             <div className="text-right">
               <p className="text-sm font-medium">{user?.name}</p>

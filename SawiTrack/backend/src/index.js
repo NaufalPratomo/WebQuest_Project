@@ -347,6 +347,7 @@ app.put(`${API_BASE_PATH}/estates/:id`, async (req, res) => {
       new: true,
     }).lean();
     if (!updated) return res.status(404).json({ error: "Not found" });
+    
     logActivity(req, "UPDATE_ESTATE", { estate_id: req.params.id, updates: update });
     res.json(updated);
   } catch (err) {

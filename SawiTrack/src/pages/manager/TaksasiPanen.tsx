@@ -294,26 +294,29 @@ export default function TaksasiPanen() {
       });
 
       // Jika sukses, baru update local state
+      // Cari data yang sama berdasarkan composite key (tanggal + estate + divisi + blok)
       const composite = `${date}|${estateId}|${divisionId}|${blockLabel}`;
-      let newRows: TaksasiRow[];
-      const existingIndex = rows.findIndex(r => `${r.date}|${r.estateId}|${r.divisionId}|${r.blockLabel}` === composite);
+      const existingIndex = rows.findIndex(r => 
+        `${r.date}|${r.estateId}|${r.divisionId}|${r.blockLabel}` === composite
+      );
 
+      let newRows: TaksasiRow[];
+      
       if (existingIndex !== -1) {
-        newRows = rows.slice();
-        newRows[existingIndex] = row;
+        // Data sudah ada - replace/update data lama
+        newRows = rows.map((r, idx) => idx === existingIndex ? row : r);
         toast.success('Taksasi diperbarui dan tersimpan ke server');
-      } else if (editingKey) {
-        newRows = rows.map(r => (
-          `${r.date}|${r.estateId}|${r.divisionId}|${r.blockLabel}` === editingKey ? row : r
-        ));
-        toast.success('Taksasi hasil edit tersimpan ke server');
       } else {
+        // Data baru - tambahkan ke array
         newRows = [...rows, row];
-        toast.success('Taksasi tersimpan ke server');
+        toast.success('Taksasi baru tersimpan ke server');
       }
 
       setRows(newRows);
       // Server is source of truth; no longer persisting to localStorage
+      
+      // Simpan selection pekerja yang sudah dialokasikan
+      await persistSelection(selectedIds);
 
       // reset for next input
       setStep(1);
@@ -324,6 +327,7 @@ export default function TaksasiPanen() {
       setAvgWeightKg(15); setBasisJanjangPerPemanen(120);
       setEditingKey(null);
       setPendingEditBlockLabel('');
+      setSelectedIds([]); // Reset selected employees
 
     } catch (e: unknown) {
       let msg = e instanceof Error ? e.message : 'Gagal simpan taksasi ke server';
@@ -361,6 +365,7 @@ export default function TaksasiPanen() {
     setBlockIndex('');
     setBm(0); setPtb(0); setBmbb(0); setBmm(0);
     setAvgWeightKg(15); setBasisJanjangPerPemanen(120);
+    setSelectedIds([]);
   }
 
   // When editing, after blocks load try to set blockIndex automatically
@@ -470,19 +475,6 @@ export default function TaksasiPanen() {
 
       {step === 2 && (
         <Card>
-          <CardHeader>
-            <CardTitle>Langkah 2: Input Observasi & Parameter</CardTitle>
-            <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-md">
-              <p className="text-sm font-semibold text-blue-900 mb-1">Keterangan Singkatan:</p>
-              <ul className="text-xs text-blue-800 space-y-1">
-                <li><strong>BH</strong> = Buah Hitam</li>
-                <li><strong>PTB</strong> = Pokok Tidak Berbuah</li>
-                <li><strong>BMBB</strong> = Buah Merah Belum Brondol</li>
-                <li><strong>BMM</strong> = Buah Merah Membrodol</li>
-                <li><strong>AKP</strong> = Angka Kerapatan Panen</li>
-              </ul>
-            </div>
-          </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-4 md:grid-cols-3">
               <div className="space-y-2">

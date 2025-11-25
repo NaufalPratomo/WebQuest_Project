@@ -130,7 +130,10 @@ export type AngkutRow = {
   division_id: number;
   block_no: string;
   block_id?: string;
+  noTPH?: string; // Nomor TPH for aggregation
   weightKg: number;
+  jjgRealisasi?: number; // Auto-aggregated from RealHarvest per TPH
+  jjgAngkut?: number; // Manual input by mandor (berapa JJG yang diangkut)
   notes?: string;
 };
 
@@ -345,123 +348,47 @@ export const api = {
   customWorkers: () => http<Array<{ _id: string; name: string; active: boolean }>>(`/custom-workers`),
   createCustomWorker: (name: string) => http<{ _id: string; name: string; active: boolean }>(`/custom-workers`, { method: 'POST', body: JSON.stringify({ name }) }),
   deleteCustomWorker: (id: string) => http<{ ok: boolean }>(`/custom-workers/${id}`, { method: 'DELETE' }),
-  panenList: (params?: {
-    date_panen?: string;
-    startDate?: string;
-    endDate?: string;
-    estateId?: string;
-    division_id?: number;
-  }) => {
-    const search = toQS(params as Record<string, string | number | undefined>);
-    return http<Array<PanenRow>>(`/panen${search}`);
+  
+  // Job Codes
+  jobcodes: () => http<Array<{ code: string; name: string; category: 'panen' | 'non-panen'; hkValue: number }>>(`/jobcodes`),
+  createJobCode: (body: { code: string; name: string; category: 'panen' | 'non-panen'; hkValue: number }) =>
+    http<{ code: string }>(`/jobcodes`, { method: 'POST', body: JSON.stringify(body) }),
+  updateJobCode: (code: string, body: Partial<{ name: string; category: 'panen' | 'non-panen'; hkValue: number }>) =>
+    http<{ code: string }>(`/jobcodes/${code}`, { method: 'PUT', body: JSON.stringify(body) }),
+  deleteJobCode: (code: string) => http<{ ok: boolean }>(`/jobcodes/${code}`, { method: 'DELETE' }),
+  
+  // Panen
+  panenList: (params?: { date_panen?: string; estateId?: string; division_id?: number; block_no?: string; }) => {
+    const search = toQS(params);
+    return http<PanenRow[]>(`/panen${search}`);
   },
-  panenCreate: (body: PanenRow | Array<PanenRow>) =>
-    http<PanenRow | Array<PanenRow>>(`/panen`, {
-      method: "POST",
-      body: JSON.stringify(body),
-    }),
-  panenBatch: (rows: Array<PanenRow>) => http<Array<PanenRow>>(`/panen`, { method: 'POST', body: JSON.stringify(rows) }),
-  angkutList: (params?: {
-    date_panen?: string;
-    date_angkut?: string;
-    estateId?: string;
-    division_id?: number;
-  }) => {
-    const search = toQS(params as Record<string, string | number | undefined>);
-    return http<Array<AngkutRow>>(`/angkut${search}`);
+  panenCreate: (body: Partial<PanenRow> | Array<Partial<PanenRow>>) =>
+    http<PanenRow | PanenRow[]>(`/panen`, { method: "POST", body: JSON.stringify(body) }),
+  panenUpdate: (id: string, body: Partial<PanenRow>) =>
+    http<PanenRow>(`/panen/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+  
+  // Angkut (Transport)
+  angkutList: (params?: { date_panen?: string; estateId?: string; division_id?: number; block_no?: string; }) => {
+    const search = toQS(params);
+    return http<AngkutRow[]>(`/angkut${search}`);
   },
-  angkutCreate: (body: AngkutRow | Array<AngkutRow>) =>
-    http<AngkutRow | Array<AngkutRow>>(`/angkut`, {
-      method: "POST",
-      body: JSON.stringify(body),
-    }),
-  attendanceList: (params?: { date?: string; employeeId?: string }) => {
-    const search = toQS(params as Record<string, string | number | undefined>);
-    return http<
-      Array<{
-        _id: string;
-        date: string;
-        employeeId: string;
-        division_id?: number;
-        status: string;
-        hk: number;
-      }>
-    >(`/attendance${search}`);
+  angkutCreate: (body: Partial<AngkutRow> | Array<Partial<AngkutRow>>) =>
+    http<AngkutRow | AngkutRow[]>(`/angkut`, { method: "POST", body: JSON.stringify(body) }),
+  angkutUpdate: (id: string, body: Partial<AngkutRow>) =>
+    http<AngkutRow>(`/angkut/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+  
+  // Attendance
+  attendanceList: (params?: { date?: string; employeeId?: string; }) => {
+    const search = toQS(params);
+    return http<Array<{ _id: string; date: string; employeeId: string; status: string; division_id?: number; notes?: string }>>(`/attendance${search}`);
   },
-  attendanceCreate: (body: {
-    date: string;
-    employeeId: string;
-    division_id?: number;
-    status: "present" | "absent" | "leave";
-    hk?: number;
-    notes?: string;
-  }) => http(`/attendance`, { method: "POST", body: JSON.stringify(body) }),
-  jobcodes: () =>
-    http<
-      Array<{
-        code: string;
-        name: string;
-        category: "panen" | "non-panen";
-        hkValue: number;
-      }>
-    >(`/jobcodes`),
-  createJobcode: (body: {
-    code: string;
-    name: string;
-    category: "panen" | "non-panen";
-    hkValue: number;
-    description?: string;
-  }) => http(`/jobcodes`, { method: "POST", body: JSON.stringify(body) }),
-  updateJobcode: (
-    code: string,
-    body: Partial<{
-      name: string;
-      category: "panen" | "non-panen";
-      hkValue: number;
-      description: string;
-    }>
-  ) => http(`/jobcodes/${code}`, { method: "PUT", body: JSON.stringify(body) }),
-  deleteJobcode: (code: string) =>
-    http(`/jobcodes/${code}`, { method: "DELETE" }),
-  reportTaksasiPerBlock: (params?: { date?: string }) => {
-    const search = toQS(params as Record<string, string | number | undefined>);
-    return http<
-      Array<{
-        estateId: string;
-        division_id: number;
-        block_no: string;
-        totalKg: number;
-      }>
-    >(`/reports/taksasi-per-block${search}`);
-  },
-  reportTrend: (params?: {
-    type?: "panen" | "angkut" | "taksasi";
-    limit?: number;
-    sort?: "asc" | "desc";
-  }) => {
-    const search = toQS(params as Record<string, string | number | undefined>);
-    return http<
-      Array<{
-        estateId: string;
-        division_id: number;
-        block_no: string;
-        totalKg: number;
-      }>
-    >(`/reports/trend${search}`);
-  },
-  reportStatement: (params?: { startDate?: string; endDate?: string }) => {
-    const search = toQS(params as Record<string, string | number | undefined>);
-    return http<
-      Array<{
-        estateId: string;
-        division_id: number;
-        totalKg: number;
-        blockCount: number;
-      }>
-    >(`/reports/statement${search}`);
-  },
+  attendanceCreate: (body: { date: string; employeeId: string; status: string; division_id?: number; notes?: string }) =>
+    http<{ _id: string }>(`/attendance`, { method: 'POST', body: JSON.stringify(body) }),
   // Activity Logs
-  activityLogs: (params?: { page?: number; limit?: number }) => {
+  activityLogs: (params?: {
+    limit?: number;
+    page?: number;
+  }) => {
     const search = toQS(params as Record<string, string | number | undefined>);
     type ActivityLogsResponse = { data?: unknown; pagination?: { pages?: number }; } | unknown[];
     return http<ActivityLogsResponse>(`/activity-logs${search}`).catch(err => {

@@ -14,10 +14,14 @@ export function setUser(u: { _id: string; name: string; role: string } | null) {
   if (u) {
     _user = { ...u, id: u._id };
     // expose for logger fallback
-    (window as any).__AUTH_USER = _user;
+    if (typeof window !== 'undefined') {
+      window.__AUTH_USER = _user;
+    }
   } else {
     _user = null;
-    (window as any).__AUTH_USER = null;
+    if (typeof window !== 'undefined') {
+      window.__AUTH_USER = undefined;
+    }
   }
 }
 export function getUser() {

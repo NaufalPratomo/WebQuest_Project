@@ -8,7 +8,10 @@ const AngkutSchema = new mongoose.Schema(
     division_id: { type: Number, required: true },
     block_id: { type: String },
     block_no: { type: String, required: true },
+    noTPH: { type: String }, // Nomor TPH for aggregation
     weightKg: { type: Number, required: true, min: 0 },
+    jjgRealisasi: { type: Number, default: 0 }, // Auto-aggregated from RealHarvest per TPH
+    jjgAngkut: { type: Number, default: 0 }, // Manual input by mandor (berapa yang diangkut)
     notes: { type: String },
   },
   { timestamps: true }

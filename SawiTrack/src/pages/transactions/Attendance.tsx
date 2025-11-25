@@ -128,8 +128,12 @@ export default function Attendance() {
         // fetch taksasi selection employeeIds
         let selected: string[] = [];
         if (taksasiContext) {
+          console.log('Loading taksasi selections with context:', taksasiContext);
           const selDocs = await api.taksasiSelections({ date, estateId: taksasiContext.estateId, division_id: taksasiContext.division_id, block_no: taksasiContext.block_no });
-          if (selDocs && selDocs.length > 0) selected = selDocs[0].employeeIds || [];
+          if (selDocs && selDocs.length > 0) {
+            selected = selDocs[0].employeeIds || [];
+            console.log('Found selected employees:', selected);
+          }
         }
         const missing: AttendanceRow[] = selected
           .filter(empId => !serverRows.some(sr => sr.employeeId === empId))
@@ -143,6 +147,7 @@ export default function Attendance() {
             block_no: taksasiContext?.block_no,
             mandorId: taksasiContext?.mandorId,
           }));
+        console.log('Missing employees to add to attendance table:', missing.length);
         setRows([...serverRows, ...missing]);
       } catch { setRows([]); }
     })();

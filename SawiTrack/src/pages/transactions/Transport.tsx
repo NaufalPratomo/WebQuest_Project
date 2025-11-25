@@ -33,27 +33,6 @@ export default function Transport() {
   const [editNoMobil, setEditNoMobil] = useState('');
   const [editSupir, setEditSupir] = useState('');
 
-  // Aggregate Real Harvest by TPH for the selected datePanen
-  const harvestTotalsByTPH = useMemo(() => {
-    // This memo now depends on rows fetched from server; grouping handled after load
-    const map = new Map<string, { estateId: string; division_id: number; block_no: string; notph: string; totalJJG: number }>();
-    for (const r of rows) {
-      if (!r || !String(r.date_panen).startsWith(datePanen)) continue;
-      const estateId = r.estateId || '';
-      const division_id = Number(r.division_id || 0) || 0;
-      const block_no = r.block_no || '';
-      const notph = noteVal(r.notes, 'notph') || '';
-      if (!notph) continue;
-      const key = `${estateId}|${division_id}|${block_no}|${notph}`;
-      const prev = map.get(key) || { estateId, division_id, block_no, notph, totalJJG: 0 };
-      // janjangTBS may not be stored; approximate via weight if available (assuming 15kg avg)
-      // AngkutRow does not carry janjangTBS; approximate from weightKg
-      const approxJanjang = Math.round((r.weightKg || 0) / 15);
-      prev.totalJJG += Number(approxJanjang || 0);
-      map.set(key, prev);
-    }
-    return map;
-  }, [rows, datePanen]);
   const exportCsv = () => {
     const header = ['date_panen', 'date_angkut', 'estateId', 'division_id', 'block_no', 'weightKg'];
     const escape = (v: unknown) => {
@@ -94,72 +73,45 @@ export default function Transport() {
   }, [estateId, divisionId]);
 
   useEffect(() => {
-    // Load angkut rows then ensure auto-populated from harvest totals
+    // Load angkut rows - RealHarvest already auto-syncs jjgRealisasi
     (async () => {
       try {
         const existing = await api.angkutList({ date_panen: datePanen });
         setRows(existing);
-        // build set of existing keys (estate|division|block|notph)
-        const existingKeys = new Set(
-          existing.map((r) => `${r.estateId}|${r.division_id}|${r.block_no}|${noteVal(r.notes, 'notph')}`),
-        );
-        const toCreate: AngkutRow[] = [];
-        harvestTotalsByTPH.forEach((grp, key) => {
-          if (!existingKeys.has(key)) {
-            const notes = [`notph=${grp.notph}`, `jjg_angkut=0`].join('; ');
-            toCreate.push({
-              date_panen: datePanen,
-              date_angkut: datePanen, // default same day, can be edited later
-              estateId: grp.estateId,
-              division_id: grp.division_id,
-              block_no: grp.block_no,
-              weightKg: 0,
-              notes,
-            } as AngkutRow);
-          }
-        });
-        if (toCreate.length > 0) {
-          try {
-            await api.angkutCreate(toCreate);
-            const latest = await api.angkutList({ date_panen: datePanen });
-            setRows(latest);
-          } catch {
-            // ignore backend failure; at least UI will reflect harvest aggregates
-          }
-        }
       } catch {
         setRows([]);
       }
     })();
-  }, [datePanen, harvestTotalsByTPH]);
+  }, [datePanen]);
 
   const filtered = useMemo(() => rows.filter(r => String(r.date_panen).startsWith(datePanen)), [rows, datePanen]);
 
   // Build derived data including JJG Realisasi and Restan per row
   const derived = useMemo(() => {
     return filtered.map((r) => {
-      const key = `${r.estateId}|${r.division_id}|${r.block_no}|${noteVal(r.notes, 'notph')}`;
-      const grp = harvestTotalsByTPH.get(key);
-      const totalJJG = grp?.totalJJG || 0;
-      const jjgAngkut = Number(noteVal(r.notes, 'jjg_angkut') || 0);
-      const restan = totalJJG - jjgAngkut;
-      return { row: r, totalJJG, jjgAngkut, restan };
+      const jjgRealisasi = Number(r.jjgRealisasi || 0); // Auto from RealHarvest
+      const jjgAngkut = Number(r.jjgAngkut || 0); // Manual input by mandor
+      const restan = jjgRealisasi - jjgAngkut;
+      return { row: r, jjgRealisasi, jjgAngkut, restan };
     });
-  }, [filtered, harvestTotalsByTPH]);
+  }, [filtered]);
 
   const addRow = async () => {
     try {
-      if (!datePanen || !dateAngkut || !estateId || !divisionId || !blockNo || !jjgAngkut) {
-        toast.error('Lengkapi input');
+      if (!datePanen || !dateAngkut || !estateId || !divisionId || !blockNo) {
+        toast.error('Lengkapi input estate/divisi/blok');
         return;
       }
-      const notes = [
-        noTPH ? `notph=${noTPH}` : '',
-        `jjg_angkut=${jjgAngkut}`,
-        noMobil ? `no_mobil=${noMobil}` : '',
-        namaSupir ? `supir=${namaSupir}` : '',
-      ].filter(Boolean).join('; ');
-      const body: AngkutRow = { date_panen: datePanen, date_angkut: dateAngkut, estateId, division_id: Number(divisionId), block_no: blockNo, weightKg: 0, notes };
+      const body: AngkutRow = { 
+        date_panen: datePanen, 
+        date_angkut: dateAngkut, 
+        estateId, 
+        division_id: Number(divisionId), 
+        block_no: blockNo,
+        noTPH: noTPH || undefined,
+        jjgAngkut: Number(jjgAngkut || 0), // Manual input
+        weightKg: 0, 
+      };
       const created = await api.angkutCreate(body);
       toast.success('Tersimpan');
       setRows(prev => Array.isArray(created) ? [...prev, ...created] : [...prev, created as AngkutRow]);
@@ -177,32 +129,17 @@ export default function Transport() {
     }
   };
 
-  // Inline update jjg_angkut for a given row, persist to backend
+  // Inline update jjgAngkut for a given row, persist to backend
   type AngkutRowWithId = AngkutRow & { _id?: string };
   const updateJjgAngkut = async (r: AngkutRow, value: number) => {
-    const notph = noteVal(r.notes, 'notph');
-    const no_mobil = noteVal(r.notes, 'no_mobil');
-    const supir = noteVal(r.notes, 'supir');
-    const notes = [
-      notph ? `notph=${notph}` : '',
-      `jjg_angkut=${Math.max(0, Math.floor(value || 0))}`,
-      no_mobil ? `no_mobil=${no_mobil}` : '',
-      supir ? `supir=${supir}` : '',
-    ]
-      .filter(Boolean)
-      .join('; ');
     try {
-      const body: AngkutRow = {
-        _id: (r as AngkutRowWithId)._id,
-        date_panen: r.date_panen,
-        date_angkut: r.date_angkut,
-        estateId: r.estateId,
-        division_id: r.division_id,
-        block_no: r.block_no,
-        weightKg: r.weightKg || 0,
-        notes,
-      } as AngkutRow;
-      await api.angkutCreate(body);
+      const body: Partial<AngkutRow> = {
+        jjgAngkut: Math.max(0, Math.floor(value || 0)),
+      };
+      const rowId = (r as AngkutRowWithId)._id;
+      if (rowId) {
+        await api.angkutUpdate(rowId, body);
+      }
       const latest = await api.angkutList({ date_panen: datePanen });
       setRows(latest);
       toast.success('JJG angkut diperbarui');
@@ -458,14 +395,14 @@ export default function Transport() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {derived.map(({ row: r, totalJJG, jjgAngkut, restan }, idx) => (
+                {derived.map(({ row: r, jjgRealisasi, jjgAngkut, restan }, idx) => (
                   <TableRow key={(r as AngkutRowWithId)._id || idx}>
                     <TableCell className="text-center">{String(r.date_angkut).slice(0, 10)}</TableCell>
                     <TableCell className="text-center">{r.estateId}</TableCell>
                     <TableCell className="text-center">{r.division_id}</TableCell>
                     <TableCell className="text-center">{r.block_no}</TableCell>
-                    <TableCell className="text-center">{noteVal(r.notes, 'notph') || '-'}</TableCell>
-                    <TableCell className="text-center font-medium">{totalJJG}</TableCell>
+                    <TableCell className="text-center">{r.noTPH || '-'}</TableCell>
+                    <TableCell className="text-center font-medium">{jjgRealisasi}</TableCell>
                     <TableCell className="text-center">
                       <Input
                         type="number"
@@ -507,12 +444,8 @@ export default function Transport() {
                     <Label>Nama Supir</Label>
                     <Input value={editSupir} onChange={(e) => setEditSupir(e.target.value)} placeholder="Isi nama supir" />
                   </div>
-                  <div className="md:col-span-2 text-sm text-muted-foreground">TPH: {noteVal(completeTarget?.notes, 'notph') || '-'}</div>
-                  <div className="md:col-span-2 text-sm">JJG Realisasi: {(() => {
-                    if (!completeTarget) return 0;
-                    const key = `${completeTarget.estateId}|${completeTarget.division_id}|${completeTarget.block_no}|${noteVal(completeTarget.notes, 'notph')}`;
-                    return harvestTotalsByTPH.get(key)?.totalJJG || 0;
-                  })()}</div>
+                  <div className="md:col-span-2 text-sm text-muted-foreground">TPH: {completeTarget?.noTPH || '-'}</div>
+                  <div className="md:col-span-2 text-sm">JJG Realisasi: {Number(completeTarget?.jjgRealisasi || 0)}</div>
                 </div>
                 <div className="flex gap-2 mt-4">
                   <Button onClick={saveComplete} className="flex-1">Simpan</Button>

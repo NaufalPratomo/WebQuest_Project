@@ -1123,6 +1123,30 @@ app.get(`${API_BASE_PATH}/panen`, async (req, res) => {
   }
 });
 
+app.put(`${API_BASE_PATH}/panen/:id`, async (req, res) => {
+  try {
+    const existing = await Panen.findById(req.params.id);
+    if (!existing) return res.status(404).json({ error: 'Panen record not found' });
+    
+    // Check if date is closed
+    const dateToCheck = req.body.date_panen || existing.date_panen;
+    if (await checkDateClosed(dateToCheck)) {
+      return res.status(400).json({ error: `Periode untuk tanggal ${dateToCheck} sudah ditutup.` });
+    }
+
+    const updated = await Panen.findByIdAndUpdate(
+      req.params.id,
+      { $set: req.body },
+      { new: true, runValidators: true }
+    );
+    
+    logActivity(req, "UPDATE_PANEN", { panenId: req.params.id });
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Angkut (Transport) locked to date_panen
 app.post(`${API_BASE_PATH}/angkut`, async (req, res) => {
   try {
@@ -1158,6 +1182,30 @@ app.get(`${API_BASE_PATH}/angkut`, async (req, res) => {
     if (division_id !== undefined) q.division_id = Number(division_id);
     const rows = await Angkut.find(q).lean();
     res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put(`${API_BASE_PATH}/angkut/:id`, async (req, res) => {
+  try {
+    const existing = await Angkut.findById(req.params.id);
+    if (!existing) return res.status(404).json({ error: 'Angkut record not found' });
+    
+    // Check if date is closed
+    const dateToCheck = req.body.date_panen || existing.date_panen;
+    if (await checkDateClosed(dateToCheck)) {
+      return res.status(400).json({ error: `Periode untuk tanggal ${dateToCheck} sudah ditutup.` });
+    }
+
+    const updated = await Angkut.findByIdAndUpdate(
+      req.params.id,
+      { $set: req.body },
+      { new: true, runValidators: true }
+    );
+    
+    logActivity(req, "UPDATE_ANGKUT", { angkutId: req.params.id });
+    res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

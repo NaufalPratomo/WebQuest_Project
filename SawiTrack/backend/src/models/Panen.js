@@ -7,6 +7,7 @@ const PanenSchema = new mongoose.Schema(
     division_id: { type: Number, required: true },
     block_id: { type: String },
     block_no: { type: String, required: true },
+    noTPH: { type: String }, // Nomor TPH
     weightKg: { type: Number, required: true, min: 0 },
     employeeId: { type: String },
     employeeName: { type: String },
@@ -14,6 +15,12 @@ const PanenSchema = new mongoose.Schema(
     mandorName: { type: String },
     jobCode: { type: String },
     notes: { type: String },
+    // Real harvest wage calculation fields
+    janjangTBS: { type: Number, default: 0 },
+    janjangKosong: { type: Number, default: 0 },
+    upahBasis: { type: Number, default: 0 },
+    premi: { type: Number, default: 0 },
+    totalUpah: { type: Number, default: 0 },
   },
   { timestamps: true }
 );

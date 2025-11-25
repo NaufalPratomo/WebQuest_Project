@@ -73,7 +73,20 @@ const RealHarvest = () => {
   useEffect(() => {
     // load estates on mount
     api.estates().then(setEstates).catch(() => toast.error('Gagal memuat estate'));
-    api.employees().then(list => setEmployees(list.map(e => ({ _id: e._id, name: e.name })))).catch(()=> setEmployees([]));
+    // Load both regular employees and custom workers
+    api.employees()
+      .then(base => {
+        api.customWorkers()
+          .then(custom => {
+            const merged = [
+              ...(base || []).map(e => ({ _id: e._id, name: e.name })),
+              ...(custom || []).map(c => ({ _id: c._id, name: c.name }))
+            ];
+            setEmployees(merged);
+          })
+          .catch(() => setEmployees((base || []).map(e => ({ _id: e._id, name: e.name }))));
+      })
+      .catch(() => setEmployees([]));
   }, []);
 
   useEffect(() => {
@@ -90,16 +103,16 @@ const RealHarvest = () => {
           estateName: estateName,
           division: String(p.division_id ?? ''),
           block: p.block_no,
-          noTPH: p.notes ? p.notes.split(';').find(x=>x.startsWith('notph='))?.split('=')[1] : undefined,
+          noTPH: (p as { noTPH?: string }).noTPH || '',
           mandor: p.mandorName || '',
           pemanenId: p.employeeId || '',
           pemanenName: p.employeeName || p.employeeId || '',
           jobCode: p.jobCode || 'panen',
-          janjangTBS: Number(p.janjangTBS ?? 0),
-          janjangKosong: 0,
-          upahBasis: Number(p.upahBasis ?? 0),
-          premi: Number(p.premi ?? 0),
-          totalUpah: Number(p.totalUpah ?? (Number(p.upahBasis ?? 0) + Number(p.premi ?? 0))),
+          janjangTBS: Number((p as { janjangTBS?: number }).janjangTBS ?? 0),
+          janjangKosong: Number((p as { janjangKosong?: number }).janjangKosong ?? 0),
+          upahBasis: Number((p as { upahBasis?: number }).upahBasis ?? 0),
+          premi: Number((p as { premi?: number }).premi ?? 0),
+          totalUpah: Number((p as { totalUpah?: number }).totalUpah ?? 0),
         };
         });
         setRows(mapped);
@@ -156,6 +169,60 @@ const RealHarvest = () => {
     setRows(next);
   }
 
+  // Sync RealHarvest data to Angkut: aggregate janjangTBS by noTPH
+  async function syncToAngkut(date: string, estateId: string, division_id: number, block_no: string, noTPH: string) {
+    try {
+      // Get all RealHarvest data for this date/estate/division/block/noTPH combination
+      const allPanen = await api.panenList({ date_panen: date });
+      
+      // Filter by same estate, division, block, noTPH
+      const samePanen = allPanen.filter(p => 
+        p.estateId === estateId && 
+        p.division_id === division_id && 
+        p.block_no === block_no &&
+        (p as { noTPH?: string }).noTPH === noTPH
+      );
+      
+      // Aggregate total janjangTBS for this TPH
+      const totalJJG = samePanen.reduce((sum, p) => sum + Number((p as { janjangTBS?: number }).janjangTBS || 0), 0);
+      
+      // Check if Angkut record already exists for this combination
+      const existingAngkut = await api.angkutList({ date_panen: date });
+      const angkutRecord = existingAngkut.find(a => 
+        a.estateId === estateId && 
+        a.division_id === division_id && 
+        a.block_no === block_no &&
+        a.noTPH === noTPH
+      );
+      
+      if (angkutRecord && angkutRecord._id) {
+        // Update existing Angkut record with new aggregated JJG Realisasi
+        await api.angkutUpdate(angkutRecord._id, {
+          jjgRealisasi: totalJJG,
+          weightKg: totalJJG * 15, // Assume 15kg per janjang
+        } as { jjgRealisasi: number; weightKg: number });
+      } else {
+        // Create new Angkut record with Realisasi
+        await api.angkutCreate({
+          date_panen: date,
+          date_angkut: date, // Default same day
+          estateId,
+          division_id,
+          block_no,
+          noTPH,
+          jjgRealisasi: totalJJG,
+          jjgAngkut: 0, // Mandor will input this later
+          weightKg: totalJJG * 15, // Assume 15kg per janjang
+        } as { date_panen: string; date_angkut: string; estateId: string; division_id: number; block_no: string; noTPH: string; jjgRealisasi: number; jjgAngkut: number; weightKg: number });
+      }
+      
+      console.log(`Angkut synced: TPH ${noTPH} = ${totalJJG} JJG`);
+    } catch (e) {
+      console.warn('Gagal sync ke Angkut:', e);
+      // Don't throw - let the main save continue even if sync fails
+    }
+  }
+
   async function handleSave() {
     if (!form.division || !form.mandor || !form.pemanenId) {
       toast.error('Mohon lengkapi mandor, pemanen, dan divisi');
@@ -199,11 +266,10 @@ const RealHarvest = () => {
       persist(next);
       // attempt backend update if _id stored previously
       // find existing row that has backend id stored transiently on object
-      const backendTarget = rows.find(r => (r as unknown as { _backendId?: string })._backendId && r.id === editingId) as (RealRow & { _backendId?: string }) | undefined;
-      if (backendTarget && backendTarget._backendId) {
+      const backendTarget = rows.find(r => r.id === editingId);
+      if (backendTarget && backendTarget.id.match(/^[0-9a-fA-F]{24}$/)) {
         try {
-          await api.panenCreate({
-            _id: backendTarget._backendId,
+          await api.panenUpdate(backendTarget.id, {
             date_panen: date,
             estateId: form.estateId || '',
             division_id: Number(form.division),
@@ -213,18 +279,21 @@ const RealHarvest = () => {
             employeeName: pemanenName,
             mandorName: form.mandor,
             jobCode: form.jobCode,
-            notes: `edit:${new Date().toISOString()}`,
+            noTPH: form.noTPH,
             janjangTBS,
             janjangKosong,
             upahBasis,
             premi,
             totalUpah,
-          });
+          } as { date_panen: string; estateId: string; division_id: number; block_no: string; weightKg: number; employeeId: string; employeeName: string; mandorName: string; jobCode: string; noTPH: string; janjangTBS: number; janjangKosong: number; upahBasis: number; premi: number; totalUpah: number });
+          
+          // Auto-update Angkut: re-aggregate by noTPH
+          await syncToAngkut(date, form.estateId || '', Number(form.division), form.blockNo, form.noTPH);
         } catch (e) {
           console.warn('Gagal update backend panen row', e);
         }
       }
-      toast.success('Data real panen diperbarui');
+      toast.success('Data real panen diperbarui dan disinkronkan ke Angkut');
     } else {
       const row: RealRow = {
         id: `${Date.now()}`,
@@ -259,13 +328,13 @@ const RealHarvest = () => {
           employeeName: pemanenName,
           mandorName: form.mandor,
           jobCode: form.jobCode,
-          notes: `create:${new Date().toISOString()}`,
+          noTPH: form.noTPH,
           janjangTBS,
           janjangKosong,
           upahBasis,
           premi,
           totalUpah,
-        });
+        } as { date_panen: string; estateId: string; division_id: number; block_no: string; weightKg: number; employeeId: string; employeeName: string; mandorName: string; jobCode: string; noTPH: string; janjangTBS: number; janjangKosong: number; upahBasis: number; premi: number; totalUpah: number });
         // store backend id for edit flows (assuming single object return)
         const backendId = (Array.isArray(created) ? created[0]?._id : (created as { _id?: string })?._id) as string | undefined;
         if (backendId) {
@@ -273,10 +342,13 @@ const RealHarvest = () => {
           // Persisting with extended metadata will drop _backendId due to typing; we only need it transiently in memory
           persist(withId as RealRow[]);
         }
+        
+        // Auto-create/update Angkut: aggregate by noTPH
+        await syncToAngkut(date, form.estateId || '', Number(form.division), form.blockNo, form.noTPH);
       } catch (e) {
         console.warn('Gagal simpan ke backend panen', e);
       }
-      toast.success('Data real panen ditambahkan');
+      toast.success('Data real panen ditambahkan dan disinkronkan ke Angkut');
     }
     setDialogOpen(false);
     setEditingId(null);
@@ -376,7 +448,9 @@ const RealHarvest = () => {
                 <Label>Pemanen (hadir)</Label>
                 <Select value={form.pemanenId} onValueChange={(v)=> setForm(p=> ({ ...p, pemanenId: v }))}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Pilih pemanen" />
+                    <SelectValue placeholder="Pilih pemanen">
+                      {form.pemanenId ? employees.find(e => e._id === form.pemanenId)?.name || form.pemanenId : 'Pilih pemanen'}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {attendance.filter(a=> (a.status==='hadir' || a.status==='present')).map(a => {

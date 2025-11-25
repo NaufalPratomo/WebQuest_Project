@@ -6,6 +6,7 @@ import { api } from '@/lib/api';
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from 'recharts';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, parseISO } from 'date-fns';
 import { id } from 'date-fns/locale';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const Dashboard = () => {
     const { user } = useAuth();
@@ -18,6 +19,8 @@ const Dashboard = () => {
         targetsPercent: number;
     } | null>(null);
     const [chartData, setChartData] = useState<any[]>([]);
+    const [estates, setEstates] = useState<Array<{ _id: string; estate_name: string }>>([]);
+    const [selectedEstate, setSelectedEstate] = useState<string>("all");
 
     useEffect(() => {
         let mounted = true;
@@ -25,8 +28,15 @@ const Dashboard = () => {
             try {
                 setLoading(true);
 
-                // Fetch stats
-                const statsData = await api.stats();
+                // Fetch estates if not already loaded
+                if (estates.length === 0) {
+                    const estatesData = await api.estates();
+                    if (mounted) setEstates(estatesData);
+                }
+
+                // Fetch stats with estate filter
+                const filterParams = selectedEstate !== "all" ? { estateId: selectedEstate } : {};
+                const statsData = await api.stats(filterParams);
                 if (mounted) setStats(statsData);
 
                 // Fetch chart data for current month
@@ -35,8 +45,8 @@ const Dashboard = () => {
                 const end = format(endOfMonth(now), 'yyyy-MM-dd');
 
                 const [taksasi, panen] = await Promise.all([
-                    api.taksasiList({ startDate: start, endDate: end }),
-                    api.panenList({ startDate: start, endDate: end })
+                    api.taksasiList({ startDate: start, endDate: end, ...filterParams }),
+                    api.panenList({ startDate: start, endDate: end, ...filterParams })
                 ]);
 
                 const days = eachDayOfInterval({ start: startOfMonth(now), end: endOfMonth(now) });
@@ -68,15 +78,32 @@ const Dashboard = () => {
         return () => {
             mounted = false;
         };
-    }, []);
+    }, [selectedEstate]);
 
     return (
         <div className="space-y-6">
-            <div>
-                <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
-                <p className="text-muted-foreground mt-1">
-                    Selamat datang, {user?.name}
-                </p>
+            <div className="flex items-center justify-between">
+                <div>
+                    <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
+                    <p className="text-muted-foreground mt-1">
+                        Selamat datang, {user?.name}
+                    </p>
+                </div>
+                <div className="w-[200px]">
+                    <Select value={selectedEstate} onValueChange={setSelectedEstate}>
+                        <SelectTrigger>
+                            <SelectValue placeholder="Pilih Estate" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">Semua Estate</SelectItem>
+                            {estates.map((estate) => (
+                                <SelectItem key={estate._id} value={estate._id}>
+                                    {estate.estate_name}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

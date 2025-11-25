@@ -900,19 +900,38 @@ app.get(`${API_BASE_PATH}/recap/hk`, async (req, res) => {
 });
 
 // Stats
-app.get(`${API_BASE_PATH}/stats`, async (_req, res) => {
+// Stats
+app.get(`${API_BASE_PATH}/stats`, async (req, res) => {
   try {
+    const { estateId } = req.query;
+    let reportFilter = {};
+    let targetFilter = { status: "active" };
+
+    // If estateId is provided, filter by divisions in that estate
+    if (estateId) {
+      const estate = await Estate.findById(estateId).lean();
+      if (estate && estate.divisions) {
+        // Convert division_ids to strings as Report.division is String
+        const divIds = estate.divisions.map(d => String(d.division_id));
+        reportFilter.division = { $in: divIds };
+        targetFilter.division = { $in: divIds };
+      }
+    }
+
     const [totalEmployees, pendingCount, targets] = await Promise.all([
-      Employee.countDocuments({}),
-      Report.countDocuments({ status: "pending" }),
-      Target.find({ status: "active" }, { target: 1, achieved: 1 }).lean(),
+      Employee.countDocuments({}), // Keep global for now
+      Report.countDocuments({ status: "pending", ...reportFilter }),
+      Target.find(targetFilter, { target: 1, achieved: 1 }).lean(),
     ]);
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const tomorrow = new Date(today);
     tomorrow.setDate(today.getDate() + 1);
+
     const todayReports = await Report.countDocuments({
       date: { $gte: today, $lt: tomorrow },
+      ...reportFilter
     });
 
     const percent = targets.length

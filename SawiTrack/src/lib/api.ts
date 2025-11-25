@@ -317,13 +317,15 @@ export const api = {
     const search = toQS(params as Record<string, string | number | undefined>);
     return http<RecapHKRow[]>(`/recap/hk${search}`);
   },
-  stats: () =>
-    http<{
+  stats: (params?: { estateId?: string }) => {
+    const search = toQS(params);
+    return http<{
       totalEmployees: number;
       todayReports: number;
       pendingCount: number;
       targetsPercent: number;
-    }>(`/stats`),
+    }>(`/stats${search}`);
+  },
   taksasiList: (params?: { date?: string; startDate?: string; endDate?: string; estateId?: string; division_id?: number }) => {
     const search = toQS(params as Record<string, string | number | undefined>);
     return http<Array<TaksasiRow>>(`/taksasi${search}`);

@@ -149,6 +149,14 @@ const Locations = () => {
     groupedData: Record<string, Partial<Block>[]>;
   } | null>(null);
 
+  // Import Estate Preview State
+  const [isImportEstatePreviewOpen, setIsImportEstatePreviewOpen] = useState(false);
+  const [importEstatePreviewData, setImportEstatePreviewData] = useState<{
+    companyId: string;
+    newEstates: string[];
+    existingEstates: string[];
+  } | null>(null);
+
   // Helper function to format numbers: 0 stays as "0", whole numbers without decimals, decimals with 3 digits
   const formatNumber = (value: number | null | undefined): string => {
     if (value == null) return "-";
@@ -354,7 +362,7 @@ const Locations = () => {
 
       // Generate ID dari nama estate (lowercase, remove spaces, add timestamp untuk uniqueness)
       const estateId =
-        newEstateName.toLowerCase().replace(/\s+/g, "_") + "_" + Date.now();
+        newEstateName.toLowerCase().replace(/\s+/g, "") + "" + Date.now();
 
       // Call API to create new estate in MongoDB
       await api.createEstate({
@@ -402,6 +410,154 @@ const Locations = () => {
     }
   };
 
+  const handleImportEstates = (companyId: string) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".xlsx,.xls";
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        try {
+          const data = new Uint8Array(event.target?.result as ArrayBuffer);
+          const wb = XLSX.read(data, { type: "array" });
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws);
+
+          const newEstates: string[] = [];
+          const existingEstates: string[] = [];
+
+          // Get current estates for this company
+          const company = companies.find((c) => c._id === companyId);
+          // Get ALL estates to prevent duplicates across the system if needed, 
+          // or just for this company. Usually estate names should be unique globally or per company.
+          // Let's check against ALL estates to be safe, or at least all estates linked to this company.
+
+          // Strategy: Check against ALL existing estates in the system to avoid ID conflicts or naming confusion
+          const allEstateNames = estates.map((e) => e.estate_name.toLowerCase().trim());
+
+          jsonData.forEach((row) => {
+            // Try to find the estate name column
+            const estateNameVal =
+              row["Nama Estate"] ||
+              row["nama estate"] ||
+              row["Estate Name"] ||
+              row["estate name"] ||
+              row["Name"] ||
+              row["name"] ||
+              row["Estate"] ||
+              row["estate"] ||
+              Object.values(row)[0]; // Fallback to first column
+
+            const estateName = String(estateNameVal || "").trim();
+
+            if (!estateName) return;
+
+            if (allEstateNames.includes(estateName.toLowerCase())) {
+              if (!existingEstates.includes(estateName)) {
+                existingEstates.push(estateName);
+              }
+            } else {
+              if (!newEstates.includes(estateName)) {
+                newEstates.push(estateName);
+              }
+            }
+          });
+
+          setImportEstatePreviewData({
+            companyId,
+            newEstates,
+            existingEstates,
+          });
+          setIsImportEstatePreviewOpen(true);
+        } catch (error) {
+          console.error("Error importing estates:", error);
+          toast({
+            title: "Gagal import",
+            description: "Gagal membaca file Excel",
+            variant: "destructive",
+          });
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    };
+    input.click();
+  };
+
+  const handleConfirmImportEstates = async () => {
+    if (!importEstatePreviewData) return;
+
+    try {
+      setLoading(true);
+      const { companyId, newEstates } = importEstatePreviewData;
+      const createdEstateIds: string[] = [];
+
+      for (const estateName of newEstates) {
+        const estateId = estateName.toLowerCase().replace(/\s+/g, "") + "" + Date.now();
+        await api.createEstate({
+          _id: estateId,
+          estate_name: estateName,
+          divisions: []
+        });
+        createdEstateIds.push(estateId);
+      }
+
+      // Update company
+      const company = companies.find(c => c._id === companyId);
+      if (company) {
+        const currentEstateIds = company.estates?.map(e => typeof e === 'string' ? e : e._id) || [];
+        await api.updateCompany(companyId, {
+          estates: [...currentEstateIds, ...createdEstateIds]
+        });
+      }
+
+      // Refresh data
+      const [updatedCompanies, updatedEstates] = await Promise.all([
+        api.companies(),
+        api.estates(),
+      ]);
+      setCompanies(updatedCompanies || []);
+      setEstates(updatedEstates || []);
+
+      toast({
+        title: "Import Berhasil",
+        description: `${newEstates.length} estate berhasil ditambahkan.`
+      });
+
+      setIsImportEstatePreviewOpen(false);
+      setImportEstatePreviewData(null);
+    } catch (error) {
+      console.error("Error confirming import estates:", error);
+      toast({
+        title: "Gagal Import",
+        description: "Terjadi kesalahan saat menyimpan data",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleExportEstates = (companyId: string) => {
+    const company = companies.find(c => c._id === companyId);
+    if (!company) return;
+
+    const currentEstateIds = company.estates?.map(e => typeof e === 'string' ? e : e._id) || [];
+    const companyEstates = estates.filter(e => currentEstateIds.includes(e._id));
+
+    const exportData = companyEstates.map(e => ({
+      "Nama Estate": e.estate_name,
+      "ID Estate": e._id
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Estates");
+    XLSX.writeFile(wb, `Estates_${company.company_name}_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
   const handleExportExcel = (estateId: string) => {
     const exportData: Array<Record<string, string | number>> = [];
 
@@ -411,11 +567,11 @@ const Locations = () => {
     const metaEs = meta[estateId];
     const blocksFlat: Array<{ division_id: number; block: Block }> = metaEs
       ? Object.entries(metaEs.blocksByDivision).flatMap(([divId, blks]) =>
-          (blks || []).map((b) => ({
-            division_id: Number(divId),
-            block: b,
-          }))
-        )
+        (blks || []).map((b) => ({
+          division_id: Number(divId),
+          block: b,
+        }))
+      )
       : [];
 
     const numOr0 = (v: unknown): number => (typeof v === "number" ? v : 0);
@@ -461,8 +617,7 @@ const Locations = () => {
 
     XLSX.writeFile(
       workbook,
-      `Aresta_${estate.estate_name}_${
-        new Date().toISOString().split("T")[0]
+      `Aresta_${estate.estate_name}_${new Date().toISOString().split("T")[0]
       }.xlsx`
     );
   };
@@ -474,11 +629,11 @@ const Locations = () => {
     const metaEs = meta[estateId];
     const blocksFlat: Array<{ division_id: number; block: Block }> = metaEs
       ? Object.entries(metaEs.blocksByDivision).flatMap(([divId, blks]) =>
-          (blks || []).map((b) => ({
-            division_id: Number(divId),
-            block: b,
-          }))
-        )
+        (blks || []).map((b) => ({
+          division_id: Number(divId),
+          block: b,
+        }))
+      )
       : [];
 
     const doc = new jsPDF({
@@ -631,8 +786,7 @@ const Locations = () => {
     });
 
     doc.save(
-      `Aresta_${estate.estate_name}_${
-        new Date().toISOString().split("T")[0]
+      `Aresta_${estate.estate_name}_${new Date().toISOString().split("T")[0]
       }.pdf`
     );
   };
@@ -670,9 +824,6 @@ const Locations = () => {
             if (!groupedData[divisi]) {
               groupedData[divisi] = [];
             }
-
-            // Log raw row untuk debugging
-            console.log("Raw row data:", row);
 
             // Transform row to Block format (sesuai dengan struktur database)
             const toNum = (v: unknown): number => {
@@ -763,11 +914,9 @@ const Locations = () => {
               const val2 = (block2 as Record<string, unknown>)[field];
 
               // Normalize values (treat null/undefined/0/"" as equivalent for comparison)
-              const norm1 =
-                val1 == null || val1 === "" || val1 === 0 ? null : val1;
-              const norm2 =
-                val2 == null || val2 === "" || val2 === 0 ? null : val2;
-
+              const norm1 = val1 == null || val1 === '' || val1 === 0 ? null : val1;
+              const norm2 = val2 == null || val2 === '' || val2 === 0 ? null : val2;
+              
               // If both are numbers, compare with tolerance for floating point
               if (typeof norm1 === "number" && typeof norm2 === "number") {
                 if (Math.abs(norm1 - norm2) > 0.001) return false;
@@ -794,7 +943,7 @@ const Locations = () => {
 
           for (const [divisionName, blocks] of Object.entries(groupedData)) {
             const divisionId = parseInt(
-              divisionName.replace("Divisi ", "").trim()
+              divisionName.replace(/Divisi/i, "").trim()
             );
 
             const existingDivision = existingDivisions.find(
@@ -878,7 +1027,7 @@ const Locations = () => {
       const updatedDivisions = [...existingDivisions];
 
       for (const [divisionName, blocks] of Object.entries(groupedData)) {
-        const divisionId = parseInt(divisionName.replace("Divisi ", "").trim());
+        const divisionId = parseInt(divisionName.replace(/Divisi/i, "").trim());
 
         // Find existing division or create new
         const divisionIndex = updatedDivisions.findIndex(
@@ -925,14 +1074,16 @@ const Locations = () => {
       const totalNew = newBlocks.length;
       const totalUpdated = updatedBlocks.length;
       const totalProcessed = totalNew + totalUpdated;
-
-      let description = "";
+      
+      let description = '';
       if (totalNew > 0 && totalUpdated > 0) {
         description = `${totalNew} blok baru ditambahkan dan ${totalUpdated} blok diperbarui di Estate "${estateName}"`;
       } else if (totalNew > 0) {
         description = `${totalNew} blok baru berhasil ditambahkan ke Estate "${estateName}"`;
       } else if (totalUpdated > 0) {
         description = `${totalUpdated} blok berhasil diperbarui di Estate "${estateName}"`;
+      } else {
+        description = 'Tidak ada data baru yang ditambahkan.';
       }
 
       toast({
@@ -980,6 +1131,7 @@ const Locations = () => {
       setLoading(false);
     }
   };
+
 
   return (
     <>
@@ -1043,68 +1195,87 @@ const Locations = () => {
                             />
                           </div>
                         </div>
-                        <Dialog
-                          open={isAddEstateOpen}
-                          onOpenChange={setIsAddEstateOpen}
-                        >
-                          <DialogTrigger asChild>
-                            <Button
-                              variant="default"
-                              size="sm"
-                              className="bg-green-600 hover:bg-green-700"
-                              onClick={() => setSelectedCompanyId(company._id)}
-                            >
-                              <Plus className="mr-2 h-4 w-4" />
-                              Tambah Estate
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent
-                            className="bg-white border-gray-200"
-                            style={{
-                              backgroundColor: "#ffffff",
-                              color: "#000000",
-                            }}
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleImportEstates(company._id)}
+                            className="border-green-500 text-green-600 hover:bg-green-50 hover:text-green-700"
                           >
-                            <DialogHeader>
-                              <DialogTitle>Tambah Estate Baru</DialogTitle>
-                              <DialogDescription>
-                                Masukkan nama estate untuk perusahaan yang
-                                dipilih
-                              </DialogDescription>
-                            </DialogHeader>
-                            <div className="space-y-4 py-4">
-                              <div className="space-y-2">
-                                <Label>Perusahaan</Label>
-                                <div className="px-3 py-2 bg-muted rounded-md text-sm">
-                                  {companies.find(
-                                    (c) => c._id === selectedCompanyId
-                                  )?.company_name ||
-                                    "Tidak ada perusahaan dipilih"}
+                            <Upload className="mr-2 h-4 w-4" />
+                            Import Estate
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={() => handleExportEstates(company._id)}
+                            className="bg-green-600 hover:bg-green-700 text-white"
+                          >
+                            <Download className="mr-2 h-4 w-4" />
+                            Export Estate
+                          </Button>
+                          <Dialog
+                            open={isAddEstateOpen}
+                            onOpenChange={setIsAddEstateOpen}
+                          >
+                            <DialogTrigger asChild>
+                              <Button
+                                variant="default"
+                                size="sm"
+                                className="bg-orange-500 hover:bg-orange-600"
+                                onClick={() => setSelectedCompanyId(company._id)}
+                              >
+                                <Plus className="mr-2 h-4 w-4" />
+                                Tambah Estate
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent
+                              className="bg-white border-gray-200"
+                              style={{
+                                backgroundColor: "#ffffff",
+                                color: "#000000",
+                              }}
+                            >
+                              <DialogHeader>
+                                <DialogTitle>Tambah Estate Baru</DialogTitle>
+                                <DialogDescription>
+                                  Masukkan nama estate untuk perusahaan yang
+                                  dipilih
+                                </DialogDescription>
+                              </DialogHeader>
+                              <div className="space-y-4 py-4">
+                                <div className="space-y-2">
+                                  <Label>Perusahaan</Label>
+                                  <div className="px-3 py-2 bg-muted rounded-md text-sm">
+                                    {companies.find(
+                                      (c) => c._id === selectedCompanyId
+                                    )?.company_name ||
+                                      "Tidak ada perusahaan dipilih"}
+                                  </div>
+                                </div>
+                                <div className="space-y-2">
+                                  <Label htmlFor="estate-name">Nama Estate</Label>
+                                  <Input
+                                    id="estate-name"
+                                    placeholder="Contoh: Estate ABC"
+                                    value={newEstateName}
+                                    onChange={(e) =>
+                                      setNewEstateName(e.target.value)
+                                    }
+                                  />
                                 </div>
                               </div>
-                              <div className="space-y-2">
-                                <Label htmlFor="estate-name">Nama Estate</Label>
-                                <Input
-                                  id="estate-name"
-                                  placeholder="Contoh: Estate ABC"
-                                  value={newEstateName}
-                                  onChange={(e) =>
-                                    setNewEstateName(e.target.value)
-                                  }
-                                />
-                              </div>
-                            </div>
-                            <DialogFooter>
-                              <Button
-                                variant="outline"
-                                onClick={() => setIsAddEstateOpen(false)}
-                              >
-                                Batal
-                              </Button>
-                              <Button onClick={handleAddEstate}>Simpan</Button>
-                            </DialogFooter>
-                          </DialogContent>
-                        </Dialog>
+                              <DialogFooter>
+                                <Button
+                                  variant="outline"
+                                  onClick={() => setIsAddEstateOpen(false)}
+                                >
+                                  Batal
+                                </Button>
+                                <Button onClick={handleAddEstate}>Simpan</Button>
+                              </DialogFooter>
+                            </DialogContent>
+                          </Dialog>
+                        </div>
                       </div>
                     </CardHeader>
                     <CardContent>
@@ -1115,14 +1286,14 @@ const Locations = () => {
                             division_id: number;
                             block: Block;
                           }> = metaEs
-                            ? Object.entries(metaEs.blocksByDivision).flatMap(
+                              ? Object.entries(metaEs.blocksByDivision).flatMap(
                                 ([divId, blks]) =>
                                   (blks || []).map((b) => ({
                                     division_id: Number(divId),
                                     block: b,
                                   }))
                               )
-                            : [];
+                              : [];
 
                           const currentPage = currentPages[es._id] || 1;
                           const itemsPerPage = 10;
@@ -1245,11 +1416,10 @@ const Locations = () => {
                                       {paginatedBlocks.map(
                                         ({ division_id, block }, idx) => (
                                           <TableRow
-                                            key={`${division_id}-${
-                                              block.no_blok ??
+                                            key={`${division_id}-${block.no_blok ??
                                               block.id_blok ??
                                               idx
-                                            }`}
+                                              }`}
                                           >
                                             <TableCell>
                                               Divisi {division_id}
@@ -1265,7 +1435,7 @@ const Locations = () => {
                                             </TableCell>
                                             <TableCell className="text-right font-medium">
                                               {typeof block.luas_blok ===
-                                              "number"
+                                                "number"
                                                 ? formatNumber(block.luas_blok)
                                                 : block.luas_blok ?? "-"}
                                             </TableCell>
@@ -1293,8 +1463,8 @@ const Locations = () => {
                                             <TableCell>
                                               {String(
                                                 block.tahun_ ??
-                                                  block.tahun ??
-                                                  "-"
+                                                block.tahun ??
+                                                "-"
                                               )}
                                             </TableCell>
                                             <TableCell>
@@ -1302,10 +1472,10 @@ const Locations = () => {
                                             </TableCell>
                                             <TableCell className="text-right">
                                               {typeof block.luas_nursery ===
-                                              "number"
+                                                "number"
                                                 ? formatNumber(
-                                                    block.luas_nursery
-                                                  )
+                                                  block.luas_nursery
+                                                )
                                                 : block.luas_nursery ?? "-"}
                                             </TableCell>
                                             <TableCell className="text-right">
@@ -1320,33 +1490,33 @@ const Locations = () => {
                                             </TableCell>
                                             <TableCell className="text-right">
                                               {typeof block.luas_garapan ===
-                                              "number"
+                                                "number"
                                                 ? formatNumber(
-                                                    block.luas_garapan
-                                                  )
+                                                  block.luas_garapan
+                                                )
                                                 : block.luas_garapan ?? "-"}
                                             </TableCell>
                                             <TableCell className="text-right">
                                               {typeof block.luas_rawa ===
-                                              "number"
+                                                "number"
                                                 ? formatNumber(block.luas_rawa)
                                                 : block.luas_rawa ?? "-"}
                                             </TableCell>
                                             <TableCell className="text-right">
                                               {typeof block.luas_area_non_efektif ===
-                                              "number"
+                                                "number"
                                                 ? formatNumber(
-                                                    block.luas_area_non_efektif
-                                                  )
+                                                  block.luas_area_non_efektif
+                                                )
                                                 : block.luas_area_non_efektif ??
-                                                  "-"}
+                                                "-"}
                                             </TableCell>
                                             <TableCell className="text-right">
                                               {typeof block.luas_konservasi ===
-                                              "number"
+                                                "number"
                                                 ? formatNumber(
-                                                    block.luas_konservasi
-                                                  )
+                                                  block.luas_konservasi
+                                                )
                                                 : block.luas_konservasi ?? "-"}
                                             </TableCell>
                                             <TableCell>
@@ -1364,11 +1534,11 @@ const Locations = () => {
                                                         division_id
                                                       ].map((b) =>
                                                         b.no_blok ===
-                                                        block.no_blok
+                                                          block.no_blok
                                                           ? {
-                                                              ...b,
-                                                              status: newStatus,
-                                                            }
+                                                            ...b,
+                                                            status: newStatus,
+                                                          }
                                                           : b
                                                       );
                                                     await api.updateEstate(
@@ -1381,13 +1551,13 @@ const Locations = () => {
                                                                 d.division_id,
                                                               blocks:
                                                                 d.division_id ===
-                                                                division_id
+                                                                  division_id
                                                                   ? updatedBlocks
                                                                   : metaEs
-                                                                      .blocksByDivision[
-                                                                      d
-                                                                        .division_id
-                                                                    ],
+                                                                    .blocksByDivision[
+                                                                  d
+                                                                    .division_id
+                                                                  ],
                                                             })
                                                           ),
                                                       }
@@ -1479,7 +1649,7 @@ const Locations = () => {
                                               (sum, { block }) =>
                                                 sum +
                                                 (typeof block.luas_blok ===
-                                                "number"
+                                                  "number"
                                                   ? block.luas_blok
                                                   : 0),
                                               0
@@ -1504,7 +1674,7 @@ const Locations = () => {
                                               (sum, { block }) =>
                                                 sum +
                                                 (typeof block.luas_nursery ===
-                                                "number"
+                                                  "number"
                                                   ? block.luas_nursery
                                                   : 0),
                                               0
@@ -1529,7 +1699,7 @@ const Locations = () => {
                                               (sum, { block }) =>
                                                 sum +
                                                 (typeof block.luas_garapan ===
-                                                "number"
+                                                  "number"
                                                   ? block.luas_garapan
                                                   : 0),
                                               0
@@ -1539,7 +1709,7 @@ const Locations = () => {
                                               (sum, { block }) =>
                                                 sum +
                                                 (typeof block.luas_rawa ===
-                                                "number"
+                                                  "number"
                                                   ? block.luas_rawa
                                                   : 0),
                                               0
@@ -1549,7 +1719,7 @@ const Locations = () => {
                                               (sum, { block }) =>
                                                 sum +
                                                 (typeof block.luas_area_non_efektif ===
-                                                "number"
+                                                  "number"
                                                   ? block.luas_area_non_efektif
                                                   : 0),
                                               0
@@ -1559,7 +1729,7 @@ const Locations = () => {
                                               (sum, { block }) =>
                                                 sum +
                                                 (typeof block.luas_konservasi ===
-                                                "number"
+                                                  "number"
                                                   ? block.luas_konservasi
                                                   : 0),
                                               0
@@ -1966,22 +2136,10 @@ const Locations = () => {
 
             <div className="space-y-4">
               {/* Summary */}
-              <div className="grid grid-cols-4 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <Card>
                   <CardHeader className="pb-3">
-                    <p className="text-sm text-muted-foreground">Total Data</p>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-2xl font-bold">
-                      {(importPreviewData?.newBlocks.length || 0) +
-                        (importPreviewData?.updatedBlocks.length || 0) +
-                        (importPreviewData?.existingBlocks.length || 0)}
-                    </p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="pb-3">
-                    <p className="text-sm text-muted-foreground">Data Baru</p>
+                    <p className="text-sm text-muted-foreground">Data Baru (Akan Ditambahkan)</p>
                   </CardHeader>
                   <CardContent>
                     <p className="text-2xl font-bold text-green-600">
@@ -1991,7 +2149,9 @@ const Locations = () => {
                 </Card>
                 <Card>
                   <CardHeader className="pb-3">
-                    <p className="text-sm text-muted-foreground">Data Diubah</p>
+                    <p className="text-sm text-muted-foreground">
+                      Data Update (Akan Diperbarui)
+                    </p>
                   </CardHeader>
                   <CardContent>
                     <p className="text-2xl font-bold text-blue-600">
@@ -2002,7 +2162,7 @@ const Locations = () => {
                 <Card>
                   <CardHeader className="pb-3">
                     <p className="text-sm text-muted-foreground">
-                      Sama (Diabaikan)
+                      Duplikat (Akan Diabaikan)
                     </p>
                   </CardHeader>
                   <CardContent>
@@ -2017,7 +2177,7 @@ const Locations = () => {
               {importPreviewData && importPreviewData.newBlocks.length > 0 && (
                 <div>
                   <h3 className="font-semibold text-lg mb-2">
-                    Data Baru yang Akan Ditambahkan
+                    Data Baru
                   </h3>
                   <div className="border rounded-lg overflow-auto max-h-60">
                     <Table>
@@ -2064,136 +2224,63 @@ const Locations = () => {
               )}
 
               {/* Updated Blocks Table */}
-              {importPreviewData &&
-                importPreviewData.updatedBlocks.length > 0 && (
-                  <div>
-                    <h3 className="font-semibold text-lg mb-2">
-                      Data yang Akan Diubah
-                    </h3>
-                    <div className="border rounded-lg overflow-auto max-h-80">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Divisi</TableHead>
-                            <TableHead>No Blok</TableHead>
-                            <TableHead>ID Blok</TableHead>
-                            <TableHead>Perubahan</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {importPreviewData.updatedBlocks
-                            .slice(0, 20)
-                            .map((item, idx) => {
-                              const changedFields: string[] = [];
-                              const oldBlock = item.oldBlock;
-                              const newBlock = item.block;
-
-                              // Check which fields changed
-                              const fieldsToCheck = [
-                                "no_tph",
-                                "luas_blok",
-                                "jumlak_pokok",
-                                "SPH",
-                                "jenis_tanah",
-                                "topografi",
-                                "tahun_tanam",
-                                "tahun_bongkar",
-                                "umur",
-                                "kemiringan_lahan",
-                                "target_brondolan",
-                                "target_janjang",
-                                "target_tonase",
-                                "target_pokok",
-                                "target_janjang_std",
-                                "target_brondolan_std",
-                                "bjr",
-                              ];
-
-                              fieldsToCheck.forEach((field) => {
-                                const oldVal =
-                                  (oldBlock as Record<string, unknown>)[
-                                    field
-                                  ] ?? null;
-                                const newVal =
-                                  (newBlock as Record<string, unknown>)[
-                                    field
-                                  ] ?? null;
-
-                                // Normalize for comparison
-                                const normalizeVal = (v: unknown) => {
-                                  if (
-                                    v === null ||
-                                    v === undefined ||
-                                    v === "" ||
-                                    v === 0
-                                  )
-                                    return null;
-                                  if (typeof v === "number") return v;
-                                  if (typeof v === "string")
-                                    return v.trim() || null;
-                                  return v;
-                                };
-
-                                const normOld = normalizeVal(oldVal);
-                                const normNew = normalizeVal(newVal);
-
-                                if (normOld !== normNew) {
-                                  if (
-                                    typeof normOld === "number" &&
-                                    typeof normNew === "number"
-                                  ) {
-                                    if (Math.abs(normOld - normNew) > 0.001) {
-                                      changedFields.push(field);
-                                    }
-                                  } else {
-                                    changedFields.push(field);
-                                  }
-                                }
-                              });
-
-                              return (
-                                <TableRow key={idx} className="bg-blue-50">
-                                  <TableCell>{item.division}</TableCell>
-                                  <TableCell>
-                                    {item.block.no_blok || "-"}
-                                  </TableCell>
-                                  <TableCell>
-                                    {item.block.id_blok || "-"}
-                                  </TableCell>
-                                  <TableCell className="text-xs">
-                                    {changedFields.length > 0
-                                      ? changedFields.join(", ")
-                                      : "Perubahan lainnya"}
-                                  </TableCell>
-                                </TableRow>
-                              );
-                            })}
-                          {importPreviewData.updatedBlocks.length > 20 && (
-                            <TableRow>
-                              <TableCell
-                                colSpan={4}
-                                className="text-center text-muted-foreground"
-                              >
-                                ... dan{" "}
-                                {importPreviewData.updatedBlocks.length - 20}{" "}
-                                data lainnya
+              {importPreviewData && importPreviewData.updatedBlocks.length > 0 && (
+                <div>
+                  <h3 className="font-semibold text-lg mb-2">
+                    Data yang Akan Diperbarui
+                  </h3>
+                  <div className="border rounded-lg overflow-auto max-h-60">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Divisi</TableHead>
+                          <TableHead>No Blok</TableHead>
+                          <TableHead>ID Blok</TableHead>
+                          <TableHead>Luas Blok</TableHead>
+                          <TableHead>Jumlah Pokok</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {importPreviewData.updatedBlocks
+                          .slice(0, 20)
+                          .map((item, idx) => (
+                            <TableRow key={idx}>
+                              <TableCell>{item.division}</TableCell>
+                              <TableCell>{item.block.no_blok || "-"}</TableCell>
+                              <TableCell>{item.block.id_blok || "-"}</TableCell>
+                              <TableCell>
+                                {formatNumber(item.block.luas_blok)}
+                              </TableCell>
+                              <TableCell>
+                                {formatNumber(item.block.jumlak_pokok)}
                               </TableCell>
                             </TableRow>
-                          )}
-                        </TableBody>
-                      </Table>
-                    </div>
+                          ))}
+                        {importPreviewData.updatedBlocks.length > 20 && (
+                          <TableRow>
+                            <TableCell
+                              colSpan={5}
+                              className="text-center text-muted-foreground"
+                            >
+                              ... dan {importPreviewData.updatedBlocks.length - 20}{" "}
+                              data lainnya
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
                   </div>
-                )}
+                </div>
+              )}
 
               {/* Existing Blocks Info */}
               {importPreviewData &&
                 importPreviewData.existingBlocks.length > 0 && (
                   <div>
                     <h3 className="font-semibold text-lg mb-2">
-                      Data yang Sudah Ada (Tidak Akan Diubah)
+                      Data Duplikat (ID/No Blok sudah ada)
                     </h3>
-                    <div className="border rounded-lg overflow-auto max-h-40">
+                    <div className="border rounded-lg overflow-auto max-h-40 bg-muted/50">
                       <Table>
                         <TableHeader>
                           <TableRow>
@@ -2206,7 +2293,7 @@ const Locations = () => {
                           {importPreviewData.existingBlocks
                             .slice(0, 10)
                             .map((item, idx) => (
-                              <TableRow key={idx} className="bg-orange-50">
+                              <TableRow key={idx} className="opacity-50">
                                 <TableCell>{item.division}</TableCell>
                                 <TableCell>
                                   {item.block.no_blok || "-"}
@@ -2238,8 +2325,7 @@ const Locations = () => {
                 importPreviewData.newBlocks.length === 0 &&
                 importPreviewData.updatedBlocks.length === 0 && (
                   <div className="text-center py-8 text-muted-foreground">
-                    Tidak ada data baru atau perubahan untuk ditambahkan. Semua
-                    data sudah sama dengan database.
+                    Tidak ada data baru atau update untuk diproses.
                   </div>
                 )}
             </div>
@@ -2247,10 +2333,7 @@ const Locations = () => {
             <DialogFooter>
               <Button
                 variant="outline"
-                onClick={() => {
-                  setIsImportPreviewOpen(false);
-                  setImportPreviewData(null);
-                }}
+                onClick={() => setIsImportPreviewOpen(false)}
               >
                 Batal
               </Button>
@@ -2263,22 +2346,124 @@ const Locations = () => {
                 }
                 className="bg-green-600 hover:bg-green-700"
               >
-                {importPreviewData ? (
-                  <>
-                    OK, Import{" "}
-                    {importPreviewData.newBlocks.length +
-                      importPreviewData.updatedBlocks.length}{" "}
-                    Data
-                    {importPreviewData.newBlocks.length > 0 &&
-                    importPreviewData.updatedBlocks.length > 0
-                      ? ` (${importPreviewData.newBlocks.length} Baru, ${importPreviewData.updatedBlocks.length} Diubah)`
-                      : importPreviewData.newBlocks.length > 0
-                      ? " Baru"
-                      : " Diubah"}
-                  </>
-                ) : (
-                  "OK, Import Data"
-                )}
+                Import {(importPreviewData?.newBlocks.length || 0) + (importPreviewData?.updatedBlocks.length || 0)} Data
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Dialog Import Estate Preview */}
+        <Dialog
+          open={isImportEstatePreviewOpen}
+          onOpenChange={setIsImportEstatePreviewOpen}
+        >
+          <DialogContent className="max-w-3xl">
+            <DialogHeader>
+              <DialogTitle>Preview Import Estate</DialogTitle>
+              <DialogDescription>
+                Review data estate yang akan diimport
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <Card>
+                  <CardHeader className="pb-3">
+                    <p className="text-sm text-muted-foreground">Data Baru (Akan Ditambahkan)</p>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold text-green-600">
+                      {importEstatePreviewData?.newEstates.length || 0}
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-3">
+                    <p className="text-sm text-muted-foreground">Duplikat (Akan Diabaikan)</p>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold text-gray-600">
+                      {importEstatePreviewData?.existingEstates.length || 0}
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {importEstatePreviewData?.newEstates.length ? (
+                <div>
+                  <h3 className="font-semibold text-lg mb-2">
+                    Data Baru
+                  </h3>
+                  <div className="border rounded-lg overflow-auto max-h-60">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>No</TableHead>
+                          <TableHead>Nama Estate</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {importEstatePreviewData.newEstates.map((name, idx) => (
+                          <TableRow key={idx}>
+                            <TableCell>{idx + 1}</TableCell>
+                            <TableCell>{name}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              ) : null}
+
+              {importEstatePreviewData?.existingEstates.length ? (
+                <div>
+                  <h3 className="font-semibold text-lg mb-2">
+                    Data Duplikat (Akan Diabaikan)
+                  </h3>
+                  <div className="border rounded-lg overflow-auto max-h-40 bg-muted/50">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>No</TableHead>
+                          <TableHead>Nama Estate</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {importEstatePreviewData.existingEstates.map((name, idx) => (
+                          <TableRow key={idx} className="opacity-50">
+                            <TableCell>{idx + 1}</TableCell>
+                            <TableCell>{name}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              ) : null}
+
+              {!importEstatePreviewData?.newEstates.length && !importEstatePreviewData?.existingEstates.length && (
+                <div className="text-center py-8 text-muted-foreground">
+                  Tidak ada data untuk ditambahkan.
+                </div>
+              )}
+            </div>
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIsImportEstatePreviewOpen(false);
+                  setImportEstatePreviewData(null);
+                }}
+              >
+                Batal
+              </Button>
+              <Button
+                onClick={handleConfirmImportEstates}
+                disabled={!importEstatePreviewData?.newEstates.length}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                Import {importEstatePreviewData?.newEstates.length || 0} Data
               </Button>
             </DialogFooter>
           </DialogContent>

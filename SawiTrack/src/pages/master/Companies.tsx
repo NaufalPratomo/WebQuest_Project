@@ -10,7 +10,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Search, Edit, Trash2 } from "lucide-react";
+import { Plus, Search, Edit } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -19,6 +19,13 @@ import {
   DialogTrigger,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Toaster } from "@/components/ui/toaster";
@@ -34,9 +41,7 @@ const Companies = () => {
   const [rows, setRows] = useState<Company[]>([]);
   const [openAdd, setOpenAdd] = useState(false);
   const [openEdit, setOpenEdit] = useState(false);
-  const [openDelete, setOpenDelete] = useState(false);
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
-  const [deletingCompany, setDeletingCompany] = useState<Company | null>(null);
   const [form, setForm] = useState({
     company_name: "",
     address: "",
@@ -126,37 +131,6 @@ const Companies = () => {
       toast({
         title: "Gagal",
         description: e instanceof Error ? e.message : "Gagal memperbarui",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleDelete = (company: Company) => {
-    setDeletingCompany(company);
-    setOpenDelete(true);
-  };
-
-  const confirmDelete = async () => {
-    if (!deletingCompany) return;
-
-    try {
-      console.log("Deleting company:", deletingCompany._id);
-      await api.deleteCompany(deletingCompany._id);
-
-      setRows((prev) => prev.filter((c) => c._id !== deletingCompany._id));
-
-      setOpenDelete(false);
-      setDeletingCompany(null);
-
-      toast({
-        title: "Berhasil",
-        description: "Perusahaan berhasil dihapus",
-      });
-    } catch (e) {
-      console.error("Error deleting company:", e);
-      toast({
-        title: "Gagal",
-        description: e instanceof Error ? e.message : "Gagal menghapus",
         variant: "destructive",
       });
     }
@@ -453,13 +427,14 @@ const Companies = () => {
                 <TableHead>Alamat</TableHead>
                 <TableHead>Telepon</TableHead>
                 <TableHead>Email</TableHead>
+                <TableHead>Status</TableHead>
                 <TableHead className="text-right">Aksi</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading && (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center">
+                  <TableCell colSpan={6} className="text-center">
                     Memuat...
                   </TableCell>
                 </TableRow>
@@ -473,6 +448,43 @@ const Companies = () => {
                     <TableCell>{company.address}</TableCell>
                     <TableCell>{company.phone || "-"}</TableCell>
                     <TableCell>{company.email || "-"}</TableCell>
+                    <TableCell>
+                      <Select
+                        value={company.status || "active"}
+                        onValueChange={async (newStatus) => {
+                          try {
+                            await api.updateCompany(company._id, {
+                              status: newStatus,
+                            });
+                            setRows((prev) =>
+                              prev.map((c) =>
+                                c._id === company._id
+                                  ? { ...c, status: newStatus }
+                                  : c
+                              )
+                            );
+                            toast({
+                              title: "Berhasil",
+                              description: "Status perusahaan diperbarui",
+                            });
+                          } catch (e) {
+                            toast({
+                              title: "Gagal",
+                              description: "Gagal memperbarui status",
+                              variant: "destructive",
+                            });
+                          }
+                        }}
+                      >
+                        <SelectTrigger className="w-28 h-8">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="active">Aktif</SelectItem>
+                          <SelectItem value="inactive">Nonaktif</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
                     <TableCell className="text-right">
                       <div className="flex gap-1 justify-end">
                         <Button
@@ -481,13 +493,6 @@ const Companies = () => {
                           onClick={() => handleEdit(company)}
                         >
                           <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDelete(company)}
-                        >
-                          <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     </TableCell>
@@ -564,35 +569,6 @@ const Companies = () => {
               </Button>
             </DialogFooter>
           </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Dialog Konfirmasi Hapus */}
-      <Dialog open={openDelete} onOpenChange={setOpenDelete}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Konfirmasi Hapus</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            Apakah Anda yakin ingin menghapus perusahaan{" "}
-            <strong>"{deletingCompany?.company_name}"</strong>? Tindakan ini
-            tidak dapat dibatalkan.
-          </p>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setOpenDelete(false);
-                setDeletingCompany(null);
-              }}
-            >
-              Batal
-            </Button>
-            <Button type="button" variant="destructive" onClick={confirmDelete}>
-              Hapus
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 

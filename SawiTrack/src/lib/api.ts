@@ -71,6 +71,7 @@ export interface Company {
   phone?: string;
   email?: string;
   estates?: Array<{ _id: string; estate_name: string }>;
+  status?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -242,6 +243,7 @@ export const api = {
       phone: string;
       email: string;
       estates: string[];
+      status: string;
     }>
   ) =>
     http<Company>(`/companies/${id}`, {

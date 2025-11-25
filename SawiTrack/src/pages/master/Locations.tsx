@@ -928,7 +928,7 @@ const Locations = () => {
             return true;
           };
 
-          // Compare new vs existing data
+// Compare new vs existing data
           const newBlocks: Array<{ division: string; block: Partial<Block> }> =
             [];
           const existingBlocks: Array<{
@@ -943,7 +943,7 @@ const Locations = () => {
 
           for (const [divisionName, blocks] of Object.entries(groupedData)) {
             const divisionId = parseInt(
-              divisionName.replace(/Divisi/i, "").trim()
+              divisionName.replace("Divisi ", "").trim()
             );
 
             const existingDivision = existingDivisions.find(
@@ -982,6 +982,7 @@ const Locations = () => {
               }
             });
           }
+
 
           // Show preview dialog
           setImportPreviewData({

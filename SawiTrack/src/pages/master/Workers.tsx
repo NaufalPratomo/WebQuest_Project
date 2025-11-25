@@ -54,6 +54,14 @@ const Workers = () => {
     status: "active",
   });
 
+  // Import preview state
+  const [isImportPreviewOpen, setIsImportPreviewOpen] = useState(false);
+  const [importPreviewData, setImportPreviewData] = useState<{
+    newEmployees: Partial<Employee>[];
+    updatedEmployees: { employee: Partial<Employee>; oldEmployee: Employee }[];
+    existingEmployees: Partial<Employee>[];
+  } | null>(null);
+
   useEffect(() => {
     setLoading(true);
     Promise.all([api.employees(), api.companies()])
@@ -163,47 +171,157 @@ const Workers = () => {
     input.type = "file";
     input.accept = ".xlsx,.xls";
     input.onchange = async (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
+      const target = e.target as HTMLInputElement;
+      const file = target.files?.[0];
       if (!file) return;
-      try {
-        const data = await file.arrayBuffer();
-        const wb = XLSX.read(data);
-        const ws = wb.Sheets[wb.SheetNames[0]];
-        const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws);
 
-        const imported: Employee[] = [];
-        for (const row of json) {
-          const companyName = row["Perusahaan"] || "";
-          const company = companies.find((c) => c.company_name === companyName);
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        try {
+          const data = new Uint8Array(event.target?.result as ArrayBuffer);
+          const wb = XLSX.read(data, { type: "array" });
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws);
 
-          const created = await api.createEmployee({
-            nik: String(row["NIK"] || ""),
-            name: String(row["Nama"] || ""),
-            companyId: company?._id,
-            position: row["Posisi"] ? String(row["Posisi"]) : undefined,
-            salary: row["Gaji"] ? Number(row["Gaji"]) : undefined,
-            address: row["Alamat"] ? String(row["Alamat"]) : undefined,
-            phone: row["Telepon"] ? String(row["Telepon"]) : undefined,
-            birthDate: row["Tanggal Lahir"]
-              ? String(row["Tanggal Lahir"])
-              : undefined,
+          const newEmployees: Partial<Employee>[] = [];
+          const updatedEmployees: { employee: Partial<Employee>; oldEmployee: Employee }[] = [];
+          const existingEmployees: Partial<Employee>[] = [];
+
+          const areEmployeesEqual = (emp1: Partial<Employee>, emp2: Employee): boolean => {
+            const fields = ['name', 'companyId', 'position', 'salary', 'address', 'phone', 'birthDate'];
+            for (const field of fields) {
+              const val1 = (emp1 as any)[field];
+              const val2 = (emp2 as any)[field];
+              // Normalize for comparison
+              const norm1 = val1 === undefined || val1 === null || val1 === "" ? null : val1;
+              const norm2 = val2 === undefined || val2 === null || val2 === "" ? null : val2;
+
+              if (field === 'salary') {
+                if (Number(norm1 || 0) !== Number(norm2 || 0)) return false;
+              } else if (norm1 !== norm2) {
+                return false;
+              }
+            }
+            return true;
+          };
+
+          jsonData.forEach((row) => {
+            const nik = String(row["NIK"] || "").trim();
+            const name = String(row["Nama"] || "").trim();
+            const companyName = row["Perusahaan"] || "";
+            const company = companies.find((c) => c.company_name === companyName);
+
+            if (!nik || !name) return;
+
+            const employeeObj: Partial<Employee> = {
+              nik,
+              name,
+              companyId: company?._id,
+              position: row["Posisi"] ? String(row["Posisi"]) : undefined,
+              salary: row["Gaji"] ? Number(row["Gaji"]) : undefined,
+              address: row["Alamat"] ? String(row["Alamat"]) : undefined,
+              phone: row["Telepon"] ? String(row["Telepon"]) : undefined,
+              birthDate: row["Tanggal Lahir"] ? String(row["Tanggal Lahir"]) : undefined,
+              status: "active",
+            };
+
+            const existing = rows.find((w) => w.nik === nik);
+
+            if (existing) {
+              if (areEmployeesEqual(employeeObj, existing)) {
+                existingEmployees.push(employeeObj);
+              } else {
+                updatedEmployees.push({ employee: employeeObj, oldEmployee: existing });
+              }
+            } else {
+              newEmployees.push(employeeObj);
+            }
           });
-          imported.push(created);
+
+          setImportPreviewData({ newEmployees, updatedEmployees, existingEmployees });
+          setIsImportPreviewOpen(true);
+        } catch (error) {
+          console.error("Error importing Excel:", error);
+          toast({
+            title: "Gagal mengimpor file Excel",
+            description: "Pastikan format file sudah benar",
+            variant: "destructive",
+          });
         }
-        setRows((prev) => [...imported, ...prev]);
-        toast({
-          title: "Berhasil",
-          description: `${imported.length} karyawan berhasil diimpor`,
-        });
-      } catch (e) {
-        toast({
-          title: "Gagal",
-          description: e instanceof Error ? e.message : "Gagal mengimpor",
-          variant: "destructive",
-        });
-      }
+      };
+      reader.readAsArrayBuffer(file);
     };
     input.click();
+  };
+
+  const handleConfirmImport = async () => {
+    if (!importPreviewData) return;
+
+    try {
+      setLoading(true);
+      const { newEmployees, updatedEmployees } = importPreviewData;
+      const processedEmployees: Employee[] = [];
+
+      // Create new employees
+      for (const emp of newEmployees) {
+        try {
+          const created = await api.createEmployee({
+            nik: emp.nik!,
+            name: emp.name!,
+            companyId: emp.companyId,
+            position: emp.position,
+            salary: emp.salary,
+            address: emp.address,
+            phone: emp.phone,
+            birthDate: emp.birthDate,
+          });
+          processedEmployees.push(created);
+        } catch (e) {
+          console.error(`Failed to create employee ${emp.nik}:`, e);
+        }
+      }
+
+      // Update existing employees
+      for (const { employee, oldEmployee } of updatedEmployees) {
+        try {
+          await api.updateEmployee(oldEmployee._id, {
+            nik: employee.nik!,
+            name: employee.name!,
+            companyId: employee.companyId || null,
+            position: employee.position || null,
+            salary: employee.salary || null,
+            address: employee.address || null,
+            phone: employee.phone || null,
+            birthDate: employee.birthDate || null,
+            status: oldEmployee.status,
+          });
+          // We don't get the updated object back from updateEmployee usually, so we construct it
+          processedEmployees.push({ ...oldEmployee, ...employee } as Employee);
+        } catch (e) {
+          console.error(`Failed to update employee ${employee.nik}:`, e);
+        }
+      }
+
+      // Refresh data to be sure
+      const latestEmployees = await api.employees();
+      setRows(latestEmployees);
+
+      toast({
+        title: "Import Berhasil",
+        description: `${newEmployees.length} data baru, ${updatedEmployees.length} data diperbarui.`,
+      });
+
+      setIsImportPreviewOpen(false);
+      setImportPreviewData(null);
+    } catch (error) {
+      toast({
+        title: "Gagal Import",
+        description: "Terjadi kesalahan saat menyimpan data",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleExportExcel = () => {
@@ -254,21 +372,26 @@ const Workers = () => {
           </p>
         </div>
         <div className="flex gap-2">
-          <TooltipButton tooltip="Import data karyawan dari Excel">
-            <Button variant="outline" onClick={handleImportExcel}>
-              <Upload className="h-4 w-4 mr-2" />
-              Import
-            </Button>
-          </TooltipButton>
-          <TooltipButton tooltip="Export data karyawan ke Excel">
-            <Button variant="outline" onClick={handleExportExcel}>
-              <Download className="h-4 w-4 mr-2" />
-              Export
-            </Button>
-          </TooltipButton>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleImportExcel}
+            className="border-green-500 text-green-600 hover:bg-green-50 hover:text-green-700"
+          >
+            <Upload className="mr-2 h-4 w-4" />
+            Import Excel
+          </Button>
+          <Button
+            size="sm"
+            onClick={handleExportExcel}
+            className="bg-green-600 hover:bg-green-700"
+          >
+            <Download className="mr-2 h-4 w-4" />
+            Export Excel
+          </Button>
           <Dialog open={openAdd} onOpenChange={setOpenAdd}>
             <DialogTrigger asChild>
-              <Button className="bg-orange-500 hover:bg-orange-600">
+              <Button size="sm" className="bg-orange-500 hover:bg-orange-600">
                 <Plus className="h-4 w-4 mr-2" />
                 Tambah Karyawan
               </Button>
@@ -657,6 +780,133 @@ const Workers = () => {
               </Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Import Preview */}
+      <Dialog open={isImportPreviewOpen} onOpenChange={setIsImportPreviewOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Preview Import Data Karyawan</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="grid grid-cols-3 gap-4">
+              <Card>
+                <CardHeader className="pb-3">
+                  <p className="text-sm text-muted-foreground">Data Baru</p>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-2xl font-bold text-green-600">
+                    {importPreviewData?.newEmployees.length || 0}
+                  </p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-3">
+                  <p className="text-sm text-muted-foreground">Data Diubah</p>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-2xl font-bold text-blue-600">
+                    {importPreviewData?.updatedEmployees.length || 0}
+                  </p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-3">
+                  <p className="text-sm text-muted-foreground">Sama (Diabaikan)</p>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-2xl font-bold text-gray-600">
+                    {importPreviewData?.existingEmployees.length || 0}
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {importPreviewData && importPreviewData.newEmployees.length > 0 && (
+              <div>
+                <h3 className="font-semibold text-lg mb-2">Data Baru (Akan Ditambahkan)</h3>
+                <div className="border rounded-lg overflow-auto max-h-60">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>NIK</TableHead>
+                        <TableHead>Nama</TableHead>
+                        <TableHead>Posisi</TableHead>
+                        <TableHead>Gaji</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {importPreviewData.newEmployees.map((emp, idx) => (
+                        <TableRow key={idx}>
+                          <TableCell>{emp.nik}</TableCell>
+                          <TableCell>{emp.name}</TableCell>
+                          <TableCell>{emp.position}</TableCell>
+                          <TableCell>{emp.salary}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            )}
+
+            {importPreviewData && importPreviewData.updatedEmployees.length > 0 && (
+              <div>
+                <h3 className="font-semibold text-lg mb-2">Data Diubah (Akan Diupdate)</h3>
+                <div className="border rounded-lg overflow-auto max-h-60">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>NIK</TableHead>
+                        <TableHead>Nama</TableHead>
+                        <TableHead>Perubahan</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {importPreviewData.updatedEmployees.map(({ employee, oldEmployee }, idx) => {
+                        const changes: string[] = [];
+                        if (employee.name !== oldEmployee.name) changes.push(`Nama: ${oldEmployee.name} -> ${employee.name}`);
+                        if (employee.position !== oldEmployee.position) changes.push(`Posisi: ${oldEmployee.position} -> ${employee.position}`);
+                        if (Number(employee.salary) !== Number(oldEmployee.salary)) changes.push(`Gaji: ${oldEmployee.salary} -> ${employee.salary}`);
+                        // Add other fields as needed
+
+                        return (
+                          <TableRow key={idx}>
+                            <TableCell>{employee.nik}</TableCell>
+                            <TableCell>{employee.name}</TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {changes.join(", ") || "Detail lain berubah"}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            )}
+
+            {importPreviewData && importPreviewData.newEmployees.length === 0 && importPreviewData.updatedEmployees.length === 0 && (
+              <div className="text-center py-8 text-muted-foreground">
+                Tidak ada data baru atau perubahan.
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-2 mt-4">
+            <Button variant="outline" onClick={() => setIsImportPreviewOpen(false)}>
+              Batal
+            </Button>
+            <Button
+              onClick={handleConfirmImport}
+              disabled={!importPreviewData || (importPreviewData.newEmployees.length === 0 && importPreviewData.updatedEmployees.length === 0)}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              Proses Import
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 

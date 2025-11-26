@@ -401,35 +401,56 @@ export default function TaksasiPanen() {
     setEditingKey(`${row.date}|${row.estateId}|${row.divisionId}|${row.blockLabel}`);
   }
 
-  const handleExport = () => {
-    if (rows.length === 0) {
-      toast.error('Tidak ada data untuk diexport');
-      return;
+  const handleExport = async () => {
+    try {
+      const allData = await api.taksasiList({});
+      if (!allData || allData.length === 0) {
+        toast.error('Tidak ada data untuk diexport');
+        return;
+      }
+
+      const data = allData.map(r => {
+        let formattedDate = r.date;
+        if (r.date) {
+          const d = new Date(r.date);
+          if (!isNaN(d.getTime())) {
+            const day = String(d.getDate()).padStart(2, '0');
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const year = d.getFullYear();
+            formattedDate = `${day}-${month}-${year}`;
+          }
+        }
+
+        const estateName = estates.find(e => e._id === r.estateId)?.estate_name || '-';
+
+        return {
+          'Tanggal': formattedDate,
+          'Estate': estateName,
+          'Divisi': r.division_id,
+          'Blok': r.block_no,
+          'Total Pokok': r.totalPokok,
+          'Sample Pokok': r.samplePokok,
+          'Buah Hitam (BH)': r.bm,
+          'Pokok Tidak Berbuah (PTB)': r.ptb,
+          'Buah Merah Belum Brondol (BMBB)': r.bmbb,
+          'Buah Merah Membrodol (BMM)': r.bmm,
+          'BJR (kg)': r.avgWeightKg,
+          'Basis (jjg/org)': r.basisJanjangPerPemanen,
+          'AKP %': r.akpPercent,
+          'Taksasi (Janjang)': r.taksasiJanjang,
+          'Taksasi (Ton)': r.taksasiTon,
+          'Kebutuhan Pemanen': r.kebutuhanPemanen
+        };
+      });
+
+      const ws = XLSX.utils.json_to_sheet(data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Taksasi");
+      XLSX.writeFile(wb, `Taksasi_All.xlsx`);
+      toast.success('Export berhasil');
+    } catch (e) {
+      toast.error('Gagal export data');
     }
-
-    const data = rows.map(r => ({
-      'Tanggal': r.date,
-      'Estate': r.estateName,
-      'Divisi': r.divisionId,
-      'Blok': r.blockLabel,
-      'Total Pokok': r.totalPokok,
-      'Sample Pokok': r.samplePokok,
-      'Buah Hitam (BH)': r.bm,
-      'Pokok Tidak Berbuah (PTB)': r.ptb,
-      'Buah Merah Belum Brondol (BMBB)': r.bmbb,
-      'Buah Merah Membrodol (BMM)': r.bmm,
-      'BJR (kg)': r.avgWeightKg,
-      'Basis (jjg/org)': r.basisJanjangPerPemanen,
-      'AKP %': r.akpPercent,
-      'Taksasi (Janjang)': r.taksasiJanjang,
-      'Taksasi (Ton)': r.taksasiTon,
-      'Kebutuhan Pemanen': r.kebutuhanPemanen
-    }));
-
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Taksasi");
-    XLSX.writeFile(wb, `Taksasi_${date}.xlsx`);
   };
 
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -440,7 +461,7 @@ export default function TaksasiPanen() {
     reader.onload = async (evt) => {
       try {
         const bstr = evt.target?.result;
-        const wb = XLSX.read(bstr, { type: 'binary' });
+        const wb = XLSX.read(bstr, { type: 'binary', cellDates: false });
         const wsname = wb.SheetNames[0];
         const ws = wb.Sheets[wsname];
         const data = XLSX.utils.sheet_to_json(ws);
@@ -449,6 +470,37 @@ export default function TaksasiPanen() {
           toast.error('File kosong');
           return;
         }
+
+        const parseDate = (dateStr: any): string => {
+          if (!dateStr) return date; // fallback to current selected date
+
+          // If it's a number (Excel serial date)
+          if (typeof dateStr === 'number') {
+            const d = new Date(Math.round((dateStr - 25569) * 86400 * 1000));
+            const year = d.getUTCFullYear();
+            const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+            const day = String(d.getUTCDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+          }
+
+          const str = String(dateStr).trim();
+
+          // Handle DD-MM-YYYY or DD/MM/YYYY
+          if (/^\d{1,2}[-/]\d{1,2}[-/]\d{4}$/.test(str)) {
+            const parts = str.split(/[-/]/);
+            const day = parts[0].padStart(2, '0');
+            const month = parts[1].padStart(2, '0');
+            const year = parts[2];
+            return `${year}-${month}-${day}`;
+          }
+
+          // Handle YYYY-MM-DD
+          if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+            return str.split('T')[0];
+          }
+
+          return date; // fallback
+        };
 
         const parsedRows: TaksasiRow[] = [];
         const errors: string[] = [];
@@ -461,7 +513,9 @@ export default function TaksasiPanen() {
             return undefined;
           };
 
-          const rowDate = getVal(['Tanggal', 'Date', 'date']) || date;
+          const rawDate = getVal(['Tanggal', 'Date', 'date']);
+          const rowDate = parseDate(rawDate);
+
           const estateName = getVal(['Estate', 'estate', 'Nama Estate']);
           const divisionId = getVal(['Divisi', 'Division', 'division', 'divisi']);
           const blockLabel = getVal(['Blok', 'Block', 'block', 'no_blok']);
@@ -664,9 +718,39 @@ export default function TaksasiPanen() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Taksasi Panen</h1>
-        <p className="text-muted-foreground">Form dua langkah untuk prediksi panen</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Taksasi Panen</h1>
+          <p className="text-muted-foreground">Form dua langkah untuk prediksi panen</p>
+        </div>
+        <div className="flex gap-2">
+          <div className="relative">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => document.getElementById('import-taksasi')?.click()}
+              className="border-green-500 text-green-600 hover:bg-green-50 hover:text-green-700"
+            >
+              <Upload className="mr-2 h-4 w-4" />
+              Import Excel
+            </Button>
+            <input
+              id="import-taksasi"
+              type="file"
+              accept=".xlsx, .xls, .csv"
+              className="hidden"
+              onChange={handleImport}
+            />
+          </div>
+          <Button
+            size="sm"
+            onClick={handleExport}
+            className="bg-green-600 hover:bg-green-700 text-white"
+          >
+            <Download className="mr-2 h-4 w-4" />
+            Export Excel
+          </Button>
+        </div>
       </div>
 
       {step === 1 && (
@@ -876,34 +960,6 @@ export default function TaksasiPanen() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Tabel Taksasi Hari Ini ({date})</CardTitle>
-          <div className="flex gap-2">
-            <div className="relative">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => document.getElementById('import-taksasi')?.click()}
-                className="border-green-500 text-green-600 hover:bg-green-50 hover:text-green-700"
-              >
-                <Upload className="mr-2 h-4 w-4" />
-                Import Excel
-              </Button>
-              <input
-                id="import-taksasi"
-                type="file"
-                accept=".xlsx, .xls, .csv"
-                className="hidden"
-                onChange={handleImport}
-              />
-            </div>
-            <Button
-              size="sm"
-              onClick={handleExport}
-              className="bg-green-600 hover:bg-green-700 text-white"
-            >
-              <Download className="mr-2 h-4 w-4" />
-              Export Excel
-            </Button>
-          </div>
         </CardHeader>
         <CardContent>
           {rows.length === 0 ? (

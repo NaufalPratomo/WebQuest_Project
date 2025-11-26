@@ -76,7 +76,7 @@ const Layout = ({ children }: LayoutProps) => {
       {/* Sidebar */}
       <aside
         className={cn(
-          'bg-card border-r border-border transition-all duration-300',
+          'bg-card border-r border-border transition-all duration-300 flex flex-col',
           sidebarOpen ? 'w-64' : 'w-16'
         )}
       >
@@ -99,7 +99,7 @@ const Layout = ({ children }: LayoutProps) => {
           </Button>
         </div>
 
-        <nav className="p-2 space-y-1">
+        <nav className="p-2 space-y-1 flex-1 overflow-y-auto">
           {/* Top level */}
           {visibleTop.map((item) => {
             const Icon = item.icon;
@@ -170,6 +170,18 @@ const Layout = ({ children }: LayoutProps) => {
             );
           })}
         </nav>
+
+        <div className="p-4 border-t border-border">
+          {sidebarOpen ? (
+            <p className="text-xs text-center text-muted-foreground">
+              Version 1.0
+            </p>
+          ) : (
+            <p className="text-[10px] text-center text-muted-foreground">
+              v1.0
+            </p>
+          )}
+        </div>
       </aside>
 
       {/* Main Content */}

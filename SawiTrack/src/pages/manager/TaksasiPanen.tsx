@@ -17,6 +17,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import * as XLSX from 'xlsx';
+import { Upload, Download } from 'lucide-react';
 
 type EstateOption = { _id: string; estate_name: string };
 type DivisionOption = { division_id: number };
@@ -61,6 +63,14 @@ export default function TaksasiPanen() {
     kebutuhanPemanen: number;
   };
   const [rows, setRows] = useState<TaksasiRow[]>([]);
+
+  // Import Preview State
+  const [isImportPreviewOpen, setIsImportPreviewOpen] = useState(false);
+  const [importPreviewData, setImportPreviewData] = useState<{
+    newRows: TaksasiRow[];
+    updatedRows: TaksasiRow[];
+    duplicateRows: TaksasiRow[];
+  } | null>(null);
 
   // Page 2 inputs
   const [bm, setBm] = useState<number>(0); // Buah Hitam (BH)
@@ -296,12 +306,12 @@ export default function TaksasiPanen() {
       // Jika sukses, baru update local state
       // Cari data yang sama berdasarkan composite key (tanggal + estate + divisi + blok)
       const composite = `${date}|${estateId}|${divisionId}|${blockLabel}`;
-      const existingIndex = rows.findIndex(r => 
+      const existingIndex = rows.findIndex(r =>
         `${r.date}|${r.estateId}|${r.divisionId}|${r.blockLabel}` === composite
       );
 
       let newRows: TaksasiRow[];
-      
+
       if (existingIndex !== -1) {
         // Data sudah ada - replace/update data lama
         newRows = rows.map((r, idx) => idx === existingIndex ? row : r);
@@ -314,7 +324,7 @@ export default function TaksasiPanen() {
 
       setRows(newRows);
       // Server is source of truth; no longer persisting to localStorage
-      
+
       // Simpan selection pekerja yang sudah dialokasikan
       await persistSelection(selectedIds);
 
@@ -390,6 +400,267 @@ export default function TaksasiPanen() {
     setStep(2);
     setEditingKey(`${row.date}|${row.estateId}|${row.divisionId}|${row.blockLabel}`);
   }
+
+  const handleExport = () => {
+    if (rows.length === 0) {
+      toast.error('Tidak ada data untuk diexport');
+      return;
+    }
+
+    const data = rows.map(r => ({
+      'Tanggal': r.date,
+      'Estate': r.estateName,
+      'Divisi': r.divisionId,
+      'Blok': r.blockLabel,
+      'Total Pokok': r.totalPokok,
+      'Sample Pokok': r.samplePokok,
+      'Buah Hitam (BH)': r.bm,
+      'Pokok Tidak Berbuah (PTB)': r.ptb,
+      'Buah Merah Belum Brondol (BMBB)': r.bmbb,
+      'Buah Merah Membrodol (BMM)': r.bmm,
+      'BJR (kg)': r.avgWeightKg,
+      'Basis (jjg/org)': r.basisJanjangPerPemanen,
+      'AKP %': r.akpPercent,
+      'Taksasi (Janjang)': r.taksasiJanjang,
+      'Taksasi (Ton)': r.taksasiTon,
+      'Kebutuhan Pemanen': r.kebutuhanPemanen
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Taksasi");
+    XLSX.writeFile(wb, `Taksasi_${date}.xlsx`);
+  };
+
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        const bstr = evt.target?.result;
+        const wb = XLSX.read(bstr, { type: 'binary' });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const data = XLSX.utils.sheet_to_json(ws);
+
+        if (data.length === 0) {
+          toast.error('File kosong');
+          return;
+        }
+
+        const parsedRows: TaksasiRow[] = [];
+        const errors: string[] = [];
+        const uniqueDates = new Set<string>();
+
+        for (let i = 0; i < data.length; i++) {
+          const row: any = data[i];
+          const getVal = (keys: string[]) => {
+            for (const k of keys) if (row[k] !== undefined) return row[k];
+            return undefined;
+          };
+
+          const rowDate = getVal(['Tanggal', 'Date', 'date']) || date;
+          const estateName = getVal(['Estate', 'estate', 'Nama Estate']);
+          const divisionId = getVal(['Divisi', 'Division', 'division', 'divisi']);
+          const blockLabel = getVal(['Blok', 'Block', 'block', 'no_blok']);
+
+          const estate = estates.find(e => e.estate_name.toLowerCase() === String(estateName).toLowerCase() || e._id === estateName);
+          if (!estate) {
+            errors.push(`Baris ${i + 2}: Estate '${estateName}' tidak ditemukan`);
+            continue;
+          }
+
+          if (!divisionId || !blockLabel) {
+            errors.push(`Baris ${i + 2}: Divisi atau Blok kurang`);
+            continue;
+          }
+
+          uniqueDates.add(rowDate);
+
+          const bm = Number(getVal(['Buah Hitam (BH)', 'BH', 'bm']) || 0);
+          const ptb = Number(getVal(['Pokok Tidak Berbuah (PTB)', 'PTB', 'ptb']) || 0);
+          const bmbb = Number(getVal(['Buah Merah Belum Brondol (BMBB)', 'BMBB', 'bmbb']) || 0);
+          const bmm = Number(getVal(['Buah Merah Membrodol (BMM)', 'BMM', 'bmm']) || 0);
+          const avgWeightKg = Number(getVal(['BJR (kg)', 'BJR', 'avgWeightKg']) || 15);
+          const basis = Number(getVal(['Basis (jjg/org)', 'Basis', 'basisJanjangPerPemanen']) || 120);
+          const totalPokok = Number(getVal(['Total Pokok', 'Pokok', 'totalPokok']) || 0);
+
+          const samplePokok = Math.max(1, Math.ceil(totalPokok * 0.10));
+          const effectiveSample = Math.max(0, samplePokok - ptb);
+          const akpPercent = effectiveSample > 0 ? (bmm / effectiveSample) * 100 : 0;
+          const nonBearingRate = samplePokok > 0 ? ptb / samplePokok : 0;
+          const estimatedNonBearingInBlock = Math.round(nonBearingRate * totalPokok);
+          const effectiveBlockPalms = Math.max(0, totalPokok - estimatedNonBearingInBlock);
+          const predictedBearingPalms = Math.round((akpPercent / 100) * effectiveBlockPalms);
+          const taksasiJanjang = predictedBearingPalms;
+          const taksasiTon = (taksasiJanjang * avgWeightKg) / 1000;
+          const kebutuhanPemanen = basis > 0 ? Math.ceil(taksasiJanjang / basis) : 0;
+
+          parsedRows.push({
+            timestamp: new Date().toISOString(),
+            date: rowDate,
+            estateId: estate._id,
+            estateName: estate.estate_name,
+            divisionId: String(divisionId),
+            blockLabel: String(blockLabel),
+            totalPokok,
+            samplePokok,
+            bm, ptb, bmbb, bmm,
+            avgWeightKg,
+            basisJanjangPerPemanen: basis,
+            akpPercent: Number(akpPercent.toFixed(2)),
+            taksasiJanjang,
+            taksasiTon: Number(taksasiTon.toFixed(2)),
+            kebutuhanPemanen,
+          });
+        }
+
+        if (errors.length > 0) {
+          toast.error(`Gagal import beberapa baris:\n${errors.slice(0, 3).join('\n')}${errors.length > 3 ? '...' : ''}`);
+          if (parsedRows.length === 0) return;
+        }
+
+        let existingData: TaksasiRow[] = [];
+        for (const d of Array.from(uniqueDates)) {
+          const list = await api.taksasiList({ date: d });
+          if (list) {
+            const mapped = list.map(doc => ({
+              timestamp: doc._id || '',
+              date: doc.date ? doc.date.split('T')[0] : d,
+              estateId: doc.estateId,
+              estateName: estates.find(e => e._id === doc.estateId)?.estate_name || '-',
+              divisionId: String(doc.division_id),
+              blockLabel: doc.block_no,
+              totalPokok: doc.totalPokok ?? 0,
+              samplePokok: doc.samplePokok ?? 0,
+              bm: doc.bm ?? 0,
+              ptb: doc.ptb ?? 0,
+              bmbb: doc.bmbb ?? 0,
+              bmm: doc.bmm ?? 0,
+              avgWeightKg: doc.avgWeightKg ?? 15,
+              basisJanjangPerPemanen: doc.basisJanjangPerPemanen ?? 120,
+              akpPercent: doc.akpPercent ?? 0,
+              taksasiJanjang: doc.taksasiJanjang ?? 0,
+              taksasiTon: doc.taksasiTon ?? 0,
+              kebutuhanPemanen: doc.kebutuhanPemanen ?? 0,
+            }));
+            existingData = [...existingData, ...mapped];
+          }
+        }
+
+        const newRows: TaksasiRow[] = [];
+        const updatedRows: TaksasiRow[] = [];
+        const duplicateRows: TaksasiRow[] = [];
+
+        parsedRows.forEach(newRow => {
+          const existing = existingData.find(ex =>
+            ex.date === newRow.date &&
+            ex.estateId === newRow.estateId &&
+            String(ex.divisionId) === String(newRow.divisionId) &&
+            ex.blockLabel === newRow.blockLabel
+          );
+
+          if (existing) {
+            const isSame =
+              existing.totalPokok === newRow.totalPokok &&
+              existing.bm === newRow.bm &&
+              existing.ptb === newRow.ptb &&
+              existing.bmbb === newRow.bmbb &&
+              existing.bmm === newRow.bmm &&
+              existing.avgWeightKg === newRow.avgWeightKg &&
+              existing.basisJanjangPerPemanen === newRow.basisJanjangPerPemanen;
+
+            if (isSame) {
+              duplicateRows.push(newRow);
+            } else {
+              updatedRows.push(newRow);
+            }
+          } else {
+            newRows.push(newRow);
+          }
+        });
+
+        setImportPreviewData({ newRows, updatedRows, duplicateRows });
+        setIsImportPreviewOpen(true);
+
+      } catch (e) {
+        console.error(e);
+        toast.error('Gagal membaca file excel');
+      } finally {
+        e.target.value = '';
+      }
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  const confirmImport = async () => {
+    if (!importPreviewData) return;
+    const { newRows, updatedRows } = importPreviewData;
+    const toProcess = [...newRows, ...updatedRows];
+
+    if (toProcess.length === 0) {
+      setIsImportPreviewOpen(false);
+      return;
+    }
+
+    try {
+      const payload = toProcess.map(row => ({
+        date: row.date,
+        estateId: row.estateId,
+        division_id: Number(row.divisionId),
+        block_no: row.blockLabel,
+        weightKg: Math.round(row.taksasiTon * 1000),
+        totalPokok: row.totalPokok,
+        samplePokok: row.samplePokok,
+        bm: row.bm,
+        ptb: row.ptb,
+        bmbb: row.bmbb,
+        bmm: row.bmm,
+        avgWeightKg: row.avgWeightKg,
+        basisJanjangPerPemanen: row.basisJanjangPerPemanen,
+        akpPercent: row.akpPercent,
+        taksasiJanjang: row.taksasiJanjang,
+        taksasiTon: row.taksasiTon,
+        kebutuhanPemanen: row.kebutuhanPemanen,
+        notes: `Imported; AKP=${row.akpPercent}%`
+      }));
+
+      await api.taksasiCreate(payload);
+      toast.success(`Berhasil memproses ${toProcess.length} data`);
+
+      const list = await api.taksasiList({ date });
+      const mapped: TaksasiRow[] = (list || []).map((doc) => {
+        const estateName = estates.find(e => e._id === doc.estateId)?.estate_name || '-';
+        return {
+          timestamp: doc._id || '',
+          date: doc.date ? doc.date.split('T')[0] : date,
+          estateId: doc.estateId,
+          estateName,
+          divisionId: String(doc.division_id),
+          blockLabel: doc.block_no,
+          totalPokok: doc.totalPokok ?? 0,
+          samplePokok: doc.samplePokok ?? 0,
+          bm: doc.bm ?? 0,
+          ptb: doc.ptb ?? 0,
+          bmbb: doc.bmbb ?? 0,
+          bmm: doc.bmm ?? 0,
+          avgWeightKg: doc.avgWeightKg ?? 15,
+          basisJanjangPerPemanen: doc.basisJanjangPerPemanen ?? 120,
+          akpPercent: doc.akpPercent ?? 0,
+          taksasiJanjang: doc.taksasiJanjang ?? Math.round((doc.weightKg || 0) / (doc.avgWeightKg || 15)),
+          taksasiTon: doc.taksasiTon ?? (doc.weightKg || 0) / 1000,
+          kebutuhanPemanen: doc.kebutuhanPemanen ?? 0,
+        };
+      });
+      setRows(mapped);
+      setIsImportPreviewOpen(false);
+      setImportPreviewData(null);
+    } catch (e) {
+      toast.error('Gagal menyimpan data import');
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -471,137 +742,168 @@ export default function TaksasiPanen() {
             </div>
           </CardContent>
         </Card>
-      )}
+      )
+      }
 
-      {step === 2 && (
-        <Card>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className="space-y-2">
-                <Label>Buah Hitam (BH)</Label>
-                <Input type="number" min={0} value={bm} onChange={(e) => setBm(Number(e.target.value || 0))} />
-              </div>
-              <div className="space-y-2">
-                <Label>Pokok Tidak Berbuah (PTB)</Label>
-                <Input type="number" min={0} value={ptb} onChange={(e) => setPtb(Number(e.target.value || 0))} />
-              </div>
-              <div className="space-y-2">
-                <Label>Buah Merah Belum Brondol (BMBB)</Label>
-                <Input type="number" min={0} value={bmbb} onChange={(e) => setBmbb(Number(e.target.value || 0))} />
-              </div>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className="space-y-2">
-                <Label>Buah Merah Membrodol (BMM)</Label>
-                <Input type="number" min={0} value={bmm} onChange={(e) => setBmm(Number(e.target.value || 0))} />
-              </div>
-              <div className="space-y-2">
-                <Label>Berat Janjang Rata-rata (kg)</Label>
-                <Input type="number" min={0} step="0.1" value={avgWeightKg} onChange={(e) => setAvgWeightKg(Number(e.target.value || 0))} />
-              </div>
-              <div className="space-y-2">
-                <Label>Basis Blok (janjang/pemanen)</Label>
-                <Input type="number" min={1} value={basisJanjangPerPemanen} onChange={(e) => setBasisJanjangPerPemanen(Number(e.target.value || 0))} />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Hasil Perhitungan</Label>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-1">
-                  <div className="text-sm text-muted-foreground">AKP % (berdasarkan BMM)</div>
-                  <Input readOnly value={akpPercent.toFixed(2)} />
+      {
+        step === 2 && (
+          <Card>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-3">
+                <div className="space-y-2">
+                  <Label>Buah Hitam (BH)</Label>
+                  <Input type="number" min={0} value={bm} onChange={(e) => setBm(Number(e.target.value || 0))} />
                 </div>
-                <div className="space-y-1">
-                  <div className="text-sm text-muted-foreground">Taksasi Janjang (janjang)</div>
-                  <Input readOnly value={taksasiJanjang} />
+                <div className="space-y-2">
+                  <Label>Pokok Tidak Berbuah (PTB)</Label>
+                  <Input type="number" min={0} value={ptb} onChange={(e) => setPtb(Number(e.target.value || 0))} />
                 </div>
-                <div className="space-y-1">
-                  <div className="text-sm text-muted-foreground">Taksasi Tonase (ton)</div>
-                  <Input readOnly value={taksasiTon.toFixed(2)} />
-                </div>
-                <div className="space-y-1">
-                  <div className="text-sm text-muted-foreground">Kebutuhan Pemanen (orang)</div>
-                  <Input readOnly value={kebutuhanPemanen} />
+                <div className="space-y-2">
+                  <Label>Buah Merah Belum Brondol (BMBB)</Label>
+                  <Input type="number" min={0} value={bmbb} onChange={(e) => setBmbb(Number(e.target.value || 0))} />
                 </div>
               </div>
-              <p className="text-xs text-muted-foreground">
-                Catatan: Perhitungan ini mengasumsikan AKP% dihitung dari BMM/efektif sample (sample - PTB), dan 1 janjang per pokok berbuah. Anda dapat menyesuaikan parameter rata-rata berat janjang dan basis janjang/pemanen.
-              </p>
-            </div>
 
-            {/* Employee selection dialog */}
-            <div className="flex items-center justify-between rounded-md border p-3">
-              <div className="text-sm">
-                <div className="font-medium">Alokasi Pemanen</div>
-                <div className="text-muted-foreground">Pilih karyawan sesuai kebutuhan: <span className="font-mono">{selectedIds.length}/{kebutuhanPemanen}</span></div>
+              <div className="grid gap-4 md:grid-cols-3">
+                <div className="space-y-2">
+                  <Label>Buah Merah Membrodol (BMM)</Label>
+                  <Input type="number" min={0} value={bmm} onChange={(e) => setBmm(Number(e.target.value || 0))} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Berat Janjang Rata-rata (kg)</Label>
+                  <Input type="number" min={0} step="0.1" value={avgWeightKg} onChange={(e) => setAvgWeightKg(Number(e.target.value || 0))} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Basis Blok (janjang/pemanen)</Label>
+                  <Input type="number" min={1} value={basisJanjangPerPemanen} onChange={(e) => setBasisJanjangPerPemanen(Number(e.target.value || 0))} />
+                </div>
               </div>
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button variant="outline">Pilih Karyawan</Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-3xl">
-                  <DialogHeader>
-                    <DialogTitle>Pilih Karyawan ({selectedIds.length}/{kebutuhanPemanen})</DialogTitle>
-                  </DialogHeader>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 max-h-[60vh] overflow-auto">
-                    {allEmployees.map((emp) => {
-                      const active = selectedIds.includes(emp._id);
-                      const atCapacity = !active && kebutuhanPemanen > 0 && selectedIds.length >= kebutuhanPemanen;
-                      return (
-                        <div
-                          key={emp._id}
-                          role="button"
-                          aria-pressed={active}
-                          onClick={() => !atCapacity && toggleSelect(emp._id)}
-                          className={`rounded-lg border p-3 transition ${active ? 'bg-emerald-50 border-emerald-300' : 'hover:bg-muted'} ${atCapacity ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-                        >
-                          <div className="font-medium truncate">{emp.name}</div>
-                          <div className="text-xs text-muted-foreground">Divisi {emp.division ?? '-'}</div>
-                          {active && <div className="mt-2 inline-block text-xs px-2 py-0.5 rounded bg-emerald-100 text-emerald-700">Dipilih</div>}
-                        </div>
-                      );
-                    })}
+
+              <div className="space-y-2">
+                <Label>Hasil Perhitungan</Label>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-1">
+                    <div className="text-sm text-muted-foreground">AKP % (berdasarkan BMM)</div>
+                    <Input readOnly value={akpPercent.toFixed(2)} />
                   </div>
-                  <div className="mt-4 space-y-2">
-                    <Label className="text-sm font-medium">Tambah Karyawan Lain (Other)</Label>
-                    <div className="flex gap-2">
-                      <Input
-                        placeholder="Nama karyawan baru"
-                        value={otherName}
-                        onChange={(e) => setOtherName(e.target.value)}
-                        className="flex-1"
-                      />
-                      <Button variant="secondary" onClick={addOtherEmployee}>Tambah</Button>
+                  <div className="space-y-1">
+                    <div className="text-sm text-muted-foreground">Taksasi Janjang (janjang)</div>
+                    <Input readOnly value={taksasiJanjang} />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-sm text-muted-foreground">Taksasi Tonase (ton)</div>
+                    <Input readOnly value={taksasiTon.toFixed(2)} />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-sm text-muted-foreground">Kebutuhan Pemanen (orang)</div>
+                    <Input readOnly value={kebutuhanPemanen} />
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Catatan: Perhitungan ini mengasumsikan AKP% dihitung dari BMM/efektif sample (sample - PTB), dan 1 janjang per pokok berbuah. Anda dapat menyesuaikan parameter rata-rata berat janjang dan basis janjang/pemanen.
+                </p>
+              </div>
+
+              {/* Employee selection dialog */}
+              <div className="flex items-center justify-between rounded-md border p-3">
+                <div className="text-sm">
+                  <div className="font-medium">Alokasi Pemanen</div>
+                  <div className="text-muted-foreground">Pilih karyawan sesuai kebutuhan: <span className="font-mono">{selectedIds.length}/{kebutuhanPemanen}</span></div>
+                </div>
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button variant="outline">Pilih Karyawan</Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-3xl">
+                    <DialogHeader>
+                      <DialogTitle>Pilih Karyawan ({selectedIds.length}/{kebutuhanPemanen})</DialogTitle>
+                    </DialogHeader>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 max-h-[60vh] overflow-auto">
+                      {allEmployees.map((emp) => {
+                        const active = selectedIds.includes(emp._id);
+                        const atCapacity = !active && kebutuhanPemanen > 0 && selectedIds.length >= kebutuhanPemanen;
+                        return (
+                          <div
+                            key={emp._id}
+                            role="button"
+                            aria-pressed={active}
+                            onClick={() => !atCapacity && toggleSelect(emp._id)}
+                            className={`rounded-lg border p-3 transition ${active ? 'bg-emerald-50 border-emerald-300' : 'hover:bg-muted'} ${atCapacity ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                          >
+                            <div className="font-medium truncate">{emp.name}</div>
+                            <div className="text-xs text-muted-foreground">Divisi {emp.division ?? '-'}</div>
+                            {active && <div className="mt-2 inline-block text-xs px-2 py-0.5 rounded bg-emerald-100 text-emerald-700">Dipilih</div>}
+                          </div>
+                        );
+                      })}
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      Hanya isi nama. Kolom divisi mengikuti konteks pilihan saat ini.
-                    </p>
-                  </div>
-                  <div className="text-xs text-muted-foreground">Tidak dapat memilih lebih dari kapasitas.</div>
-                </DialogContent>
-              </Dialog>
-            </div>
-
-            <div className="flex justify-between gap-2">
-              <Button variant="outline" onClick={() => setStep(1)}>Kembali</Button>
-              <div className="flex gap-2">
-                <Button variant="secondary" onClick={() => {
-                  // For now we don't persist; we just show a confirmation
-                  toast.success('Taksasi dihitung. Anda dapat menyimpan fitur ini nanti.');
-                }}>Hitung Ulang</Button>
-                <Button onClick={saveRow}>Selesai</Button>
+                    <div className="mt-4 space-y-2">
+                      <Label className="text-sm font-medium">Tambah Karyawan Lain (Other)</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          placeholder="Nama karyawan baru"
+                          value={otherName}
+                          onChange={(e) => setOtherName(e.target.value)}
+                          className="flex-1"
+                        />
+                        <Button variant="secondary" onClick={addOtherEmployee}>Tambah</Button>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Hanya isi nama. Kolom divisi mengikuti konteks pilihan saat ini.
+                      </p>
+                    </div>
+                    <div className="text-xs text-muted-foreground">Tidak dapat memilih lebih dari kapasitas.</div>
+                  </DialogContent>
+                </Dialog>
               </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+
+              <div className="flex justify-between gap-2">
+                <Button variant="outline" onClick={() => setStep(1)}>Kembali</Button>
+                <div className="flex gap-2">
+                  <Button variant="secondary" onClick={() => {
+                    // For now we don't persist; we just show a confirmation
+                    toast.success('Taksasi dihitung. Anda dapat menyimpan fitur ini nanti.');
+                  }}>Hitung Ulang</Button>
+                  <Button onClick={saveRow}>Selesai</Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )
+      }
 
       {/* Table of saved rows for the selected date */}
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Tabel Taksasi Hari Ini ({date})</CardTitle>
+          <div className="flex gap-2">
+            <div className="relative">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => document.getElementById('import-taksasi')?.click()}
+                className="border-green-500 text-green-600 hover:bg-green-50 hover:text-green-700"
+              >
+                <Upload className="mr-2 h-4 w-4" />
+                Import Excel
+              </Button>
+              <input
+                id="import-taksasi"
+                type="file"
+                accept=".xlsx, .xls, .csv"
+                className="hidden"
+                onChange={handleImport}
+              />
+            </div>
+            <Button
+              size="sm"
+              onClick={handleExport}
+              className="bg-green-600 hover:bg-green-700 text-white"
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Export Excel
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           {rows.length === 0 ? (
@@ -652,6 +954,134 @@ export default function TaksasiPanen() {
           )}
         </CardContent>
       </Card>
-    </div>
+
+      {/* Import Preview Dialog */}
+      <Dialog open={isImportPreviewOpen} onOpenChange={setIsImportPreviewOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Preview Import Taksasi</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-6">
+            <div className="grid grid-cols-3 gap-4">
+              <Card>
+                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Data Baru</CardTitle></CardHeader>
+                <CardContent><div className="text-2xl font-bold text-green-600">{importPreviewData?.newRows.length || 0}</div></CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Update</CardTitle></CardHeader>
+                <CardContent><div className="text-2xl font-bold text-blue-600">{importPreviewData?.updatedRows.length || 0}</div></CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Duplikat (Diabaikan)</CardTitle></CardHeader>
+                <CardContent><div className="text-2xl font-bold text-gray-400">{importPreviewData?.duplicateRows.length || 0}</div></CardContent>
+              </Card>
+            </div>
+
+            {importPreviewData?.newRows.length ? (
+              <div>
+                <h3 className="font-semibold mb-2 flex items-center gap-2 text-green-700"><div className="w-2 h-2 rounded-full bg-green-600" /> Data Baru (Akan Ditambahkan)</h3>
+                <div className="border rounded-md overflow-auto max-h-60">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Tanggal</TableHead>
+                        <TableHead>Estate</TableHead>
+                        <TableHead>Divisi</TableHead>
+                        <TableHead>Blok</TableHead>
+                        <TableHead className="text-right">Taksasi (Ton)</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {importPreviewData.newRows.slice(0, 50).map((r, i) => (
+                        <TableRow key={i}>
+                          <TableCell>{r.date}</TableCell>
+                          <TableCell>{r.estateName}</TableCell>
+                          <TableCell>Divisi {r.divisionId}</TableCell>
+                          <TableCell>{r.blockLabel}</TableCell>
+                          <TableCell className="text-right">{r.taksasiTon.toFixed(2)}</TableCell>
+                        </TableRow>
+                      ))}
+                      {importPreviewData.newRows.length > 50 && (
+                        <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground">... dan {importPreviewData.newRows.length - 50} data lainnya</TableCell></TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            ) : null}
+
+            {importPreviewData?.updatedRows.length ? (
+              <div>
+                <h3 className="font-semibold mb-2 flex items-center gap-2 text-blue-700"><div className="w-2 h-2 rounded-full bg-blue-600" /> Data Update (Akan Diperbarui)</h3>
+                <div className="border rounded-md overflow-auto max-h-60">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Tanggal</TableHead>
+                        <TableHead>Estate</TableHead>
+                        <TableHead>Divisi</TableHead>
+                        <TableHead>Blok</TableHead>
+                        <TableHead className="text-right">Taksasi Baru (Ton)</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {importPreviewData.updatedRows.slice(0, 50).map((r, i) => (
+                        <TableRow key={i}>
+                          <TableCell>{r.date}</TableCell>
+                          <TableCell>{r.estateName}</TableCell>
+                          <TableCell>Divisi {r.divisionId}</TableCell>
+                          <TableCell>{r.blockLabel}</TableCell>
+                          <TableCell className="text-right">{r.taksasiTon.toFixed(2)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            ) : null}
+
+            {importPreviewData?.duplicateRows.length ? (
+              <div>
+                <h3 className="font-semibold mb-2 flex items-center gap-2 text-gray-500"><div className="w-2 h-2 rounded-full bg-gray-400" /> Data Duplikat (Sama Persis - Diabaikan)</h3>
+                <div className="border rounded-md overflow-auto max-h-40 bg-muted/30">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Tanggal</TableHead>
+                        <TableHead>Estate</TableHead>
+                        <TableHead>Divisi</TableHead>
+                        <TableHead>Blok</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {importPreviewData.duplicateRows.slice(0, 20).map((r, i) => (
+                        <TableRow key={i} className="opacity-60">
+                          <TableCell>{r.date}</TableCell>
+                          <TableCell>{r.estateName}</TableCell>
+                          <TableCell>Divisi {r.divisionId}</TableCell>
+                          <TableCell>{r.blockLabel}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="flex justify-end gap-2 mt-4">
+            <Button variant="outline" onClick={() => setIsImportPreviewOpen(false)}>Batal</Button>
+            <Button
+              onClick={confirmImport}
+              disabled={!importPreviewData || (importPreviewData.newRows.length === 0 && importPreviewData.updatedRows.length === 0)}
+              className="bg-green-600 hover:bg-green-700 text-white"
+            >
+              Proses Import ({((importPreviewData?.newRows.length || 0) + (importPreviewData?.updatedRows.length || 0))})
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div >
   );
 }

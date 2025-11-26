@@ -347,7 +347,7 @@ app.put(`${API_BASE_PATH}/estates/:id`, async (req, res) => {
       new: true,
     }).lean();
     if (!updated) return res.status(404).json({ error: "Not found" });
-    
+
     logActivity(req, "UPDATE_ESTATE", { estate_id: req.params.id, updates: update });
     res.json(updated);
   } catch (err) {
@@ -555,6 +555,7 @@ app.post(`${API_BASE_PATH}/employees`, async (req, res) => {
     const { nik, name, companyId, position, salary, address, phone, birthDate } = req.body;
     if (!nik || !name)
       return res.status(400).json({ error: "Missing required fields (NIK, name)" });
+
     const employee = await Employee.create({
       nik,
       name,
@@ -576,15 +577,34 @@ app.post(`${API_BASE_PATH}/employees`, async (req, res) => {
 app.put(`${API_BASE_PATH}/employees/:id`, async (req, res) => {
   try {
     const { nik, name, companyId, position, salary, address, phone, birthDate, status } = req.body;
+
+    const updateData = {
+      nik,
+      name,
+      companyId: companyId || null,
+      position: position || null,
+      salary: salary || null,
+      address: address || null,
+      phone: phone || null,
+      birthDate: birthDate || null,
+      status
+    };
+
     const updated = await Employee.findByIdAndUpdate(
       req.params.id,
-      { $set: { nik, name, companyId, position, salary, address, phone, birthDate, status } },
+      { $set: updateData },
       { new: true }
     ).lean();
-    if (!updated) return res.status(404).json({ error: "Not found" });
+
+    if (!updated) {
+      console.log(`[Employee] Update failed: ID ${req.params.id} not found`);
+      return res.status(404).json({ error: "Not found" });
+    }
+
     logActivity(req, "UPDATE_EMPLOYEE", { id: req.params.id, nik, name });
     res.json(updated);
   } catch (err) {
+    console.error("[Employee] Update error:", err);
     res.status(500).json({ error: err.message });
   }
 });

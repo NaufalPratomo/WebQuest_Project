@@ -107,7 +107,7 @@ const Workers = () => {
   };
 
   const handleUpdateWorker = async () => {
-    if (!editingWorker) return;
+    if (!editingWorker || !editingWorker._id) return;
 
     try {
       if (!form.nik || !form.name) {
@@ -122,7 +122,7 @@ const Workers = () => {
       await api.updateEmployee(editingWorker._id, {
         nik: form.nik,
         name: form.name,
-        companyId: form.companyId || null,
+        companyId: form.companyId || "",
         position: form.position || null,
         salary: form.salary || null,
         address: form.address || null,
@@ -179,7 +179,7 @@ const Workers = () => {
       reader.onload = async (event) => {
         try {
           const data = new Uint8Array(event.target?.result as ArrayBuffer);
-          const wb = XLSX.read(data, { type: "array" });
+          const wb = XLSX.read(data, { type: "array", cellDates: true });
           const ws = wb.Sheets[wb.SheetNames[0]];
           const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws);
 
@@ -205,6 +205,50 @@ const Workers = () => {
             return true;
           };
 
+          const parseDate = (dateStr: any): string | undefined => {
+            if (!dateStr) return undefined;
+
+            // If it's already a Date object (from cellDates: true)
+            if (dateStr instanceof Date) {
+              // Adjust for timezone offset if needed, but usually ISO string is fine
+              // However, Excel dates are often local time. 
+              // Let's just take the YYYY-MM-DD part to be safe and treat as UTC or local noon to avoid shifting
+              const year = dateStr.getFullYear();
+              const month = String(dateStr.getMonth() + 1).padStart(2, '0');
+              const day = String(dateStr.getDate()).padStart(2, '0');
+              return `${year}-${month}-${day}T00:00:00.000Z`;
+            }
+
+            // If it's a number (Excel serial date, if cellDates was false or failed)
+            if (typeof dateStr === 'number') {
+              // Excel base date is usually Dec 30 1899
+              const date = new Date(Math.round((dateStr - 25569) * 86400 * 1000));
+              const year = date.getFullYear();
+              const month = String(date.getMonth() + 1).padStart(2, '0');
+              const day = String(date.getDate()).padStart(2, '0');
+              return `${year}-${month}-${day}T00:00:00.000Z`;
+            }
+
+            const str = String(dateStr).trim();
+
+            // Handle DD-MM-YYYY or DD/MM/YYYY
+            if (/^\d{1,2}[-/]\d{1,2}[-/]\d{4}$/.test(str)) {
+              const parts = str.split(/[-/]/);
+              // parts[0] = day, parts[1] = month, parts[2] = year
+              const day = parts[0].padStart(2, '0');
+              const month = parts[1].padStart(2, '0');
+              const year = parts[2];
+              return `${year}-${month}-${day}T00:00:00.000Z`;
+            }
+
+            // Handle YYYY-MM-DD
+            if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+              return new Date(str).toISOString();
+            }
+
+            return undefined;
+          };
+
           jsonData.forEach((row) => {
             const nik = String(row["NIK"] || "").trim();
             const name = String(row["Nama"] || "").trim();
@@ -221,7 +265,7 @@ const Workers = () => {
               salary: row["Gaji"] ? Number(row["Gaji"]) : undefined,
               address: row["Alamat"] ? String(row["Alamat"]) : undefined,
               phone: row["Telepon"] ? String(row["Telepon"]) : undefined,
-              birthDate: row["Tanggal Lahir"] ? String(row["Tanggal Lahir"]) : undefined,
+              birthDate: parseDate(row["Tanggal Lahir"]),
               status: "active",
             };
 
@@ -287,7 +331,7 @@ const Workers = () => {
           await api.updateEmployee(oldEmployee._id, {
             nik: employee.nik!,
             name: employee.name!,
-            companyId: employee.companyId || null,
+            companyId: employee.companyId || "",
             position: employee.position || null,
             salary: employee.salary || null,
             address: employee.address || null,
@@ -328,6 +372,18 @@ const Workers = () => {
     try {
       const exportData = filteredWorkers.map((w) => {
         const company = companies.find((c) => c._id === w.companyId);
+
+        let formattedDate = "-";
+        if (w.birthDate) {
+          const d = new Date(w.birthDate);
+          if (!isNaN(d.getTime())) {
+            const day = String(d.getDate()).padStart(2, '0');
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const year = d.getFullYear();
+            formattedDate = `${day}-${month}-${year}`;
+          }
+        }
+
         return {
           NIK: w.nik,
           Nama: w.name,
@@ -336,7 +392,7 @@ const Workers = () => {
           Gaji: w.salary || 0,
           Alamat: w.address || "-",
           Telepon: w.phone || "-",
-          "Tanggal Lahir": w.birthDate || "-",
+          "Tanggal Lahir": formattedDate,
           Status: w.status === "active" ? "Aktif" : "Nonaktif",
         };
       });

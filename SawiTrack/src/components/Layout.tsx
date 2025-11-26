@@ -82,8 +82,12 @@ const Layout = ({ children }: LayoutProps) => {
       >
         <div className="flex h-16 items-center justify-between px-4 border-b border-border">
           {sidebarOpen && (
-            <div className="flex items-center gap-2">
-              <img src="/PalmaGroupLogo.png" alt="Palma ROOTS" className="h-20 w-auto" />
+            <div className="flex items-center gap-3">
+              <img
+                src="/PalmaGroupLogo.png"
+                alt="Palma ROOTS"
+                className="h-16 w-auto object-contain"
+              />
             </div>
           )}
           <Button

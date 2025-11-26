@@ -350,7 +350,7 @@ export const api = {
   customWorkers: () => http<Array<{ _id: string; name: string; active: boolean }>>(`/custom-workers`),
   createCustomWorker: (name: string) => http<{ _id: string; name: string; active: boolean }>(`/custom-workers`, { method: 'POST', body: JSON.stringify({ name }) }),
   deleteCustomWorker: (id: string) => http<{ ok: boolean }>(`/custom-workers/${id}`, { method: 'DELETE' }),
-  
+
   // Job Codes
   jobcodes: () => http<Array<{ code: string; name: string; category: 'panen' | 'non-panen'; hkValue: number }>>(`/jobcodes`),
   createJobCode: (body: { code: string; name: string; category: 'panen' | 'non-panen'; hkValue: number }) =>
@@ -358,17 +358,17 @@ export const api = {
   updateJobCode: (code: string, body: Partial<{ name: string; category: 'panen' | 'non-panen'; hkValue: number }>) =>
     http<{ code: string }>(`/jobcodes/${code}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteJobCode: (code: string) => http<{ ok: boolean }>(`/jobcodes/${code}`, { method: 'DELETE' }),
-  
+
   // Panen
-  panenList: (params?: { date_panen?: string; estateId?: string; division_id?: number; block_no?: string; }) => {
-    const search = toQS(params);
+  panenList: (params?: { date_panen?: string; startDate?: string; endDate?: string; estateId?: string; division_id?: number; block_no?: string; }) => {
+    const search = toQS(params as Record<string, string | number | undefined>);
     return http<PanenRow[]>(`/panen${search}`);
   },
   panenCreate: (body: Partial<PanenRow> | Array<Partial<PanenRow>>) =>
     http<PanenRow | PanenRow[]>(`/panen`, { method: "POST", body: JSON.stringify(body) }),
   panenUpdate: (id: string, body: Partial<PanenRow>) =>
     http<PanenRow>(`/panen/${id}`, { method: "PUT", body: JSON.stringify(body) }),
-  
+
   // Angkut (Transport)
   angkutList: (params?: { date_panen?: string; estateId?: string; division_id?: number; block_no?: string; }) => {
     const search = toQS(params);
@@ -378,7 +378,7 @@ export const api = {
     http<AngkutRow | AngkutRow[]>(`/angkut`, { method: "POST", body: JSON.stringify(body) }),
   angkutUpdate: (id: string, body: Partial<AngkutRow>) =>
     http<AngkutRow>(`/angkut/${id}`, { method: "PUT", body: JSON.stringify(body) }),
-  
+
   // Attendance
   attendanceList: (params?: { date?: string; employeeId?: string; }) => {
     const search = toQS(params);

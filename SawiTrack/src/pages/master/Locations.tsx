@@ -872,10 +872,12 @@ const Locations = () => {
             return;
           }
 
-          const existingEstate = (await api.estate(estateId)) as {
-            divisions?: Array<{ division_id: number; blocks?: Block[] }>;
-          };
-          const existingDivisions = existingEstate.divisions || [];
+          // Fetch existing divisions WITH blocks to compare
+          // Note: api.estate() excludes divisions, so we use api.divisions() which returns the full division array including blocks
+          const existingDivisions = (await api.divisions(estateId)) as Array<{
+            division_id: number;
+            blocks?: Block[];
+          }>;
 
           // Helper function to compare blocks deeply
           const areBlocksEqual = (
@@ -916,7 +918,7 @@ const Locations = () => {
               // Normalize values (treat null/undefined/0/"" as equivalent for comparison)
               const norm1 = val1 == null || val1 === '' || val1 === 0 ? null : val1;
               const norm2 = val2 == null || val2 === '' || val2 === 0 ? null : val2;
-              
+
               // If both are numbers, compare with tolerance for floating point
               if (typeof norm1 === "number" && typeof norm2 === "number") {
                 if (Math.abs(norm1 - norm2) > 0.001) return false;
@@ -928,7 +930,7 @@ const Locations = () => {
             return true;
           };
 
-// Compare new vs existing data
+          // Compare new vs existing data
           const newBlocks: Array<{ division: string; block: Partial<Block> }> =
             [];
           const existingBlocks: Array<{
@@ -1075,7 +1077,7 @@ const Locations = () => {
       const totalNew = newBlocks.length;
       const totalUpdated = updatedBlocks.length;
       const totalProcessed = totalNew + totalUpdated;
-      
+
       let description = '';
       if (totalNew > 0 && totalUpdated > 0) {
         description = `${totalNew} blok baru ditambahkan dan ${totalUpdated} blok diperbarui di Estate "${estateName}"`;

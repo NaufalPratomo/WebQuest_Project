@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/table";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Download } from "lucide-react";
+import { Download, HelpCircle } from "lucide-react";
 import { toast } from "sonner";
 import {
   Bar,
@@ -20,7 +20,7 @@ import {
   CartesianGrid,
   XAxis,
   YAxis,
-  Tooltip,
+  Tooltip as ChartTooltip,
   Legend,
   ResponsiveContainer,
 } from "recharts";
@@ -56,6 +56,7 @@ export default function TaksasiPerBlock() {
   >([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showLegend, setShowLegend] = useState(false);
 
   useEffect(() => {
     api
@@ -232,7 +233,7 @@ export default function TaksasiPerBlock() {
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="blok" />
                   <YAxis />
-                  <Tooltip />
+                  <ChartTooltip />
                   <Legend />
                   <Bar dataKey="ton" fill="#f97316" name="Taksasi (Ton)" />
                 </BarChart>
@@ -244,9 +245,42 @@ export default function TaksasiPerBlock() {
 
       <Card>
         <CardHeader>
-          <h3 className="text-lg font-semibold">Data Taksasi per Blok</h3>
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-lg font-semibold">Data Taksasi per Blok</h3>
+            <button
+              onClick={() => setShowLegend(!showLegend)}
+              className="p-1 hover:bg-gray-100 rounded transition"
+              title="Lihat keterangan"
+            >
+              <HelpCircle className="h-5 w-5 text-gray-600 hover:text-orange-500" />
+            </button>
+          </div>
         </CardHeader>
         <CardContent>
+          {showLegend && (
+            <Card className="mb-4 bg-blue-50 border-blue-200">
+              <CardHeader className="pb-3">
+                <h4 className="font-semibold text-sm">Keterangan Kolom</h4>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                <div>
+                  <strong>BH</strong> = Buah Hitam
+                </div>
+                <div>
+                  <strong>PTB</strong> = Pokok Tidak Berbuah
+                </div>
+                <div>
+                  <strong>BMBB</strong> = Buah Merah Belum Brondol
+                </div>
+                <div>
+                  <strong>BMM</strong> = Buah Merah Membrodol
+                </div>
+                <div>
+                  <strong>AKP %</strong> = Angka Kepala Pokok (% buah matang)
+                </div>
+              </CardContent>
+            </Card>
+          )}
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>

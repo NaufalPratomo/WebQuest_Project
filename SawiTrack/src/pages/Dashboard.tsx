@@ -180,7 +180,7 @@ const Dashboard = () => {
                                 />
                                 <Legend />
                                 <Bar dataKey="Taksasi" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-                                <Bar dataKey="Realisasi" fill="hsl(var(--destructive))" radius={[4, 4, 0, 0]} />
+                                <Bar dataKey="Realisasi" fill="#f97316" radius={[4, 4, 0, 0]} />
                             </BarChart>
                         </ResponsiveContainer>
                     </div>

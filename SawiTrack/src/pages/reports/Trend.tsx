@@ -407,7 +407,7 @@ export default function Trend() {
                   <Bar dataKey="taksasi" fill="#f97316" name="Taksasi (Ton)" />
                   <Bar
                     dataKey="realisasi"
-                    fill="#22c55e"
+                    fill="hsl(var(--primary))"
                     name="Realisasi (Ton)"
                   />
                 </BarChart>

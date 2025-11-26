@@ -303,27 +303,33 @@ export default function TaksasiPanen() {
         notes: `AKP=${row.akpPercent}%; BH=${bm}; PTB=${ptb}`,
       });
 
-      // Jika sukses, baru update local state
-      // Cari data yang sama berdasarkan composite key (tanggal + estate + divisi + blok)
-      const composite = `${date}|${estateId}|${divisionId}|${blockLabel}`;
-      const existingIndex = rows.findIndex(r =>
-        `${r.date}|${r.estateId}|${r.divisionId}|${r.blockLabel}` === composite
-      );
-
-      let newRows: TaksasiRow[];
-
-      if (existingIndex !== -1) {
-        // Data sudah ada - replace/update data lama
-        newRows = rows.map((r, idx) => idx === existingIndex ? row : r);
-        toast.success('Taksasi diperbarui dan tersimpan ke server');
-      } else {
-        // Data baru - tambahkan ke array
-        newRows = [...rows, row];
-        toast.success('Taksasi baru tersimpan ke server');
-      }
-
-      setRows(newRows);
-      // Server is source of truth; no longer persisting to localStorage
+      // Reload dari server untuk memastikan tidak ada duplikat
+      const list = await api.taksasiList({ date });
+      const mapped: TaksasiRow[] = (list || []).map((doc) => {
+        const estateName = estates.find(e => e._id === doc.estateId)?.estate_name || '-';
+        return {
+          timestamp: doc._id || '',
+          date: doc.date ? doc.date.split('T')[0] : date,
+          estateId: doc.estateId,
+          estateName,
+          divisionId: String(doc.division_id),
+          blockLabel: doc.block_no,
+          totalPokok: doc.totalPokok ?? 0,
+          samplePokok: doc.samplePokok ?? 0,
+          bm: doc.bm ?? 0,
+          ptb: doc.ptb ?? 0,
+          bmbb: doc.bmbb ?? 0,
+          bmm: doc.bmm ?? 0,
+          avgWeightKg: doc.avgWeightKg ?? 15,
+          basisJanjangPerPemanen: doc.basisJanjangPerPemanen ?? 120,
+          akpPercent: doc.akpPercent ?? 0,
+          taksasiJanjang: doc.taksasiJanjang ?? Math.round((doc.weightKg || 0) / (doc.avgWeightKg || 15)),
+          taksasiTon: doc.taksasiTon ?? (doc.weightKg || 0) / 1000,
+          kebutuhanPemanen: doc.kebutuhanPemanen ?? 0,
+        };
+      });
+      setRows(mapped);
+      toast.success('Taksasi tersimpan ke server');
 
       // Simpan selection pekerja yang sudah dialokasikan
       await persistSelection(selectedIds);
@@ -464,14 +470,14 @@ export default function TaksasiPanen() {
         const wb = XLSX.read(bstr, { type: 'binary', cellDates: false });
         const wsname = wb.SheetNames[0];
         const ws = wb.Sheets[wsname];
-        const data = XLSX.utils.sheet_to_json(ws);
+        const data = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws);
 
         if (data.length === 0) {
           toast.error('File kosong');
           return;
         }
 
-        const parseDate = (dateStr: any): string => {
+        const parseDate = (dateStr: unknown): string => {
           if (!dateStr) return date; // fallback to current selected date
 
           // If it's a number (Excel serial date)
@@ -507,7 +513,7 @@ export default function TaksasiPanen() {
         const uniqueDates = new Set<string>();
 
         for (let i = 0; i < data.length; i++) {
-          const row: any = data[i];
+          const row = data[i];
           const getVal = (keys: string[]) => {
             for (const k of keys) if (row[k] !== undefined) return row[k];
             return undefined;

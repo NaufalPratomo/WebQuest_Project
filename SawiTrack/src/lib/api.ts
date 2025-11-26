@@ -368,6 +368,8 @@ export const api = {
     http<PanenRow | PanenRow[]>(`/panen`, { method: "POST", body: JSON.stringify(body) }),
   panenUpdate: (id: string, body: Partial<PanenRow>) =>
     http<PanenRow>(`/panen/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+  panenDelete: (id: string) =>
+    http<{ ok: boolean }>(`/panen/${id}`, { method: "DELETE" }),
 
   // Angkut (Transport)
   angkutList: (params?: { date_panen?: string; estateId?: string; division_id?: number; block_no?: string; }) => {
@@ -386,6 +388,8 @@ export const api = {
   },
   attendanceCreate: (body: { date: string; employeeId: string; status: string; division_id?: number; notes?: string }) =>
     http<{ _id: string }>(`/attendance`, { method: 'POST', body: JSON.stringify(body) }),
+  attendanceUpdate: (id: string, body: { date?: string; employeeId?: string; status?: string; division_id?: number; notes?: string }) =>
+    http<{ _id: string }>(`/attendance/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   // Activity Logs
   activityLogs: (params?: {
     limit?: number;

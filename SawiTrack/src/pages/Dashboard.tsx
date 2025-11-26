@@ -18,7 +18,7 @@ const Dashboard = () => {
         pendingCount: number;
         targetsPercent: number;
     } | null>(null);
-    const [chartData, setChartData] = useState<any[]>([]);
+    const [chartData, setChartData] = useState<Array<{ date: string; Taksasi: number; Realisasi: number }>>([]);
     const [estates, setEstates] = useState<Array<{ _id: string; estate_name: string }>>([]);
     const [selectedEstate, setSelectedEstate] = useState<string>("all");
 

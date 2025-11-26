@@ -255,57 +255,68 @@ export default function Attendance() {
     }
     try {
       const map = toBackendStatus(r.status);
-      await api.attendanceCreate({ date, employeeId: r.employeeId, status: map.backend, division_id: r.division_id ?? taksasiContext?.division_id, notes: map.note });
-      // if present/hadir, auto-generate placeholder in Real Harvest storage
-      if (map.backend === 'present' && taksasiContext) {
-        const emp = employees.find(e => e._id === r.employeeId);
-        try {
-          await api.panenCreate({
-            date_panen: date,
-            estateId: taksasiContext.estateId,
-            division_id: taksasiContext.division_id,
-            block_no: taksasiContext.block_no,
-            weightKg: 0,
-            employeeId: r.employeeId,
-            employeeName: emp?.name || r.employeeId,
-            mandorId: taksasiContext.mandorId,
-            mandorName: user?.name,
-            janjangTBS: 0,
-            jobCode: 'panen',
-            notes: 'placeholder=1'
-          });
-        } catch { /* ignore */ }
+      const body = { date, employeeId: r.employeeId, status: map.backend, division_id: r.division_id ?? taksasiContext?.division_id, notes: map.note };
+      
+      // Check if attendance already exists (has _id)
+      let savedId = r._id;
+      if (r._id && r._id !== 'saved') {
+        // Update existing attendance
+        await api.attendanceUpdate(r._id, body);
+      } else {
+        // Create new attendance
+        const created = await api.attendanceCreate(body);
+        savedId = created._id;
       }
-      const latest = await api.attendanceList({ date });
-      let selected: string[] = [];
+
+      // Handle panen placeholder based on status change
       if (taksasiContext) {
-        try {
-          const selDocs = await api.taksasiSelections({ date, estateId: taksasiContext.estateId, division_id: taksasiContext.division_id, block_no: taksasiContext.block_no });
-          if (selDocs && selDocs.length > 0) selected = selDocs[0].employeeIds || [];
-        } catch { /* ignore */ }
+        const emp = employees.find(e => e._id === r.employeeId);
+        
+        // If changing to hadir/present, ensure panen placeholder exists
+        if (map.backend === 'present') {
+          try {
+            await api.panenCreate({
+              date_panen: date,
+              estateId: taksasiContext.estateId,
+              division_id: taksasiContext.division_id,
+              block_no: taksasiContext.block_no,
+              weightKg: 0,
+              employeeId: r.employeeId,
+              employeeName: emp?.name || r.employeeId,
+              mandorId: taksasiContext.mandorId,
+              mandorName: user?.name,
+              janjangTBS: 0,
+              jobCode: 'panen',
+              notes: 'placeholder=1'
+            });
+          } catch { /* ignore - placeholder may already exist */ }
+        } 
+        // If changing to non-hadir (sakit/mangkir/izin), delete panen placeholder
+        else if (map.backend === 'absent' || map.backend === 'leave') {
+          try {
+            // Find and delete panen for this employee on this date
+            const panenList = await api.panenList({ 
+              date_panen: date, 
+              estateId: taksasiContext.estateId,
+              division_id: taksasiContext.division_id,
+              block_no: taksasiContext.block_no
+            });
+            const employeePanen = panenList.filter(p => p.employeeId === r.employeeId);
+            for (const p of employeePanen) {
+              if (p._id) {
+                await api.panenDelete(p._id);
+              }
+            }
+          } catch { /* ignore - panen may not exist */ }
+        }
       }
-      const serverRows = (latest as AttendanceRow[]).map(r0 => ({
-        ...r0,
-        estateId: taksasiContext?.estateId,
-        estateName: taksasiContext?.estateName,
-        division_id: r0.division_id ?? taksasiContext?.division_id,
-        block_no: taksasiContext?.block_no,
-        mandorId: taksasiContext?.mandorId,
-        status: toLocalStatus(r0.status),
-      }));
-      const missing: AttendanceRow[] = selected
-        .filter(id => !serverRows.some(sr => sr.employeeId === id))
-        .map(id => ({
-          date,
-          employeeId: id,
-          status: '',
-          estateId: taksasiContext?.estateId,
-          estateName: taksasiContext?.estateName,
-          division_id: taksasiContext?.division_id,
-          block_no: taksasiContext?.block_no,
-          mandorId: taksasiContext?.mandorId,
-        }));
-      setRows([...serverRows, ...missing]);
+
+      // Update only this row, keep other rows' unsaved status
+      setRows(prev => prev.map(row => 
+        row.employeeId === r.employeeId 
+          ? { ...row, _id: savedId, status: r.status } 
+          : row
+      ));
       toast.success('Status diperbarui');
       logActivity({ action: 'attendance_update', category: 'attendance', level: 'info', details: { date, employeeId: r.employeeId, status: map.backend } });
     } catch (e: unknown) {
@@ -369,7 +380,6 @@ export default function Attendance() {
                       <SelectContent>
                         <SelectItem value="hadir">hadir</SelectItem>
                         <SelectItem value="sakit">sakit</SelectItem>
-                        <SelectItem value="tidak_hadir_diganti">tidak hadir diganti</SelectItem>
                         <SelectItem value="mangkir">mangkir/alpha</SelectItem>
                         <SelectItem value="izin_dibayar">izin dibayar</SelectItem>
                       </SelectContent>
@@ -388,6 +398,13 @@ export default function Attendance() {
       <Card>
         <CardHeader>
           <h3 className="text-lg font-semibold">Data Absensi Tanggal {date}</h3>
+          <div className="flex gap-4 mt-2 text-sm">
+            <span className="px-3 py-1 bg-green-100 text-green-700 rounded">Hadir: {filtered.filter(r => r.status === 'hadir').length}</span>
+            <span className="px-3 py-1 bg-yellow-100 text-yellow-700 rounded">Sakit: {filtered.filter(r => r.status === 'sakit').length}</span>
+            <span className="px-3 py-1 bg-red-100 text-red-700 rounded">Mangkir: {filtered.filter(r => r.status === 'mangkir').length}</span>
+            <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded">Izin: {filtered.filter(r => r.status === 'izin_dibayar').length}</span>
+            <span className="px-3 py-1 bg-gray-100 text-gray-700 rounded">Belum diisi: {filtered.filter(r => !r.status).length}</span>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -446,7 +463,6 @@ export default function Attendance() {
                           <option value="">- pilih -</option>
                           <option value="hadir">Hadir</option>
                           <option value="sakit">Sakit</option>
-                          <option value="tidak_hadir_diganti">Tidak hadir diganti</option>
                           <option value="mangkir">Mangkir/Alpha</option>
                           <option value="izin_dibayar">Izin dibayar</option>
                         </select>

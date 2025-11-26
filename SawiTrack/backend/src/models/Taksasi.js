@@ -26,6 +26,6 @@ const TaksasiSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-TaksasiSchema.index({ date: 1, estateId: 1, division_id: 1, block_no: 1 }, { unique: false });
+TaksasiSchema.index({ date: 1, estateId: 1, division_id: 1, block_no: 1 }, { unique: true });
 
 export default mongoose.models.Taksasi || mongoose.model('Taksasi', TaksasiSchema);

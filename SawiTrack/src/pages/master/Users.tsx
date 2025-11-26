@@ -178,7 +178,7 @@ const Users = () => {
             // but UserRow doesn't have password. We can attach it to the object we pass to create.
             // For simplicity in preview, we just show UserRow data.
             // We'll store the full data for creation in a separate way or just use this object and cast it.
-            (userObj as any).password = password;
+            (userObj as UserRow & { password?: string }).password = password;
 
             if (exists) {
               existingUsers.push(userObj);
@@ -217,7 +217,7 @@ const Users = () => {
             name: user.name,
             email: user.email,
             role: user.role as Role,
-            password: (user as any).password,
+            password: (user as UserRow & { password?: string }).password || 'default123',
             division: user.division || null,
           });
           createdUsers.push({

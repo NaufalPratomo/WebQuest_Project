@@ -1011,11 +1011,20 @@ app.post(`${API_BASE_PATH}/taksasi`, async (req, res) => {
     }
 
     if (Array.isArray(body)) {
-      const docs = await Taksasi.insertMany(body);
-      return res.status(201).json(docs);
+      // Batch upsert for array
+      const results = [];
+      for (const item of body) {
+        const key = { date: item.date, estateId: item.estateId, division_id: item.division_id, block_no: item.block_no };
+        const updated = await Taksasi.findOneAndUpdate(key, item, { upsert: true, new: true });
+        results.push(updated);
+      }
+      logActivity(req, "INPUT_TAKSASI", { count: results.length });
+      return res.status(201).json(results);
     }
-    const created = await Taksasi.create(body);
-    logActivity(req, "INPUT_TAKSASI", { count: Array.isArray(body) ? body.length : 1 });
+    // Single record upsert
+    const key = { date: body.date, estateId: body.estateId, division_id: body.division_id, block_no: body.block_no };
+    const created = await Taksasi.findOneAndUpdate(key, body, { upsert: true, new: true });
+    logActivity(req, "INPUT_TAKSASI", { count: 1 });
     res.status(201).json(created);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1176,6 +1185,23 @@ app.put(`${API_BASE_PATH}/panen/:id`, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+app.delete(`${API_BASE_PATH}/panen/:id`, async (req, res) => {
+  try {
+    const existing = await Panen.findById(req.params.id);
+    if (!existing) return res.status(404).json({ error: 'Panen record not found' });
+
+    // Check if date is closed
+    if (await checkDateClosed(existing.date_panen)) {
+      return res.status(400).json({ error: `Periode untuk tanggal ${existing.date_panen} sudah ditutup.` });
+    }
+
+    await Panen.findByIdAndDelete(req.params.id);
+    logActivity(req, "DELETE_PANEN", { panenId: req.params.id });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // Angkut (Transport) locked to date_panen
 app.post(`${API_BASE_PATH}/angkut`, async (req, res) => {
@@ -1269,6 +1295,23 @@ app.get(`${API_BASE_PATH}/attendance`, async (req, res) => {
     if (employeeId) q.employeeId = String(employeeId);
     const rows = await Attendance.find(q).lean();
     res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+app.put(`${API_BASE_PATH}/attendance/:id`, async (req, res) => {
+  try {
+    const filter = restrictByDivision(req, {});
+    if (filter.division_id != null) req.body.division_id = filter.division_id;
+
+    if (await checkDateClosed(req.body.date)) {
+      return res.status(400).json({ error: `Periode untuk tanggal ${req.body.date} sudah ditutup.` });
+    }
+
+    const updated = await Attendance.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    if (!updated) return res.status(404).json({ error: 'Attendance not found' });
+    logActivity(req, "UPDATE_ATTENDANCE", { id: req.params.id });
+    res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

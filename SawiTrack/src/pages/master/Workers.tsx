@@ -188,10 +188,10 @@ const Workers = () => {
           const existingEmployees: Partial<Employee>[] = [];
 
           const areEmployeesEqual = (emp1: Partial<Employee>, emp2: Employee): boolean => {
-            const fields = ['name', 'companyId', 'position', 'salary', 'address', 'phone', 'birthDate'];
+            const fields = ['name', 'companyId', 'position', 'salary', 'address', 'phone', 'birthDate'] as const;
             for (const field of fields) {
-              const val1 = (emp1 as any)[field];
-              const val2 = (emp2 as any)[field];
+              const val1 = emp1[field];
+              const val2 = emp2[field];
               // Normalize for comparison
               const norm1 = val1 === undefined || val1 === null || val1 === "" ? null : val1;
               const norm2 = val2 === undefined || val2 === null || val2 === "" ? null : val2;
@@ -205,7 +205,7 @@ const Workers = () => {
             return true;
           };
 
-          const parseDate = (dateStr: any): string | undefined => {
+          const parseDate = (dateStr: unknown): string | undefined => {
             if (!dateStr) return undefined;
 
             // If it's already a Date object (from cellDates: true)

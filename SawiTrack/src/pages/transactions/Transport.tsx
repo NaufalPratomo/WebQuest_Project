@@ -166,25 +166,21 @@ export default function Transport() {
   const saveComplete = async () => {
     if (!completeTarget) return;
     try {
-      const notph = noteVal(completeTarget.notes, 'notph');
-      const jjg = noteVal(completeTarget.notes, 'jjg_angkut');
       const notes = [
-        notph ? `notph=${notph}` : '',
-        jjg ? `jjg_angkut=${jjg}` : 'jjg_angkut=0',
         editNoMobil ? `no_mobil=${editNoMobil}` : '',
         editSupir ? `supir=${editSupir}` : '',
       ].filter(Boolean).join('; ');
-      const body: AngkutRow = {
-        _id: (completeTarget as (AngkutRow & { _id?: string }))._id,
-        date_panen: completeTarget.date_panen,
-        date_angkut: completeTarget.date_angkut,
-        estateId: completeTarget.estateId,
-        division_id: completeTarget.division_id,
-        block_no: completeTarget.block_no,
-        weightKg: completeTarget.weightKg || 0,
+      
+      const rowId = (completeTarget as AngkutRowWithId)._id;
+      if (!rowId) {
+        toast.error('ID record tidak ditemukan');
+        return;
+      }
+      
+      const body: Partial<AngkutRow> = {
         notes,
-      } as AngkutRow;
-      await api.angkutCreate(body);
+      };
+      await api.angkutUpdate(rowId, body);
       const latest = await api.angkutList({ date_panen: datePanen });
       setRows(latest);
       toast.success('Data angkut diperbarui');

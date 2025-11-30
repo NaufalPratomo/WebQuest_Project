@@ -201,54 +201,45 @@ export default function TaksasiPanen() {
     return Math.max(1, Math.ceil(totalPokok * 0.10));
   }, [totalPokok]);
 
-  // Derived calculations (assumptions documented below):
+  // Derived calculations for current editable context
   const effectiveSample = Math.max(0, samplePokok - ptb);
-  // Assumption: AKP% uses only BMM (ripe and brondol) palms over effective sample
   const akpPercent = effectiveSample > 0 ? (bmm / effectiveSample) * 100 : 0;
-  // Estimate non-bearing rate across block
-  const nonBearingRate = samplePokok > 0 ? ptb / samplePokok : 0;
-  const estimatedNonBearingInBlock = Math.round(nonBearingRate * totalPokok);
-  const effectiveBlockPalms = Math.max(0, totalPokok - estimatedNonBearingInBlock);
-  // Assumption: 1 janjang per bearing palm on estimation horizon
-  const predictedBearingPalms = Math.round((akpPercent / 100) * effectiveBlockPalms);
-  const taksasiJanjang = predictedBearingPalms;
-  const taksasiTon = (taksasiJanjang * avgWeightKg) / 1000; // tons
+  const taksasiJanjang = Math.round((akpPercent / 100) * totalPokok);
+  const taksasiTon = (taksasiJanjang * avgWeightKg) / 1000;
   const kebutuhanPemanen = basisJanjangPerPemanen > 0 ? Math.ceil(taksasiJanjang / basisJanjangPerPemanen) : 0;
-
-  function toggleSelect(empId: string) {
-    setSelectedIds((prev) => {
-      const exists = prev.includes(empId);
-      let next: string[];
-      if (exists) {
-        next = prev.filter(id => id !== empId);
-      } else {
-        if (prev.length >= kebutuhanPemanen && kebutuhanPemanen > 0) {
-          toast.error(`Kapasitas penuh (${prev.length}/${kebutuhanPemanen})`);
-          return prev;
-        }
-        next = [...prev, empId];
-      }
-      persistSelection(next);
-      return next;
-    });
-  }
 
   async function addOtherEmployee() {
     const name = otherName.trim();
-    if (!name) { toast.error('Isi nama karyawan lainnya'); return; }
-    if (kebutuhanPemanen > 0 && selectedIds.length >= kebutuhanPemanen) { toast.error('Kapasitas penuh, tidak bisa menambah'); return; }
+    if (!name) {
+      toast.error('Mohon isi nama karyawan lainnya');
+      return;
+    }
     try {
       const created = await api.createCustomWorker(name);
       const newEmp: Emp = { _id: String(created._id), name: created.name, role: 'karyawan' };
       setCustomEmployees(prev => [...prev, newEmp]);
       const next = [...selectedIds, newEmp._id];
       setSelectedIds(next);
-      persistSelection(next);
+      await persistSelection(next);
       setOtherName('');
       toast.success('Karyawan lainnya ditambahkan');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Gagal tambah karyawan lainnya');
     }
+  }
+
+  async function toggleSelect(id: string) {
+    const active = selectedIds.includes(id);
+    let next = active ? selectedIds.filter(x => x !== id) : selectedIds;
+    if (!active) {
+      if (kebutuhanPemanen > 0 && selectedIds.length >= kebutuhanPemanen) {
+        toast.error('Kapasitas pemanen sudah terpenuhi');
+        return;
+      }
+      next = [...selectedIds, id];
+    }
+    setSelectedIds(next);
+    await persistSelection(next);
   }
 
   async function saveRow() {
@@ -415,45 +406,146 @@ export default function TaksasiPanen() {
         return;
       }
 
-      const data = allData.map(r => {
+      // Gunakan exceljs untuk styling (center, lebar, freeze). Jika gagal import, fallback ke metode lama.
+      let exceljsModule: typeof import('exceljs') | null = null;
+      try { exceljsModule = await import('exceljs'); } catch { /* ignore */ }
+      if (exceljsModule) {
+        const Workbook = exceljsModule.Workbook;
+        const wb = new Workbook();
+        const ws = wb.addWorksheet('Taksasi', { views: [{ state: 'frozen', ySplit: 2 }] });
+
+        // Header grup + kolom
+        const groupHeaders = [
+          'Data Input','Data Input','Data Input','Data Input',
+          'Master Data Base','Master Data Base','Master Data Base','Master Data Base',
+          'Input Data Hasil Sensus AKP Harian','Input Data Hasil Sensus AKP Harian','Input Data Hasil Sensus AKP Harian','Input Data Hasil Sensus AKP Harian',
+          'Hasil Perhitungan','Hasil Perhitungan','Hasil Perhitungan','Hasil Perhitungan'
+        ];
+        const headers = [
+          'Tanggal','Estate','Divisi','Blok','Total Pokok','BJR (kg)','Basis (jjg/org)','Sample Pokok',
+          'Pokok Tidak Berbuah (PTB)','Buah Hitam (BH)','Buah Merah Belum Brondol (BMBB)','Buah Merah Membrodol (BMM)',
+          'AKP %','Taksasi (Janjang)','Taksasi (Ton)','Kebutuhan Pemanen'
+        ];
+
+        ws.addRow(groupHeaders);
+        ws.addRow(headers);
+
+        // Merge grup
+        ws.mergeCells(1,1,1,4); // A1:D1
+        ws.mergeCells(1,5,1,8); // E1:H1
+        ws.mergeCells(1,9,1,12); // I1:L1
+        ws.mergeCells(1,13,1,16); // M1:P1
+
+        // Styling header
+        const headerStyle = { alignment: { horizontal: 'center', vertical: 'middle' }, font: { bold: true }, border: { top:{style:'thin'}, left:{style:'thin'}, right:{style:'thin'}, bottom:{style:'thin'} } };
+        ws.getRow(1).height = 22;
+        ws.getRow(2).height = 20;
+        ws.getRow(1).eachCell(cell => { cell.style = headerStyle; });
+        ws.getRow(2).eachCell(cell => { cell.style = headerStyle; });
+
+        // Column widths (sedikit lebih besar untuk teks panjang)
+        const widths = [14,20,10,12,14,10,14,14,24,16,32,30,10,16,14,20];
+        widths.forEach((w, i) => { ws.getColumn(i+1).width = w; });
+
+        // Data rows
+        for (const r of allData) {
+          let formattedDate = r.date;
+          if (r.date) {
+            const d = new Date(r.date);
+            if (!isNaN(d.getTime())) {
+              const day = String(d.getDate()).padStart(2,'0');
+              const month = String(d.getMonth()+1).padStart(2,'0');
+              const year = d.getFullYear();
+              formattedDate = `${day}-${month}-${year}`;
+            }
+          }
+          const estateName = estates.find(e => e._id === r.estateId)?.estate_name || '-';
+          const akpVal = (r.akpPercent ?? (r.samplePokok && r.samplePokok>0 ? (r.bmm||0)/r.samplePokok*100 : 0));
+          const taksasiJanjangVal = r.taksasiJanjang ?? Math.round((akpVal/100)*(r.totalPokok||0));
+          const taksasiTonVal = r.taksasiTon ?? (taksasiJanjangVal*(r.avgWeightKg||0))/1000;
+          const kebutuhanVal = r.kebutuhanPemanen ?? (r.basisJanjangPerPemanen ? Math.ceil(taksasiJanjangVal / r.basisJanjangPerPemanen) : 0);
+          const row = ws.addRow([
+            formattedDate,
+            estateName,
+            r.division_id,
+            r.block_no,
+            r.totalPokok,
+            r.avgWeightKg,
+            r.basisJanjangPerPemanen,
+            r.samplePokok,
+            r.ptb,
+            r.bm,
+            r.bmbb,
+            r.bmm,
+            Number(akpVal.toFixed(2)),
+            taksasiJanjangVal,
+            Number(taksasiTonVal.toFixed(2)),
+            kebutuhanVal
+          ]);
+          row.eachCell(cell => {
+            cell.alignment = { horizontal: 'center', vertical: 'middle' };
+            cell.border = { top:{style:'thin'}, left:{style:'thin'}, right:{style:'thin'}, bottom:{style:'thin'} };
+          });
+        }
+
+        // Save file
+        const buf = await wb.xlsx.writeBuffer();
+        const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = 'Taksasi_All.xlsx'; a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+        toast.success('Export berhasil (styled)');
+        return;
+      }
+
+      // Fallback tanpa styling (xlsx komunitas)
+      const groupHeaders = [
+        'Data Input','Data Input','Data Input','Data Input',
+        'Master Data Base','Master Data Base','Master Data Base','Master Data Base',
+        'Input Data Hasil Sensus AKP Harian','Input Data Hasil Sensus AKP Harian','Input Data Hasil Sensus AKP Harian','Input Data Hasil Sensus AKP Harian',
+        'Hasil Perhitungan','Hasil Perhitungan','Hasil Perhitungan','Hasil Perhitungan'
+      ];
+      const headers = [
+        'Tanggal','Estate','Divisi','Blok','Total Pokok','BJR (kg)','Basis (jjg/org)','Sample Pokok',
+        'Pokok Tidak Berbuah (PTB)','Buah Hitam (BH)','Buah Merah Belum Brondol (BMBB)','Buah Merah Membrodol (BMM)',
+        'AKP %','Taksasi (Janjang)','Taksasi (Ton)','Kebutuhan Pemanen'
+      ];
+      const wbSimple = XLSX.utils.book_new();
+      const wsSimple = XLSX.utils.aoa_to_sheet([groupHeaders, headers]);
+      let rowIndex = 3;
+      for (const r of allData) {
         let formattedDate = r.date;
         if (r.date) {
           const d = new Date(r.date);
           if (!isNaN(d.getTime())) {
-            const day = String(d.getDate()).padStart(2, '0');
-            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2,'0');
+            const month = String(d.getMonth()+1).padStart(2,'0');
             const year = d.getFullYear();
             formattedDate = `${day}-${month}-${year}`;
           }
         }
-
         const estateName = estates.find(e => e._id === r.estateId)?.estate_name || '-';
-
-        return {
-          'Tanggal': formattedDate,
-          'Estate': estateName,
-          'Divisi': r.division_id,
-          'Blok': r.block_no,
-          'Total Pokok': r.totalPokok,
-          'Sample Pokok': r.samplePokok,
-          'Buah Hitam (BH)': r.bm,
-          'Pokok Tidak Berbuah (PTB)': r.ptb,
-          'Buah Merah Belum Brondol (BMBB)': r.bmbb,
-          'Buah Merah Membrodol (BMM)': r.bmm,
-          'BJR (kg)': r.avgWeightKg,
-          'Basis (jjg/org)': r.basisJanjangPerPemanen,
-          'AKP %': r.akpPercent,
-          'Taksasi (Janjang)': r.taksasiJanjang,
-          'Taksasi (Ton)': r.taksasiTon,
-          'Kebutuhan Pemanen': r.kebutuhanPemanen
-        };
-      });
-
-      const ws = XLSX.utils.json_to_sheet(data);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Taksasi");
-      XLSX.writeFile(wb, `Taksasi_All.xlsx`);
-      toast.success('Export berhasil');
+        const akpVal = (r.akpPercent ?? (r.samplePokok && r.samplePokok>0 ? (r.bmm||0)/r.samplePokok*100 : 0));
+        const taksasiJanjangVal = r.taksasiJanjang ?? Math.round((akpVal/100)*(r.totalPokok||0));
+        const taksasiTonVal = r.taksasiTon ?? (taksasiJanjangVal*(r.avgWeightKg||0))/1000;
+        const kebutuhanVal = r.kebutuhanPemanen ?? (r.basisJanjangPerPemanen ? Math.ceil(taksasiJanjangVal / r.basisJanjangPerPemanen) : 0);
+        XLSX.utils.sheet_add_aoa(wsSimple, [[
+          formattedDate, estateName, r.division_id, r.block_no, r.totalPokok, r.avgWeightKg, r.basisJanjangPerPemanen,
+          r.samplePokok, r.ptb, r.bm, r.bmbb, r.bmm, Number(akpVal.toFixed(2)), taksasiJanjangVal, Number(taksasiTonVal.toFixed(2)), kebutuhanVal
+        ]], { origin: { r: rowIndex - 1, c: 0 } });
+        rowIndex++;
+      }
+      wsSimple['!merges'] = [
+        { s:{r:0,c:0}, e:{r:0,c:3} },
+        { s:{r:0,c:4}, e:{r:0,c:7} },
+        { s:{r:0,c:8}, e:{r:0,c:11} },
+        { s:{r:0,c:12}, e:{r:0,c:15} }
+      ];
+      wsSimple['!cols'] = [14,20,10,12,14,10,14,14,18,16,22,22,10,16,14,18].map(w=>({wch:w}));
+      XLSX.utils.book_append_sheet(wbSimple, wsSimple, 'Taksasi');
+      XLSX.writeFile(wbSimple, 'Taksasi_All.xlsx');
+      toast.success('Export berhasil (tanpa styling penuh)');
     } catch (e) {
       toast.error('Gagal export data');
     }
@@ -470,7 +562,21 @@ export default function TaksasiPanen() {
         const wb = XLSX.read(bstr, { type: 'binary', cellDates: false });
         const wsname = wb.SheetNames[0];
         const ws = wb.Sheets[wsname];
-        const data = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws);
+
+        // Detect multi-row header (group header row) and reconstruct data if present
+        let data: Record<string, unknown>[];
+        const rawMatrix = XLSX.utils.sheet_to_json<(string|number)[]>(ws, { header: 1, blankrows: false });
+        if (rawMatrix.length > 1 && typeof rawMatrix[0][0] === 'string' && /(Data Input)/i.test(String(rawMatrix[0][0]))) {
+          // Use second row as headers
+          const headerRow = rawMatrix[1].map(h => String(h).trim());
+          data = rawMatrix.slice(2).map(rArr => {
+            const obj: Record<string, unknown> = {};
+            headerRow.forEach((h, idx) => { obj[h] = rArr[idx]; });
+            return obj;
+          });
+        } else {
+          data = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws);
+        }
 
         if (data.length === 0) {
           toast.error('File kosong');
@@ -522,7 +628,7 @@ export default function TaksasiPanen() {
           const rawDate = getVal(['Tanggal', 'Date', 'date']);
           const rowDate = parseDate(rawDate);
 
-          const estateName = getVal(['Estate', 'estate', 'Nama Estate']);
+          const estateName = getVal(['Estate', 'estate', 'Nama Estate', 'PT']);
           const divisionId = getVal(['Divisi', 'Division', 'division', 'divisi']);
           const blockLabel = getVal(['Blok', 'Block', 'block', 'no_blok']);
 

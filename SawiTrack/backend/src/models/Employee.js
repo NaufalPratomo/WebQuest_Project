@@ -14,6 +14,10 @@ const EmployeeSchema = new mongoose.Schema(
     phone: { type: String },
     birthDate: { type: Date },
     position: { type: String }, // jabatan: pemanen, mandor, dll
+    gender: { type: String },
+    religion: { type: String },
+    division: { type: String },
+    joinDate: { type: Date },
   },
   { timestamps: true, collection: 'employees', strict: false }
 );

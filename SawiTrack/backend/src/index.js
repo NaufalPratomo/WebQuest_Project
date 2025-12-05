@@ -532,7 +532,7 @@ app.get(`${API_BASE_PATH}/employees`, async (_req, res) => {
   try {
     const docs = await Employee.find(
       {},
-      { nik: 1, name: 1, companyId: 1, position: 1, salary: 1, address: 1, phone: 1, birthDate: 1, status: 1 }
+      { nik: 1, name: 1, companyId: 1, position: 1, salary: 1, address: 1, phone: 1, birthDate: 1, gender: 1, religion: 1, division: 1, joinDate: 1, status: 1 }
     ).lean();
     res.json(docs);
   } catch (err) {
@@ -552,7 +552,7 @@ app.get(`${API_BASE_PATH}/employees/:id`, async (req, res) => {
 
 app.post(`${API_BASE_PATH}/employees`, async (req, res) => {
   try {
-    const { nik, name, companyId, position, salary, address, phone, birthDate } = req.body;
+    const { nik, name, companyId, position, salary, address, phone, birthDate, gender, religion, division, joinDate } = req.body;
     if (!nik || !name)
       return res.status(400).json({ error: "Missing required fields (NIK, name)" });
 
@@ -565,6 +565,10 @@ app.post(`${API_BASE_PATH}/employees`, async (req, res) => {
       address: address || null,
       phone: phone || null,
       birthDate: birthDate || null,
+      gender: gender || null,
+      religion: religion || null,
+      division: division || null,
+      joinDate: joinDate || null,
       status: "active",
     });
     logActivity(req, "CREATE_EMPLOYEE", { nik, name });
@@ -576,7 +580,7 @@ app.post(`${API_BASE_PATH}/employees`, async (req, res) => {
 
 app.put(`${API_BASE_PATH}/employees/:id`, async (req, res) => {
   try {
-    const { nik, name, companyId, position, salary, address, phone, birthDate, status } = req.body;
+    const { nik, name, companyId, position, salary, address, phone, birthDate, gender, religion, division, joinDate, status } = req.body;
 
     const updateData = {
       nik,
@@ -587,6 +591,10 @@ app.put(`${API_BASE_PATH}/employees/:id`, async (req, res) => {
       address: address || null,
       phone: phone || null,
       birthDate: birthDate || null,
+      gender: gender || null,
+      religion: religion || null,
+      division: division || null,
+      joinDate: joinDate || null,
       status
     };
 

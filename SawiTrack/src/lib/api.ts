@@ -30,6 +30,10 @@ export interface Employee {
   address?: string;
   phone?: string;
   birthDate?: string;
+  gender?: string;
+  religion?: string;
+  division?: string;
+  joinDate?: string;
   status: string;
 }
 
@@ -211,6 +215,10 @@ export const api = {
     address?: string;
     phone?: string;
     birthDate?: string;
+    gender?: string;
+    religion?: string;
+    division?: string;
+    joinDate?: string;
   }) => http<Employee>(`/employees`, { method: "POST", body: JSON.stringify(body) }),
   updateEmployee: (id: string, body: Partial<{
     nik: string;
@@ -221,6 +229,10 @@ export const api = {
     address: string;
     phone: string;
     birthDate: string;
+    gender: string;
+    religion: string;
+    division: string;
+    joinDate: string;
     status: string;
   }>) => http<Employee>(`/employees/${id}`, { method: "PUT", body: JSON.stringify(body) }),
   deleteEmployee: (id: string) => http<void>(`/employees/${id}`, { method: "DELETE" }),

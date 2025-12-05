@@ -11,7 +11,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search, Edit, Upload, Download } from "lucide-react";
+import { Plus, Search, Edit, Upload, Download, FileSpreadsheet } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -51,6 +51,10 @@ const Workers = () => {
     address: "",
     phone: "",
     birthDate: "",
+    gender: "",
+    religion: "",
+    division: "",
+    joinDate: "",
     status: "active",
   });
 
@@ -101,6 +105,10 @@ const Workers = () => {
       address: worker.address || "",
       phone: worker.phone || "",
       birthDate: worker.birthDate ? new Date(worker.birthDate).toISOString().split('T')[0] : "",
+      gender: worker.gender || "",
+      religion: worker.religion || "",
+      division: worker.division || "",
+      joinDate: worker.joinDate ? new Date(worker.joinDate).toISOString().split('T')[0] : "",
       status: worker.status || "active",
     });
     setOpenEdit(true);
@@ -128,6 +136,10 @@ const Workers = () => {
         address: form.address || null,
         phone: form.phone || null,
         birthDate: form.birthDate || null,
+        gender: form.gender || null,
+        religion: form.religion || null,
+        division: form.division || null,
+        joinDate: form.joinDate || null,
         status: form.status,
       });
 
@@ -150,6 +162,10 @@ const Workers = () => {
         address: "",
         phone: "",
         birthDate: "",
+        gender: "",
+        religion: "",
+        division: "",
+        joinDate: "",
         status: "active",
       });
 
@@ -181,47 +197,85 @@ const Workers = () => {
           const data = new Uint8Array(event.target?.result as ArrayBuffer);
           const wb = XLSX.read(data, { type: "array", cellDates: true });
           const ws = wb.Sheets[wb.SheetNames[0]];
-          const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws);
+
+          // Check first cell to see if it matches our new format (merged header)
+          const firstCell = ws['A1'] ? ws['A1'].v : null;
+          let range = 0;
+          if (firstCell && String(firstCell).includes("Data Karyawan sesuai Kartu Identitas")) {
+            range = 1; // Skip first row, headers are on row 2 (index 1)
+          }
+
+          const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { range });
 
           const newEmployees: Partial<Employee>[] = [];
           const updatedEmployees: { employee: Partial<Employee>; oldEmployee: Employee }[] = [];
           const existingEmployees: Partial<Employee>[] = [];
 
           const areEmployeesEqual = (emp1: Partial<Employee>, emp2: Employee): boolean => {
-            const fields = ['name', 'companyId', 'position', 'salary', 'address', 'phone', 'birthDate'] as const;
+            const fields = ['name', 'companyId', 'position', 'address', 'phone', 'birthDate', 'gender', 'religion', 'division', 'joinDate'] as const;
+
+            const normalize = (val: unknown): unknown => {
+              if (val === undefined || val === null) return null;
+              if (typeof val === 'string') {
+                const trimmed = val.trim();
+                return trimmed === "" ? null : trimmed;
+              }
+              return val;
+            };
+
+            const getDatePart = (dateStr: unknown): string | null => {
+              if (!dateStr) return null;
+              try {
+                const d = new Date(dateStr as string);
+                if (isNaN(d.getTime())) return null;
+                return d.toISOString().split('T')[0];
+              } catch {
+                return null;
+              }
+            };
+
             for (const field of fields) {
               const val1 = emp1[field];
               const val2 = emp2[field];
-              // Normalize for comparison
-              const norm1 = val1 === undefined || val1 === null || val1 === "" ? null : val1;
-              const norm2 = val2 === undefined || val2 === null || val2 === "" ? null : val2;
 
-              if (field === 'salary') {
-                if (Number(norm1 || 0) !== Number(norm2 || 0)) return false;
-              } else if (norm1 !== norm2) {
-                return false;
+              const norm1 = normalize(val1);
+              const norm2 = normalize(val2);
+
+              if (field === 'birthDate' || field === 'joinDate') {
+                const d1 = getDatePart(norm1);
+                const d2 = getDatePart(norm2);
+                if (d1 !== d2) return false;
+              } else {
+                if (norm1 !== norm2) return false;
               }
             }
             return true;
           };
 
+          // Normalize keys to handle potential whitespace in headers
+          const normalizedJsonData = jsonData.map(row => {
+            const newRow: Record<string, unknown> = {};
+            for (const key in row) {
+              newRow[key.trim()] = row[key];
+            }
+            return newRow;
+          });
+
+          console.log("Raw JSON Data:", jsonData);
+          console.log("Normalized JSON Data:", normalizedJsonData);
+
           const parseDate = (dateStr: unknown): string | undefined => {
+            // ... (keep existing parseDate logic)
             if (!dateStr) return undefined;
 
-            // If it's already a Date object (from cellDates: true)
             if (dateStr instanceof Date) {
-              // Adjust for timezone offset if needed, but usually ISO string is fine
-              // However, Excel dates are often local time. 
-              // Let's just take the YYYY-MM-DD part to be safe and treat as UTC or local noon to avoid shifting
               const year = dateStr.getFullYear();
               const month = String(dateStr.getMonth() + 1).padStart(2, '0');
               const day = String(dateStr.getDate()).padStart(2, '0');
               return `${year}-${month}-${day}T00:00:00.000Z`;
             }
 
-            // If it's a number (Excel serial date, if cellDates was false or failed)
             if (typeof dateStr === 'number') {
-              // Excel base date is usually Dec 30 1899
               const date = new Date(Math.round((dateStr - 25569) * 86400 * 1000));
               const year = date.getFullYear();
               const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -231,17 +285,20 @@ const Workers = () => {
 
             const str = String(dateStr).trim();
 
-            // Handle DD-MM-YYYY or DD/MM/YYYY
-            if (/^\d{1,2}[-/]\d{1,2}[-/]\d{4}$/.test(str)) {
-              const parts = str.split(/[-/]/);
-              // parts[0] = day, parts[1] = month, parts[2] = year
-              const day = parts[0].padStart(2, '0');
-              const month = parts[1].padStart(2, '0');
-              const year = parts[2];
+            const dateMatch = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})$/);
+            if (dateMatch) {
+              const day = dateMatch[1].padStart(2, '0');
+              const month = dateMatch[2].padStart(2, '0');
+              let year = dateMatch[3];
+
+              if (year.length === 2) {
+                const y = parseInt(year, 10);
+                year = (y > 50 ? '19' : '20') + year;
+              }
+
               return `${year}-${month}-${day}T00:00:00.000Z`;
             }
 
-            // Handle YYYY-MM-DD
             if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
               return new Date(str).toISOString();
             }
@@ -249,11 +306,14 @@ const Workers = () => {
             return undefined;
           };
 
-          jsonData.forEach((row) => {
-            const nik = String(row["NIK"] || "").trim();
+          normalizedJsonData.forEach((row) => {
+            // Debug log for specific fields
+            console.log("Processing Row:", row);
+            console.log("Kelamin:", row["Kelamin"], "Agama:", row["Agama"], "Divisi:", row["Divisi"], "Tgl Masuk:", row["Tanggal Masuk Kerja"]);
+            const nik = String(row["NIK KTP"] || row["NIK"] || "").trim();
             const name = String(row["Nama"] || "").trim();
-            const companyName = row["Perusahaan"] || "";
-            const company = companies.find((c) => c.company_name === companyName);
+            const companyName = String(row["Perusahaan"] || "").trim();
+            const company = companies.find((c) => c.company_name.trim().toLowerCase() === companyName.toLowerCase());
 
             if (!nik || !name) return;
 
@@ -261,11 +321,19 @@ const Workers = () => {
               nik,
               name,
               companyId: company?._id,
-              position: row["Posisi"] ? String(row["Posisi"]) : undefined,
-              salary: row["Gaji"] ? Number(row["Gaji"]) : undefined,
-              address: row["Alamat"] ? String(row["Alamat"]) : undefined,
-              phone: row["Telepon"] ? String(row["Telepon"]) : undefined,
+              position: row["Posisi"] ? String(row["Posisi"]).trim() : undefined,
+              address: row["Alamat"] ? String(row["Alamat"]).trim() : undefined,
+              phone: row["Telepon"] ? String(row["Telepon"]).trim() : undefined,
               birthDate: parseDate(row["Tanggal Lahir"]),
+              gender: (() => {
+                const g = String(row["Kelamin"] || "").trim().toLowerCase();
+                if (g === "laki-laki" || g === "l") return "L";
+                if (g === "perempuan" || g === "p") return "P";
+                return undefined;
+              })(),
+              religion: row["Agama"] ? String(row["Agama"]).trim() : undefined,
+              division: row["Divisi"] ? String(row["Divisi"]).trim() : undefined,
+              joinDate: parseDate(row["Tanggal Masuk Kerja"]),
               status: "active",
             };
 
@@ -314,10 +382,13 @@ const Workers = () => {
             name: emp.name!,
             companyId: emp.companyId,
             position: emp.position,
-            salary: emp.salary,
             address: emp.address,
             phone: emp.phone,
             birthDate: emp.birthDate,
+            gender: emp.gender,
+            religion: emp.religion,
+            division: emp.division,
+            joinDate: emp.joinDate,
           });
           processedEmployees.push(created);
         } catch (e) {
@@ -333,10 +404,13 @@ const Workers = () => {
             name: employee.name!,
             companyId: employee.companyId || "",
             position: employee.position || null,
-            salary: employee.salary || null,
             address: employee.address || null,
             phone: employee.phone || null,
             birthDate: employee.birthDate || null,
+            gender: employee.gender || null,
+            religion: employee.religion || null,
+            division: employee.division || null,
+            joinDate: employee.joinDate || null,
             status: oldEmployee.status,
           });
           // We don't get the updated object back from updateEmployee usually, so we construct it
@@ -370,7 +444,17 @@ const Workers = () => {
 
   const handleExportExcel = () => {
     try {
-      const exportData = filteredWorkers.map((w) => {
+      // Define headers
+      const mainHeader = [
+        "Data Karyawan sesuai Kartu Identitas", "", "", "", "", "", "",
+        "Data Karyawan Bekerja di Perusahaan", "", "", "", ""
+      ];
+      const subHeader = [
+        "Nama", "NIK KTP", "Kelamin", "Tanggal Lahir", "Agama", "Alamat", "Telepon",
+        "Perusahaan", "Divisi", "Posisi", "Tanggal Masuk Kerja", "Status"
+      ];
+
+      const dataRows = filteredWorkers.map((w) => {
         const company = companies.find((c) => c._id === w.companyId);
 
         let formattedDate = "-";
@@ -384,20 +468,58 @@ const Workers = () => {
           }
         }
 
-        return {
-          NIK: w.nik,
-          Nama: w.name,
-          Perusahaan: company?.company_name || "-",
-          Posisi: w.position || "-",
-          Gaji: w.salary || 0,
-          Alamat: w.address || "-",
-          Telepon: w.phone || "-",
-          "Tanggal Lahir": formattedDate,
-          Status: w.status === "active" ? "Aktif" : "Nonaktif",
-        };
+        let formattedJoinDate = "-";
+        if (w.joinDate) {
+          const d = new Date(w.joinDate);
+          if (!isNaN(d.getTime())) {
+            const day = String(d.getDate()).padStart(2, '0');
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const year = d.getFullYear();
+            formattedJoinDate = `${day}-${month}-${year}`;
+          }
+        }
+
+        return [
+          w.name,
+          w.nik,
+          w.gender || "-",
+          formattedDate,
+          w.religion || "-",
+          w.address || "-",
+          w.phone || "-",
+          company?.company_name || "-",
+          w.division || "-",
+          w.position || "-",
+          formattedJoinDate,
+          w.status === "active" ? "Aktif" : "Nonaktif",
+        ];
       });
 
-      const ws = XLSX.utils.json_to_sheet(exportData);
+      const wsData = [mainHeader, subHeader, ...dataRows];
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+      // Add merges
+      ws['!merges'] = [
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 6 } }, // First group (Cols 0-6)
+        { s: { r: 0, c: 7 }, e: { r: 0, c: 11 } } // Second group (Cols 7-11)
+      ];
+
+      // Optional: Set column widths for better visibility
+      ws['!cols'] = [
+        { wch: 20 }, // Nama
+        { wch: 15 }, // NIK
+        { wch: 10 }, // Kelamin
+        { wch: 15 }, // Tgl Lahir
+        { wch: 10 }, // Agama
+        { wch: 25 }, // Alamat
+        { wch: 15 }, // Telepon
+        { wch: 20 }, // Perusahaan
+        { wch: 15 }, // Divisi
+        { wch: 15 }, // Posisi
+        { wch: 15 }, // Tgl Masuk
+        { wch: 10 }, // Status
+      ];
+
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Karyawan");
       XLSX.writeFile(
@@ -418,6 +540,72 @@ const Workers = () => {
     }
   };
 
+  const handleDownloadTemplate = () => {
+    try {
+      // Define headers
+      const mainHeader = [
+        "Data Karyawan sesuai Kartu Identitas", "", "", "", "", "", "",
+        "Data Karyawan Bekerja di Perusahaan", "", "", "", ""
+      ];
+      const subHeader = [
+        "Nama", "NIK KTP", "Kelamin", "Tanggal Lahir", "Agama", "Alamat", "Telepon",
+        "Perusahaan", "Divisi", "Posisi", "Tanggal Masuk Kerja", "Status"
+      ];
+
+      // Dummy Data
+      const dummyData = [
+        [
+          "Contoh Budi", "1234567890123456", "L", "1990-01-01", "Islam", "Jl. Contoh No. 1", "08123456789",
+          "PT Contoh Sejahtera", "Produksi", "Pemanen", "2022-01-01", "Aktif"
+        ],
+        [
+          "Contoh Siti", "6543210987654321", "P", "1995-05-20", "Kristen", "Jl. Contoh No. 2", "08987654321",
+          "PT Contoh Sejahtera", "Administrasi", "Admin", "2023-03-15", "Aktif"
+        ]
+      ];
+
+      const wsData = [mainHeader, subHeader, ...dummyData];
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+      // Add merges
+      ws['!merges'] = [
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 6 } }, // First group (Cols 0-6)
+        { s: { r: 0, c: 7 }, e: { r: 0, c: 11 } } // Second group (Cols 7-11)
+      ];
+
+      // Set column widths
+      ws['!cols'] = [
+        { wch: 20 }, // Nama
+        { wch: 20 }, // NIK
+        { wch: 10 }, // Kelamin
+        { wch: 15 }, // Tgl Lahir
+        { wch: 10 }, // Agama
+        { wch: 25 }, // Alamat
+        { wch: 15 }, // Telepon
+        { wch: 25 }, // Perusahaan
+        { wch: 15 }, // Divisi
+        { wch: 15 }, // Posisi
+        { wch: 15 }, // Tgl Masuk
+        { wch: 10 }, // Status
+      ];
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Template");
+      XLSX.writeFile(wb, "Template_Import_Karyawan.xlsx");
+
+      toast({
+        title: "Berhasil",
+        description: "Template berhasil diunduh",
+      });
+    } catch (e) {
+      toast({
+        title: "Gagal",
+        description: "Gagal mengunduh template",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -428,6 +616,15 @@ const Workers = () => {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleDownloadTemplate}
+            className="border-blue-500 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+          >
+            <FileSpreadsheet className="mr-2 h-4 w-4" />
+            Template Excel
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -459,9 +656,9 @@ const Workers = () => {
               <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>NIK</Label>
+                    <Label>NIK KTP</Label>
                     <Input
-                      placeholder="Masukkan NIK karyawan"
+                      placeholder="Masukkan NIK KTP"
                       value={form.nik}
                       onChange={(e) =>
                         setForm((f) => ({ ...f, nik: e.target.value }))
@@ -479,50 +676,43 @@ const Workers = () => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>Perusahaan</Label>
+                    <Label>Jenis Kelamin</Label>
                     <Select
-                      value={form.companyId}
+                      value={form.gender}
                       onValueChange={(v) =>
-                        setForm((f) => ({ ...f, companyId: v }))
+                        setForm((f) => ({ ...f, gender: v }))
                       }
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Pilih perusahaan" />
+                        <SelectValue placeholder="Pilih jenis kelamin" />
                       </SelectTrigger>
                       <SelectContent>
-                        {companies.map((c) => (
-                          <SelectItem key={c._id} value={c._id}>
-                            {c.company_name}
-                          </SelectItem>
-                        ))}
+                        <SelectItem value="L">Laki-laki</SelectItem>
+                        <SelectItem value="P">Perempuan</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label>Posisi/Jabatan</Label>
-                    <Input
-                      placeholder="Contoh: Pemanen, Mandor"
-                      value={form.position}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, position: e.target.value }))
+                    <Label>Agama</Label>
+                    <Select
+                      value={form.religion}
+                      onValueChange={(v) =>
+                        setForm((f) => ({ ...f, religion: v }))
                       }
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Gaji</Label>
-                    <Input
-                      type="number"
-                      placeholder="Masukkan gaji"
-                      min="0"
-                      value={form.salary}
-                      onChange={(e) => {
-                        const value = Number(e.target.value);
-                        setForm((f) => ({
-                          ...f,
-                          salary: value < 0 ? 0 : value,
-                        }));
-                      }}
-                    />
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Pilih agama" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Islam">Islam</SelectItem>
+                        <SelectItem value="Kristen">Kristen</SelectItem>
+                        <SelectItem value="Katolik">Katolik</SelectItem>
+                        <SelectItem value="Hindu">Hindu</SelectItem>
+                        <SelectItem value="Buddha">Buddha</SelectItem>
+                        <SelectItem value="Konghucu">Konghucu</SelectItem>
+                        <SelectItem value="Lainnya">Lainnya</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-2">
                     <Label>Tanggal Lahir</Label>
@@ -554,6 +744,62 @@ const Workers = () => {
                       }
                     />
                   </div>
+
+                  <div className="col-span-2 border-t pt-4 mt-2">
+                    <h3 className="font-semibold mb-4">Data Pekerjaan</h3>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Perusahaan</Label>
+                    <Select
+                      value={form.companyId}
+                      onValueChange={(v) =>
+                        setForm((f) => ({ ...f, companyId: v }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Pilih perusahaan" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {companies.map((c) => (
+                          <SelectItem key={c._id} value={c._id}>
+                            {c.company_name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Divisi</Label>
+                    <Input
+                      placeholder="Masukkan divisi"
+                      value={form.division}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, division: e.target.value }))
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Posisi/Jabatan</Label>
+                    <Input
+                      placeholder="Contoh: Pemanen, Mandor"
+                      value={form.position}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, position: e.target.value }))
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Tanggal Masuk Kerja</Label>
+                    <Input
+                      type="date"
+                      value={form.joinDate}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, joinDate: e.target.value }))
+                      }
+                    />
+                  </div>
+
                 </div>
                 <Button
                   type="button"
@@ -577,6 +823,10 @@ const Workers = () => {
                         address: form.address || undefined,
                         phone: form.phone || undefined,
                         birthDate: form.birthDate || undefined,
+                        gender: form.gender || undefined,
+                        religion: form.religion || undefined,
+                        division: form.division || undefined,
+                        joinDate: form.joinDate || undefined,
                       });
                       setRows((prev) => [created, ...prev]);
                       setOpenAdd(false);
@@ -589,6 +839,10 @@ const Workers = () => {
                         address: "",
                         phone: "",
                         birthDate: "",
+                        gender: "",
+                        religion: "",
+                        division: "",
+                        joinDate: "",
                         status: "active",
                       });
                       toast({
@@ -631,13 +885,23 @@ const Workers = () => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>NIK</TableHead>
+                <TableHead colSpan={7} className="text-center border-r bg-muted/50">Data Karyawan sesuai Kartu Identitas</TableHead>
+                <TableHead colSpan={5} className="text-center bg-muted/50">Data Karyawan Bekerja di Perusahaan</TableHead>
+                <TableHead rowSpan={2} className="text-right bg-muted/50">Aksi</TableHead>
+              </TableRow>
+              <TableRow>
                 <TableHead>Nama</TableHead>
+                <TableHead>NIK KTP</TableHead>
+                <TableHead>Kelamin</TableHead>
+                <TableHead>Tanggal Lahir</TableHead>
+                <TableHead>Agama</TableHead>
+                <TableHead>Alamat</TableHead>
+                <TableHead className="border-r">Telepon</TableHead>
                 <TableHead>Perusahaan</TableHead>
+                <TableHead>Divisi</TableHead>
                 <TableHead>Posisi</TableHead>
-                <TableHead>Gaji</TableHead>
+                <TableHead>Tanggal Masuk Kerja</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead className="text-right">Aksi</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -655,15 +919,24 @@ const Workers = () => {
                   );
                   return (
                     <TableRow key={worker._id}>
+                      <TableCell className="font-medium">{worker.name}</TableCell>
                       <TableCell className="font-mono">{worker.nik}</TableCell>
-                      <TableCell className="font-medium">
-                        {worker.name}
+                      <TableCell>{worker.gender === 'L' ? 'Laki-laki' : worker.gender === 'P' ? 'Perempuan' : worker.gender || "-"}</TableCell>
+                      <TableCell>
+                        {worker.birthDate
+                          ? new Date(worker.birthDate).toLocaleDateString("id-ID")
+                          : "-"}
                       </TableCell>
+                      <TableCell>{worker.religion || "-"}</TableCell>
+                      <TableCell>{worker.address || "-"}</TableCell>
+                      <TableCell className="border-r">{worker.phone || "-"}</TableCell>
+
                       <TableCell>{company?.company_name || "-"}</TableCell>
+                      <TableCell>{worker.division || "-"}</TableCell>
                       <TableCell>{worker.position || "-"}</TableCell>
                       <TableCell>
-                        {worker.salary
-                          ? `Rp ${worker.salary.toLocaleString()}`
+                        {worker.joinDate
+                          ? new Date(worker.joinDate).toLocaleDateString("id-ID")
                           : "-"}
                       </TableCell>
                       <TableCell>
@@ -700,15 +973,8 @@ const Workers = () => {
           </DialogHeader>
           <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>NIK</Label>
-                <Input
-                  placeholder="Masukkan NIK karyawan"
-                  value={form.nik}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, nik: e.target.value }))
-                  }
-                />
+              <div className="col-span-2 border-b pb-2 mb-2">
+                <h3 className="font-semibold">Data Identitas</h3>
               </div>
               <div className="space-y-2">
                 <Label>Nama Lengkap</Label>
@@ -720,6 +986,90 @@ const Workers = () => {
                   }
                 />
               </div>
+              <div className="space-y-2">
+                <Label>NIK KTP</Label>
+                <Input
+                  placeholder="Masukkan NIK KTP"
+                  value={form.nik}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, nik: e.target.value }))
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Jenis Kelamin</Label>
+                <Select
+                  value={form.gender}
+                  onValueChange={(v) =>
+                    setForm((f) => ({ ...f, gender: v }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Pilih jenis kelamin" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="L">Laki-laki</SelectItem>
+                    <SelectItem value="P">Perempuan</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Tanggal Lahir</Label>
+                <Input
+                  type="date"
+                  value={form.birthDate}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, birthDate: e.target.value }))
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Agama</Label>
+                <Select
+                  value={form.religion}
+                  onValueChange={(v) =>
+                    setForm((f) => ({ ...f, religion: v }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Pilih agama" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Islam">Islam</SelectItem>
+                    <SelectItem value="Kristen">Kristen</SelectItem>
+                    <SelectItem value="Katolik">Katolik</SelectItem>
+                    <SelectItem value="Hindu">Hindu</SelectItem>
+                    <SelectItem value="Buddha">Buddha</SelectItem>
+                    <SelectItem value="Konghucu">Konghucu</SelectItem>
+                    <SelectItem value="Lainnya">Lainnya</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Telepon</Label>
+                <Input
+                  placeholder="Contoh: 081234567890"
+                  value={form.phone}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, phone: e.target.value }))
+                  }
+                />
+              </div>
+              <div className="col-span-2 space-y-2">
+                <Label>Alamat</Label>
+                <Input
+                  placeholder="Masukkan alamat lengkap"
+                  value={form.address}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, address: e.target.value }))
+                  }
+                />
+              </div>
+
+              <div className="col-span-2 border-t pt-4 mt-2 border-b pb-2 mb-2">
+                <h3 className="font-semibold">Data Pekerjaan</h3>
+              </div>
+
               <div className="space-y-2">
                 <Label>Perusahaan</Label>
                 <Select
@@ -741,6 +1091,16 @@ const Workers = () => {
                 </Select>
               </div>
               <div className="space-y-2">
+                <Label>Divisi</Label>
+                <Input
+                  placeholder="Masukkan divisi"
+                  value={form.division}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, division: e.target.value }))
+                  }
+                />
+              </div>
+              <div className="space-y-2">
                 <Label>Posisi/Jabatan</Label>
                 <Input
                   placeholder="Contoh: Pemanen, Mandor"
@@ -751,38 +1111,16 @@ const Workers = () => {
                 />
               </div>
               <div className="space-y-2">
-                <Label>Gaji</Label>
-                <Input
-                  type="number"
-                  placeholder="Masukkan gaji"
-                  min="0"
-                  value={form.salary}
-                  onChange={(e) => {
-                    const value = Number(e.target.value);
-                    setForm((f) => ({ ...f, salary: value < 0 ? 0 : value }));
-                  }}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Tanggal Lahir</Label>
+                <Label>Tanggal Masuk Kerja</Label>
                 <Input
                   type="date"
-                  value={form.birthDate}
+                  value={form.joinDate}
                   onChange={(e) =>
-                    setForm((f) => ({ ...f, birthDate: e.target.value }))
+                    setForm((f) => ({ ...f, joinDate: e.target.value }))
                   }
                 />
               </div>
-              <div className="space-y-2">
-                <Label>Telepon</Label>
-                <Input
-                  placeholder="Contoh: 081234567890"
-                  value={form.phone}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, phone: e.target.value }))
-                  }
-                />
-              </div>
+
               <div className="space-y-2">
                 <Label>Status</Label>
                 <Select
@@ -798,17 +1136,8 @@ const Workers = () => {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="col-span-2 space-y-2">
-                <Label>Alamat</Label>
-                <Input
-                  placeholder="Masukkan alamat lengkap"
-                  value={form.address}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, address: e.target.value }))
-                  }
-                />
-              </div>
             </div>
+
             <div className="flex gap-2 justify-end">
               <Button
                 type="button"
@@ -825,6 +1154,10 @@ const Workers = () => {
                     address: "",
                     phone: "",
                     birthDate: "",
+                    gender: "",
+                    religion: "",
+                    division: "",
+                    joinDate: "",
                     status: "active",
                   });
                 }}
@@ -835,12 +1168,12 @@ const Workers = () => {
                 Simpan
               </Button>
             </div>
-          </form>
-        </DialogContent>
-      </Dialog>
+          </form >
+        </DialogContent >
+      </Dialog >
 
       {/* Dialog Import Preview */}
-      <Dialog open={isImportPreviewOpen} onOpenChange={setIsImportPreviewOpen}>
+      < Dialog open={isImportPreviewOpen} onOpenChange={setIsImportPreviewOpen} >
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Preview Import Data Karyawan</DialogTitle>
@@ -890,7 +1223,6 @@ const Workers = () => {
                         <TableHead>NIK</TableHead>
                         <TableHead>Nama</TableHead>
                         <TableHead>Posisi</TableHead>
-                        <TableHead>Gaji</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -899,7 +1231,6 @@ const Workers = () => {
                           <TableCell>{emp.nik}</TableCell>
                           <TableCell>{emp.name}</TableCell>
                           <TableCell>{emp.position}</TableCell>
-                          <TableCell>{emp.salary}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -923,17 +1254,70 @@ const Workers = () => {
                     <TableBody>
                       {importPreviewData.updatedEmployees.map(({ employee, oldEmployee }, idx) => {
                         const changes: string[] = [];
-                        if (employee.name !== oldEmployee.name) changes.push(`Nama: ${oldEmployee.name} -> ${employee.name}`);
-                        if (employee.position !== oldEmployee.position) changes.push(`Posisi: ${oldEmployee.position} -> ${employee.position}`);
-                        if (Number(employee.salary) !== Number(oldEmployee.salary)) changes.push(`Gaji: ${oldEmployee.salary} -> ${employee.salary}`);
-                        // Add other fields as needed
+
+                        const normalize = (val: unknown): unknown => {
+                          if (val === undefined || val === null) return null;
+                          if (typeof val === 'string') {
+                            const trimmed = val.trim();
+                            return trimmed === "" ? null : trimmed;
+                          }
+                          return val;
+                        };
+
+                        // Helper to format values for display
+                        const fmt = (v: any) => {
+                          const n = normalize(v);
+                          return n === null ? "-" : String(n);
+                        };
+
+                        const dateFmt = (v: any) => {
+                          if (!v) return "-";
+                          try { return new Date(v).toLocaleDateString('id-ID'); } catch { return "-"; }
+                        };
+
+                        if (normalize(employee.name) !== normalize(oldEmployee.name)) changes.push(`Nama: ${oldEmployee.name} -> ${employee.name}`);
+
+                        if (normalize(employee.companyId) !== normalize(oldEmployee.companyId)) {
+                          const oldComp = companies.find(c => c._id === oldEmployee.companyId)?.company_name || "-";
+                          const newComp = companies.find(c => c._id === employee.companyId)?.company_name || "-";
+                          if (oldComp !== newComp) changes.push(`Perusahaan: ${oldComp} -> ${newComp}`);
+                        }
+
+                        if (normalize(employee.position) !== normalize(oldEmployee.position)) changes.push(`Posisi: ${fmt(oldEmployee.position)} -> ${fmt(employee.position)}`);
+                        if (normalize(employee.address) !== normalize(oldEmployee.address)) changes.push(`Alamat: ${fmt(oldEmployee.address)} -> ${fmt(employee.address)}`);
+                        if (normalize(employee.phone) !== normalize(oldEmployee.phone)) changes.push(`Telepon: ${fmt(oldEmployee.phone)} -> ${fmt(employee.phone)}`);
+                        if (normalize(employee.gender) !== normalize(oldEmployee.gender)) {
+                          const n1 = normalize(oldEmployee.gender);
+                          const n2 = normalize(employee.gender);
+                          const gFmt = (v: any) => v === 'L' ? 'Laki-laki' : v === 'P' ? 'Perempuan' : fmt(v);
+                          if (n1 !== n2) changes.push(`Kelamin: ${gFmt(oldEmployee.gender)} -> ${gFmt(employee.gender)}`);
+                        }
+                        if (normalize(employee.religion) !== normalize(oldEmployee.religion)) {
+                          const n1 = normalize(oldEmployee.religion);
+                          const n2 = normalize(employee.religion);
+                          if (n1 !== n2) changes.push(`Agama: ${fmt(oldEmployee.religion)} -> ${fmt(employee.religion)}`);
+                        }
+                        if (normalize(employee.division) !== normalize(oldEmployee.division)) {
+                          const n1 = normalize(oldEmployee.division);
+                          const n2 = normalize(employee.division);
+                          if (n1 !== n2) changes.push(`Divisi: ${fmt(oldEmployee.division)} -> ${fmt(employee.division)}`);
+                        }
+
+                        // Date comparisons for display
+                        const d1 = employee.birthDate ? new Date(employee.birthDate).toISOString().split('T')[0] : null;
+                        const d2 = oldEmployee.birthDate ? new Date(oldEmployee.birthDate).toISOString().split('T')[0] : null;
+                        if (d1 !== d2) changes.push(`Tgl Lahir: ${dateFmt(oldEmployee.birthDate)} -> ${dateFmt(employee.birthDate)}`);
+
+                        const j1 = employee.joinDate ? new Date(employee.joinDate).toISOString().split('T')[0] : null;
+                        const j2 = oldEmployee.joinDate ? new Date(oldEmployee.joinDate).toISOString().split('T')[0] : null;
+                        if (j1 !== j2) changes.push(`Tgl Masuk: ${dateFmt(oldEmployee.joinDate)} -> ${dateFmt(employee.joinDate)}`);
 
                         return (
                           <TableRow key={idx}>
                             <TableCell>{employee.nik}</TableCell>
                             <TableCell>{employee.name}</TableCell>
                             <TableCell className="text-sm text-muted-foreground">
-                              {changes.join(", ") || "Detail lain berubah"}
+                              {changes.length > 0 ? changes.join(", ") : "Perubahan format data (trim/spasi)"}
                             </TableCell>
                           </TableRow>
                         );
@@ -964,10 +1348,10 @@ const Workers = () => {
             </Button>
           </div>
         </DialogContent>
-      </Dialog>
+      </Dialog >
 
       <Toaster />
-    </div>
+    </div >
   );
 };
 

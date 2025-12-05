@@ -11,7 +11,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search, Edit, Upload, Download, FileSpreadsheet } from "lucide-react";
+import { Plus, Search, Edit, Upload, Download } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -540,71 +540,6 @@ const Workers = () => {
     }
   };
 
-  const handleDownloadTemplate = () => {
-    try {
-      // Define headers
-      const mainHeader = [
-        "Data Karyawan sesuai Kartu Identitas", "", "", "", "", "", "",
-        "Data Karyawan Bekerja di Perusahaan", "", "", "", ""
-      ];
-      const subHeader = [
-        "Nama", "NIK KTP", "Kelamin", "Tanggal Lahir", "Agama", "Alamat", "Telepon",
-        "Perusahaan", "Divisi", "Posisi", "Tanggal Masuk Kerja", "Status"
-      ];
-
-      // Dummy Data
-      const dummyData = [
-        [
-          "Contoh Budi", "1234567890123456", "L", "1990-01-01", "Islam", "Jl. Contoh No. 1", "08123456789",
-          "PT Contoh Sejahtera", "Produksi", "Pemanen", "2022-01-01", "Aktif"
-        ],
-        [
-          "Contoh Siti", "6543210987654321", "P", "1995-05-20", "Kristen", "Jl. Contoh No. 2", "08987654321",
-          "PT Contoh Sejahtera", "Administrasi", "Admin", "2023-03-15", "Aktif"
-        ]
-      ];
-
-      const wsData = [mainHeader, subHeader, ...dummyData];
-      const ws = XLSX.utils.aoa_to_sheet(wsData);
-
-      // Add merges
-      ws['!merges'] = [
-        { s: { r: 0, c: 0 }, e: { r: 0, c: 6 } }, // First group (Cols 0-6)
-        { s: { r: 0, c: 7 }, e: { r: 0, c: 11 } } // Second group (Cols 7-11)
-      ];
-
-      // Set column widths
-      ws['!cols'] = [
-        { wch: 20 }, // Nama
-        { wch: 20 }, // NIK
-        { wch: 10 }, // Kelamin
-        { wch: 15 }, // Tgl Lahir
-        { wch: 10 }, // Agama
-        { wch: 25 }, // Alamat
-        { wch: 15 }, // Telepon
-        { wch: 25 }, // Perusahaan
-        { wch: 15 }, // Divisi
-        { wch: 15 }, // Posisi
-        { wch: 15 }, // Tgl Masuk
-        { wch: 10 }, // Status
-      ];
-
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Template");
-      XLSX.writeFile(wb, "Template_Import_Karyawan.xlsx");
-
-      toast({
-        title: "Berhasil",
-        description: "Template berhasil diunduh",
-      });
-    } catch (e) {
-      toast({
-        title: "Gagal",
-        description: "Gagal mengunduh template",
-        variant: "destructive",
-      });
-    }
-  };
 
   return (
     <div className="space-y-6">
@@ -616,15 +551,6 @@ const Workers = () => {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleDownloadTemplate}
-            className="border-blue-500 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
-          >
-            <FileSpreadsheet className="mr-2 h-4 w-4" />
-            Template Excel
-          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -864,8 +790,8 @@ const Workers = () => {
               </form>
             </DialogContent>
           </Dialog>
-        </div>
-      </div>
+        </div >
+      </div >
 
       <Card>
         <CardHeader>

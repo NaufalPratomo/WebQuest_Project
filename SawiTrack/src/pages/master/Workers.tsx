@@ -1191,14 +1191,14 @@ const Workers = () => {
                         };
 
                         // Helper to format values for display
-                        const fmt = (v: any) => {
+                        const fmt = (v: unknown) => {
                           const n = normalize(v);
                           return n === null ? "-" : String(n);
                         };
 
-                        const dateFmt = (v: any) => {
+                        const dateFmt = (v: unknown) => {
                           if (!v) return "-";
-                          try { return new Date(v).toLocaleDateString('id-ID'); } catch { return "-"; }
+                          try { return new Date(v as string | number | Date).toLocaleDateString('id-ID'); } catch { return "-"; }
                         };
 
                         if (normalize(employee.name) !== normalize(oldEmployee.name)) changes.push(`Nama: ${oldEmployee.name} -> ${employee.name}`);
@@ -1215,7 +1215,7 @@ const Workers = () => {
                         if (normalize(employee.gender) !== normalize(oldEmployee.gender)) {
                           const n1 = normalize(oldEmployee.gender);
                           const n2 = normalize(employee.gender);
-                          const gFmt = (v: any) => v === 'L' ? 'Laki-laki' : v === 'P' ? 'Perempuan' : fmt(v);
+                          const gFmt = (v: unknown) => v === 'L' ? 'Laki-laki' : v === 'P' ? 'Perempuan' : fmt(v);
                           if (n1 !== n2) changes.push(`Kelamin: ${gFmt(oldEmployee.gender)} -> ${gFmt(employee.gender)}`);
                         }
                         if (normalize(employee.religion) !== normalize(oldEmployee.religion)) {

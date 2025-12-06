@@ -1,10 +1,12 @@
 // src/lib/api.ts
-import { getToken } from './authStore';
+import { getToken } from "./authStore";
 // Resolve API base; allow relative '/api' to be expanded to current origin
-const RAW_API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api";
-export const API_BASE = RAW_API_BASE.startsWith('/') && typeof window !== 'undefined'
-  ? `${window.location.origin}${RAW_API_BASE}`
-  : RAW_API_BASE;
+const RAW_API_BASE =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api";
+export const API_BASE =
+  RAW_API_BASE.startsWith("/") && typeof window !== "undefined"
+    ? `${window.location.origin}${RAW_API_BASE}`
+    : RAW_API_BASE;
 
 export type Role = "manager" | "foreman" | "employee";
 export type EmpStatus = "active" | "inactive";
@@ -151,8 +153,10 @@ function toQS(params?: Record<string, string | number | undefined>): string {
   return "?" + new URLSearchParams(entries).toString();
 }
 
-
-async function http<T>(path: string, init?: (RequestInit & { disableLog?: boolean })): Promise<T> {
+async function http<T>(
+  path: string,
+  init?: RequestInit & { disableLog?: boolean }
+): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -162,7 +166,7 @@ async function http<T>(path: string, init?: (RequestInit & { disableLog?: boolea
   const fullUrl = `${API_BASE}${path}`;
   const res = await fetch(fullUrl, {
     headers,
-    credentials: 'include', // allow cookie-based session fallback
+    credentials: "include", // allow cookie-based session fallback
     ...init,
   });
 
@@ -194,14 +198,18 @@ export const api = {
     division?: string | null;
     status?: string;
   }) => http<User>(`/users`, { method: "POST", body: JSON.stringify(body) }),
-  updateUser: (id: string, body: Partial<{
-    name: string;
-    email: string;
-    role: Role;
-    password: string;
-    division: string | null;
-    status: string;
-  }>) => http<User>(`/users/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+  updateUser: (
+    id: string,
+    body: Partial<{
+      name: string;
+      email: string;
+      role: Role;
+      password: string;
+      division: string | null;
+      status: string;
+    }>
+  ) =>
+    http<User>(`/users/${id}`, { method: "PUT", body: JSON.stringify(body) }),
   deleteUser: (id: string) => http<void>(`/users/${id}`, { method: "DELETE" }),
   // Employees (Workers/Pemanen)
   employees: () => http<Employee[]>(`/employees`),
@@ -219,23 +227,35 @@ export const api = {
     religion?: string;
     division?: string;
     joinDate?: string;
-  }) => http<Employee>(`/employees`, { method: "POST", body: JSON.stringify(body) }),
-  updateEmployee: (id: string, body: Partial<{
-    nik: string;
-    name: string;
-    companyId: string;
-    position: string;
-    salary: number;
-    address: string;
-    phone: string;
-    birthDate: string;
-    gender: string;
-    religion: string;
-    division: string;
-    joinDate: string;
-    status: string;
-  }>) => http<Employee>(`/employees/${id}`, { method: "PUT", body: JSON.stringify(body) }),
-  deleteEmployee: (id: string) => http<void>(`/employees/${id}`, { method: "DELETE" }),
+  }) =>
+    http<Employee>(`/employees`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  updateEmployee: (
+    id: string,
+    body: Partial<{
+      nik: string;
+      name: string;
+      companyId: string;
+      position: string;
+      salary: number;
+      address: string;
+      phone: string;
+      birthDate: string;
+      gender: string;
+      religion: string;
+      division: string;
+      joinDate: string;
+      status: string;
+    }>
+  ) =>
+    http<Employee>(`/employees/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+  deleteEmployee: (id: string) =>
+    http<void>(`/employees/${id}`, { method: "DELETE" }),
   // Companies
   companies: () => http<Company[]>(`/companies`),
   company: (id: string) => http<Company>(`/companies/${id}`),
@@ -343,7 +363,13 @@ export const api = {
       targetsPercent: number;
     }>(`/stats${search}`);
   },
-  taksasiList: (params?: { date?: string; startDate?: string; endDate?: string; estateId?: string; division_id?: number }) => {
+  taksasiList: (params?: {
+    date?: string;
+    startDate?: string;
+    endDate?: string;
+    estateId?: string;
+    division_id?: number;
+  }) => {
     const search = toQS(params as Record<string, string | number | undefined>);
     return http<Array<TaksasiRow>>(`/taksasi${search}`);
   },
@@ -352,79 +378,208 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
-  taksasiSelections: (params?: { date?: string; estateId?: string; division_id?: number; block_no?: string }) => {
+  taksasiSelections: (params?: {
+    date?: string;
+    estateId?: string;
+    division_id?: number;
+    block_no?: string;
+  }) => {
     const search = toQS(params as Record<string, string | number | undefined>);
-    return http<Array<{ _id: string; date: string; estateId: string; division_id: number; block_no: string; employeeIds: string[]; notes?: string }>>(`/taksasi-selections${search}`);
+    return http<
+      Array<{
+        _id: string;
+        date: string;
+        estateId: string;
+        division_id: number;
+        block_no: string;
+        employeeIds: string[];
+        notes?: string;
+      }>
+    >(`/taksasi-selections${search}`);
   },
-  upsertTaksasiSelection: (body: { date: string; estateId: string; division_id: number; block_no: string; employeeIds: string[]; notes?: string }) =>
-    http(`/taksasi-selections`, { method: 'POST', body: JSON.stringify(body) }),
-  deleteTaksasiSelection: (id: string) => http<{ ok: boolean }>(`/taksasi-selections/${id}`, { method: 'DELETE' }),
-  customWorkers: () => http<Array<{ _id: string; name: string; active: boolean }>>(`/custom-workers`),
-  createCustomWorker: (name: string) => http<{ _id: string; name: string; active: boolean }>(`/custom-workers`, { method: 'POST', body: JSON.stringify({ name }) }),
-  deleteCustomWorker: (id: string) => http<{ ok: boolean }>(`/custom-workers/${id}`, { method: 'DELETE' }),
+  upsertTaksasiSelection: (body: {
+    date: string;
+    estateId: string;
+    division_id: number;
+    block_no: string;
+    employeeIds: string[];
+    notes?: string;
+  }) =>
+    http(`/taksasi-selections`, { method: "POST", body: JSON.stringify(body) }),
+  deleteTaksasiSelection: (id: string) =>
+    http<{ ok: boolean }>(`/taksasi-selections/${id}`, { method: "DELETE" }),
+  customWorkers: () =>
+    http<Array<{ _id: string; name: string; active: boolean }>>(
+      `/custom-workers`
+    ),
+  createCustomWorker: (name: string) =>
+    http<{ _id: string; name: string; active: boolean }>(`/custom-workers`, {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    }),
+  deleteCustomWorker: (id: string) =>
+    http<{ ok: boolean }>(`/custom-workers/${id}`, { method: "DELETE" }),
 
   // Job Codes
-  jobcodes: () => http<Array<{ code: string; name: string; category: 'panen' | 'non-panen'; hkValue: number }>>(`/jobcodes`),
-  createJobCode: (body: { code: string; name: string; category: 'panen' | 'non-panen'; hkValue: number }) =>
-    http<{ code: string }>(`/jobcodes`, { method: 'POST', body: JSON.stringify(body) }),
-  updateJobCode: (code: string, body: Partial<{ name: string; category: 'panen' | 'non-panen'; hkValue: number }>) =>
-    http<{ code: string }>(`/jobcodes/${code}`, { method: 'PUT', body: JSON.stringify(body) }),
-  deleteJobCode: (code: string) => http<{ ok: boolean }>(`/jobcodes/${code}`, { method: 'DELETE' }),
+  jobcodes: () =>
+    http<
+      Array<{
+        code: string;
+        name: string;
+        category: "panen" | "non-panen";
+        hkValue: number;
+      }>
+    >(`/jobcodes`),
+  createJobCode: (body: {
+    code: string;
+    name: string;
+    category: "panen" | "non-panen";
+    hkValue: number;
+  }) =>
+    http<{ code: string }>(`/jobcodes`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  updateJobCode: (
+    code: string,
+    body: Partial<{
+      name: string;
+      category: "panen" | "non-panen";
+      hkValue: number;
+    }>
+  ) =>
+    http<{ code: string }>(`/jobcodes/${code}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+  deleteJobCode: (code: string) =>
+    http<{ ok: boolean }>(`/jobcodes/${code}`, { method: "DELETE" }),
 
   // Panen
-  panenList: (params?: { date_panen?: string; startDate?: string; endDate?: string; estateId?: string; division_id?: number; block_no?: string; }) => {
+  panenList: (params?: {
+    date_panen?: string;
+    startDate?: string;
+    endDate?: string;
+    estateId?: string;
+    division_id?: number;
+    block_no?: string;
+  }) => {
     const search = toQS(params as Record<string, string | number | undefined>);
     return http<PanenRow[]>(`/panen${search}`);
   },
   panenCreate: (body: Partial<PanenRow> | Array<Partial<PanenRow>>) =>
-    http<PanenRow | PanenRow[]>(`/panen`, { method: "POST", body: JSON.stringify(body) }),
+    http<PanenRow | PanenRow[]>(`/panen`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   panenUpdate: (id: string, body: Partial<PanenRow>) =>
-    http<PanenRow>(`/panen/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+    http<PanenRow>(`/panen/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
   panenDelete: (id: string) =>
     http<{ ok: boolean }>(`/panen/${id}`, { method: "DELETE" }),
 
   // Angkut (Transport)
-  angkutList: (params?: { date_panen?: string; estateId?: string; division_id?: number; block_no?: string; }) => {
+  angkutList: (params?: {
+    date_panen?: string;
+    estateId?: string;
+    division_id?: number;
+    block_no?: string;
+  }) => {
     const search = toQS(params);
     return http<AngkutRow[]>(`/angkut${search}`);
   },
   angkutCreate: (body: Partial<AngkutRow> | Array<Partial<AngkutRow>>) =>
-    http<AngkutRow | AngkutRow[]>(`/angkut`, { method: "POST", body: JSON.stringify(body) }),
+    http<AngkutRow | AngkutRow[]>(`/angkut`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   angkutUpdate: (id: string, body: Partial<AngkutRow>) =>
-    http<AngkutRow>(`/angkut/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+    http<AngkutRow>(`/angkut/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
 
   // Attendance
-  attendanceList: (params?: { date?: string; employeeId?: string; }) => {
+  attendanceList: (params?: { date?: string; employeeId?: string }) => {
     const search = toQS(params);
-    return http<Array<{ _id: string; date: string; employeeId: string; status: string; division_id?: number; notes?: string }>>(`/attendance${search}`);
+    return http<
+      Array<{
+        _id: string;
+        date: string;
+        employeeId: string;
+        status: string;
+        division_id?: number;
+        notes?: string;
+      }>
+    >(`/attendance${search}`);
   },
-  attendanceCreate: (body: { date: string; employeeId: string; status: string; division_id?: number; notes?: string }) =>
-    http<{ _id: string }>(`/attendance`, { method: 'POST', body: JSON.stringify(body) }),
-  attendanceUpdate: (id: string, body: { date?: string; employeeId?: string; status?: string; division_id?: number; notes?: string }) =>
-    http<{ _id: string }>(`/attendance/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  attendanceCreate: (body: {
+    date: string;
+    employeeId: string;
+    status: string;
+    division_id?: number;
+    notes?: string;
+  }) =>
+    http<{ _id: string }>(`/attendance`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  attendanceUpdate: (
+    id: string,
+    body: {
+      date?: string;
+      employeeId?: string;
+      status?: string;
+      division_id?: number;
+      notes?: string;
+    }
+  ) =>
+    http<{ _id: string }>(`/attendance/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
   // Activity Logs
-  activityLogs: (params?: {
-    limit?: number;
-    page?: number;
-  }) => {
+  activityLogs: (params?: { limit?: number; page?: number }) => {
     const search = toQS(params as Record<string, string | number | undefined>);
-    type ActivityLogsResponse = { data?: unknown; pagination?: { pages?: number }; } | unknown[];
-    return http<ActivityLogsResponse>(`/activity-logs${search}`).catch(err => {
-      // Fallback logic: if 404 or Not Found message, try alias without dash
-      if (err instanceof Error && (/404|not\s*found/i).test(err.message)) {
-        return http<ActivityLogsResponse>(`/activitylogs${search}`, { disableLog: true }).catch(inner => {
-          // Provide a clearer combined error
-          throw new Error(`Activity logs endpoint tidak ditemukan. Coba cek backend routes /activity-logs & /activitylogs. Asli: ${err.message}; Alias: ${inner instanceof Error ? inner.message : String(inner)}`);
-        });
+    type ActivityLogsResponse =
+      | { data?: unknown; pagination?: { pages?: number } }
+      | unknown[];
+    return http<ActivityLogsResponse>(`/activity-logs${search}`).catch(
+      (err) => {
+        // Fallback logic: if 404 or Not Found message, try alias without dash
+        if (err instanceof Error && /404|not\s*found/i.test(err.message)) {
+          return http<ActivityLogsResponse>(`/activitylogs${search}`, {
+            disableLog: true,
+          }).catch((inner) => {
+            // Provide a clearer combined error
+            throw new Error(
+              `Activity logs endpoint tidak ditemukan. Coba cek backend routes /activity-logs & /activitylogs. Asli: ${
+                err.message
+              }; Alias: ${
+                inner instanceof Error ? inner.message : String(inner)
+              }`
+            );
+          });
+        }
+        throw err;
       }
-      throw err;
-    });
+    );
   },
   // Closing endpoints
   // Closing endpoints
   closingPeriods: () =>
-    http<Array<{ _id: string; startDate: string; endDate: string; notes?: string }>>(`/closing-periods`),
-  createClosingPeriod: (body: { startDate: string; endDate: string; notes?: string; month?: number; year?: number }) =>
+    http<
+      Array<{ _id: string; startDate: string; endDate: string; notes?: string }>
+    >(`/closing-periods`),
+  createClosingPeriod: (body: {
+    startDate: string;
+    endDate: string;
+    notes?: string;
+    month?: number;
+    year?: number;
+  }) =>
     http<{ _id: string }>(`/closing-periods`, {
       method: "POST",
       body: JSON.stringify(body),

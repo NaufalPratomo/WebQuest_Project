@@ -10,7 +10,7 @@ const BlockSchema = new mongoose.Schema(
     id_blok: String,
     no_blok: String,
     no_tph: String, // Nomor TPH per blok
-    status: { type: String, enum: ['active', 'inactive'], default: 'active' },
+    status: { type: String, enum: ["active", "inactive"], default: "active" },
     location_type: String,
     jenis_tanah: String,
     topografi: String,
@@ -32,6 +32,7 @@ const BlockSchema = new mongoose.Schema(
     luas_drainase: Number,
     luas_perumahan: Number,
     luas_sarana_prasanara: Number,
+    jumlah_pokok_sensus: Number,
     luas_blok: Number,
     SPH: Number,
   },
@@ -50,7 +51,7 @@ const EstateSchema = new mongoose.Schema({
   _id: { type: String, required: true },
   estate_name: { type: String, required: true },
   divisions: [DivisionSchema],
-  status: { type: String, enum: ['active', 'inactive'], default: 'active' },
+  status: { type: String, enum: ["active", "inactive"], default: "active" },
 });
 
 // Clear any cached model to force reload

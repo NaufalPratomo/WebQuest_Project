@@ -95,15 +95,25 @@ type Block = {
   jenis_tanah?: string;
   topografi?: string;
   tahun_?: number;
+  luas_tanam_?: number;
   luas_tanaman_?: number;
   jenis_bibit?: string;
+  luas_land_preparation?: number;
   luas_nursery?: number;
   luas_lain___lain?: number;
   luas_lain__lain?: number;
+  luas_lebungan?: number;
   luas_garapan?: number;
   luas_rawa?: number;
+  luas_tanggul?: number;
   luas_area_non_efektif?: number;
   luas_konservasi?: number;
+  luas_pks?: number;
+  luas_jalan?: number;
+  luas_drainase?: number;
+  luas_perumahan?: number;
+  luas_sarana_prasanara?: number;
+  jumlah_pokok_sensus?: number;
   location?: { type?: string; coordinates?: unknown };
   [key: string]: unknown;
 };
@@ -871,36 +881,36 @@ const Locations = () => {
           content: "Data Base Aresta",
           colSpan: 10,
           styles: {
-            fillColor: [191, 219, 254],
-            halign: "center",
-            fontStyle: "bold",
+            fillColor: [191, 219, 254] as [number, number, number],
+            halign: "center" as const,
+            fontStyle: "bold" as const,
           },
         },
         {
           content: "Hasil Mapping Survey",
           colSpan: 14,
           styles: {
-            fillColor: [187, 247, 208],
-            halign: "center",
-            fontStyle: "bold",
+            fillColor: [187, 247, 208] as [number, number, number],
+            halign: "center" as const,
+            fontStyle: "bold" as const,
           },
         },
         {
           content: "Hasil Sensus",
           colSpan: 1,
           styles: {
-            fillColor: [233, 213, 255],
-            halign: "center",
-            fontStyle: "bold",
+            fillColor: [233, 213, 255] as [number, number, number],
+            halign: "center" as const,
+            fontStyle: "bold" as const,
           },
         },
         {
           content: "Hasil Perhitungan",
           colSpan: 4,
           styles: {
-            fillColor: [254, 215, 170],
-            halign: "center",
-            fontStyle: "bold",
+            fillColor: [254, 215, 170] as [number, number, number],
+            halign: "center" as const,
+            fontStyle: "bold" as const,
           },
         },
       ],
@@ -2625,7 +2635,7 @@ const Locations = () => {
 
         {/* Dialog Edit Blok */}
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Edit Blok</DialogTitle>
               <DialogDescription>
@@ -2633,261 +2643,545 @@ const Locations = () => {
                 {editingBlock?.block.id_blok || editingBlock?.block.no_blok}
               </DialogDescription>
             </DialogHeader>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="edit-no-blok">No Blok</Label>
-                <Input
-                  id="edit-no-blok"
-                  value={editFormData.no_blok || ""}
-                  onChange={(e) =>
-                    setEditFormData({
-                      ...editFormData,
-                      no_blok: e.target.value,
-                    })
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-no-tph">
-                  No TPH (Pilih satu atau lebih)
-                </Label>
-                <div className="flex flex-wrap gap-2 p-3 border rounded-md">
-                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => {
-                    const selected =
-                      editFormData.no_tph
-                        ?.split(",")
-                        .map((s) => s.trim())
-                        .includes(String(num)) || false;
-                    return (
-                      <label
-                        key={num}
-                        className="flex items-center gap-2 cursor-pointer"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selected}
-                          onChange={(e) => {
-                            const currentTphs =
-                              editFormData.no_tph
-                                ?.split(",")
-                                .map((s) => s.trim())
-                                .filter(Boolean) || [];
-                            const newTphs = e.target.checked
-                              ? [...currentTphs, String(num)]
-                              : currentTphs.filter((t) => t !== String(num));
-                            setEditFormData({
-                              ...editFormData,
-                              no_tph: newTphs
-                                .sort((a, b) => Number(a) - Number(b))
-                                .join(", "),
-                            });
-                          }}
-                          className="w-4 h-4"
-                        />
-                        <span>TPH {num}</span>
-                      </label>
-                    );
-                  })}
+            <div className="space-y-6">
+              {/* Data Base Aresta */}
+              <div className="space-y-4">
+                <h3 className="text-sm font-bold text-white bg-blue-600 px-3 py-2 rounded">
+                  Data Base Aresta
+                </h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-no-blok">No Blok</Label>
+                    <Input
+                      id="edit-no-blok"
+                      value={editFormData.no_blok || ""}
+                      onChange={(e) =>
+                        setEditFormData({
+                          ...editFormData,
+                          no_blok: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2 col-span-2">
+                    <Label>Wilayah (No TPH)</Label>
+                    <div className="flex flex-wrap gap-3 p-3 border rounded-md bg-white">
+                      {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => {
+                        const selected =
+                          editFormData.no_tph
+                            ?.split(",")
+                            .map((s) => s.trim())
+                            .includes(String(num)) || false;
+                        return (
+                          <label
+                            key={num}
+                            className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 px-2 py-1 rounded"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selected}
+                              onChange={(e) => {
+                                const currentTphs =
+                                  editFormData.no_tph
+                                    ?.split(",")
+                                    .map((s) => s.trim())
+                                    .filter(Boolean) || [];
+                                const newTphs = e.target.checked
+                                  ? [...currentTphs, String(num)]
+                                  : currentTphs.filter(
+                                      (t) => t !== String(num)
+                                    );
+                                setEditFormData({
+                                  ...editFormData,
+                                  no_tph: newTphs
+                                    .sort((a, b) => Number(a) - Number(b))
+                                    .join(", "),
+                                });
+                              }}
+                              className="w-4 h-4"
+                            />
+                            <span className="text-sm">TPH {num}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-jenis-tanah">Jenis Tanah</Label>
+                    <Input
+                      id="edit-jenis-tanah"
+                      value={editFormData.jenis_tanah || ""}
+                      onChange={(e) =>
+                        setEditFormData({
+                          ...editFormData,
+                          jenis_tanah: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-topografi">Topografi</Label>
+                    <Input
+                      id="edit-topografi"
+                      value={editFormData.topografi || ""}
+                      onChange={(e) =>
+                        setEditFormData({
+                          ...editFormData,
+                          topografi: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-luas-tanam">Luas Tanam Awal</Label>
+                    <Input
+                      id="edit-luas-tanam"
+                      type="number"
+                      step="0.001"
+                      value={editFormData.luas_tanam_ || ""}
+                      onChange={(e) =>
+                        setEditFormData({
+                          ...editFormData,
+                          luas_tanam_: parseFloat(e.target.value) || 0,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-tahun">Tahun Tanam</Label>
+                    <Input
+                      id="edit-tahun"
+                      type="number"
+                      value={editFormData.tahun_ || ""}
+                      onChange={(e) =>
+                        setEditFormData({
+                          ...editFormData,
+                          tahun_: parseInt(e.target.value) || 0,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-jenis-bibit">Jenis Bibit</Label>
+                    <Input
+                      id="edit-jenis-bibit"
+                      value={editFormData.jenis_bibit || ""}
+                      onChange={(e) =>
+                        setEditFormData({
+                          ...editFormData,
+                          jenis_bibit: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-jumlah-pokok">Jumlah Pokok Awal</Label>
+                    <Input
+                      id="edit-jumlah-pokok"
+                      type="number"
+                      step="0.001"
+                      value={editFormData.jumlak_pokok || ""}
+                      onChange={(e) =>
+                        setEditFormData({
+                          ...editFormData,
+                          jumlak_pokok: parseFloat(e.target.value) || 0,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-sph">SPH Awal</Label>
+                    <Input
+                      id="edit-sph"
+                      type="number"
+                      value={editFormData.SPH || ""}
+                      onChange={(e) =>
+                        setEditFormData({
+                          ...editFormData,
+                          SPH: parseInt(e.target.value) || 0,
+                        })
+                      }
+                    />
+                  </div>
                 </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-id-blok">ID Blok</Label>
-                <Input
-                  id="edit-id-blok"
-                  value={editFormData.id_blok || ""}
-                  onChange={(e) =>
-                    setEditFormData({
-                      ...editFormData,
-                      id_blok: e.target.value,
-                    })
-                  }
-                />
+
+              {/* Hasil Mapping Survey */}
+              <div className="space-y-4">
+                <h3 className="text-sm font-bold text-white bg-green-600 px-3 py-2 rounded">
+                  Hasil Mapping Survey
+                </h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-luas-land-prep">
+                      Luas Land Preparation
+                    </Label>
+                    <Input
+                      id="edit-luas-land-prep"
+                      type="number"
+                      step="0.001"
+                      value={editFormData.luas_land_preparation || ""}
+                      onChange={(e) =>
+                        setEditFormData({
+                          ...editFormData,
+                          luas_land_preparation:
+                            parseFloat(e.target.value) || 0,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-luas-nursery">Luas Nursery</Label>
+                    <Input
+                      id="edit-luas-nursery"
+                      type="number"
+                      step="0.001"
+                      value={editFormData.luas_nursery || ""}
+                      onChange={(e) =>
+                        setEditFormData({
+                          ...editFormData,
+                          luas_nursery: parseFloat(e.target.value) || 0,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-luas-lebungan">Luas Lebungan</Label>
+                    <Input
+                      id="edit-luas-lebungan"
+                      type="number"
+                      step="0.001"
+                      value={editFormData.luas_lebungan || ""}
+                      onChange={(e) =>
+                        setEditFormData({
+                          ...editFormData,
+                          luas_lebungan: parseFloat(e.target.value) || 0,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-luas-garapan">Luas Garapan</Label>
+                    <Input
+                      id="edit-luas-garapan"
+                      type="number"
+                      step="0.001"
+                      value={editFormData.luas_garapan || ""}
+                      onChange={(e) =>
+                        setEditFormData({
+                          ...editFormData,
+                          luas_garapan: parseFloat(e.target.value) || 0,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-luas-rawa">Luas Rawa</Label>
+                    <Input
+                      id="edit-luas-rawa"
+                      type="number"
+                      step="0.001"
+                      value={editFormData.luas_rawa || ""}
+                      onChange={(e) =>
+                        setEditFormData({
+                          ...editFormData,
+                          luas_rawa: parseFloat(e.target.value) || 0,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-luas-tanggul">Luas Tanggul</Label>
+                    <Input
+                      id="edit-luas-tanggul"
+                      type="number"
+                      step="0.001"
+                      value={editFormData.luas_tanggul || ""}
+                      onChange={(e) =>
+                        setEditFormData({
+                          ...editFormData,
+                          luas_tanggul: parseFloat(e.target.value) || 0,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-luas-non-efektif">
+                      Luas Area Non Efektif
+                    </Label>
+                    <Input
+                      id="edit-luas-non-efektif"
+                      type="number"
+                      step="0.001"
+                      value={editFormData.luas_area_non_efektif || ""}
+                      onChange={(e) =>
+                        setEditFormData({
+                          ...editFormData,
+                          luas_area_non_efektif:
+                            parseFloat(e.target.value) || 0,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-luas-konservasi">
+                      Luas Konservasi
+                    </Label>
+                    <Input
+                      id="edit-luas-konservasi"
+                      type="number"
+                      step="0.001"
+                      value={editFormData.luas_konservasi || ""}
+                      onChange={(e) =>
+                        setEditFormData({
+                          ...editFormData,
+                          luas_konservasi: parseFloat(e.target.value) || 0,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-luas-pks">Luas PKS</Label>
+                    <Input
+                      id="edit-luas-pks"
+                      type="number"
+                      step="0.001"
+                      value={editFormData.luas_pks || ""}
+                      onChange={(e) =>
+                        setEditFormData({
+                          ...editFormData,
+                          luas_pks: parseFloat(e.target.value) || 0,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-luas-jalan">Luas Jalan</Label>
+                    <Input
+                      id="edit-luas-jalan"
+                      type="number"
+                      step="0.001"
+                      value={editFormData.luas_jalan || ""}
+                      onChange={(e) =>
+                        setEditFormData({
+                          ...editFormData,
+                          luas_jalan: parseFloat(e.target.value) || 0,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-luas-drainase">Luas Drainase</Label>
+                    <Input
+                      id="edit-luas-drainase"
+                      type="number"
+                      step="0.001"
+                      value={editFormData.luas_drainase || ""}
+                      onChange={(e) =>
+                        setEditFormData({
+                          ...editFormData,
+                          luas_drainase: parseFloat(e.target.value) || 0,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-luas-perumahan">Luas Perumahan</Label>
+                    <Input
+                      id="edit-luas-perumahan"
+                      type="number"
+                      step="0.001"
+                      value={editFormData.luas_perumahan || ""}
+                      onChange={(e) =>
+                        setEditFormData({
+                          ...editFormData,
+                          luas_perumahan: parseFloat(e.target.value) || 0,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-luas-sarana">
+                      Luas Sarana Prasanara
+                    </Label>
+                    <Input
+                      id="edit-luas-sarana"
+                      type="number"
+                      step="0.001"
+                      value={editFormData.luas_sarana_prasanara || ""}
+                      onChange={(e) =>
+                        setEditFormData({
+                          ...editFormData,
+                          luas_sarana_prasanara:
+                            parseFloat(e.target.value) || 0,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-luas-lain">Luas Lain-Lain</Label>
+                    <Input
+                      id="edit-luas-lain"
+                      type="number"
+                      step="0.001"
+                      value={editFormData.luas_lain___lain || ""}
+                      onChange={(e) =>
+                        setEditFormData({
+                          ...editFormData,
+                          luas_lain___lain: parseFloat(e.target.value) || 0,
+                        })
+                      }
+                    />
+                  </div>
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-luas-blok">Luas Blok</Label>
-                <Input
-                  id="edit-luas-blok"
-                  type="number"
-                  step="0.001"
-                  value={editFormData.luas_blok || ""}
-                  onChange={(e) =>
-                    setEditFormData({
-                      ...editFormData,
-                      luas_blok: parseFloat(e.target.value) || 0,
-                    })
-                  }
-                />
+
+              {/* Hasil Sensus */}
+              <div className="space-y-4">
+                <h3 className="text-sm font-bold text-white bg-purple-600 px-3 py-2 rounded">
+                  Hasil Sensus
+                </h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-jumlah-pokok-sensus">
+                      Jumlah Pokok Sensus
+                    </Label>
+                    <Input
+                      id="edit-jumlah-pokok-sensus"
+                      type="number"
+                      step="0.001"
+                      value={editFormData.jumlah_pokok_sensus || ""}
+                      onChange={(e) =>
+                        setEditFormData({
+                          ...editFormData,
+                          jumlah_pokok_sensus: parseFloat(e.target.value) || 0,
+                        })
+                      }
+                    />
+                  </div>
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-jumlah-pokok">Jumlah Pokok</Label>
-                <Input
-                  id="edit-jumlah-pokok"
-                  type="number"
-                  value={editFormData.jumlah_pokok || ""}
-                  onChange={(e) =>
-                    setEditFormData({
-                      ...editFormData,
-                      jumlah_pokok: parseInt(e.target.value) || 0,
-                    })
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-sph">SPH</Label>
-                <Input
-                  id="edit-sph"
-                  type="number"
-                  value={editFormData.SPH || ""}
-                  onChange={(e) =>
-                    setEditFormData({
-                      ...editFormData,
-                      SPH: parseInt(e.target.value) || 0,
-                    })
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-jenis-tanah">Jenis Tanah</Label>
-                <Input
-                  id="edit-jenis-tanah"
-                  value={editFormData.jenis_tanah || ""}
-                  onChange={(e) =>
-                    setEditFormData({
-                      ...editFormData,
-                      jenis_tanah: e.target.value,
-                    })
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-topografi">Topografi</Label>
-                <Input
-                  id="edit-topografi"
-                  value={editFormData.topografi || ""}
-                  onChange={(e) =>
-                    setEditFormData({
-                      ...editFormData,
-                      topografi: e.target.value,
-                    })
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-tahun">Tahun</Label>
-                <Input
-                  id="edit-tahun"
-                  type="number"
-                  value={editFormData.tahun_ || ""}
-                  onChange={(e) =>
-                    setEditFormData({
-                      ...editFormData,
-                      tahun_: parseInt(e.target.value) || 0,
-                    })
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-jenis-bibit">Jenis Bibit</Label>
-                <Input
-                  id="edit-jenis-bibit"
-                  value={editFormData.jenis_bibit || ""}
-                  onChange={(e) =>
-                    setEditFormData({
-                      ...editFormData,
-                      jenis_bibit: e.target.value,
-                    })
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-luas-nursery">Luas Nursery</Label>
-                <Input
-                  id="edit-luas-nursery"
-                  type="number"
-                  step="0.001"
-                  value={editFormData.luas_nursery || ""}
-                  onChange={(e) =>
-                    setEditFormData({
-                      ...editFormData,
-                      luas_nursery: parseFloat(e.target.value) || 0,
-                    })
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-luas-lain">Luas Lain-Lain</Label>
-                <Input
-                  id="edit-luas-lain"
-                  type="number"
-                  step="0.001"
-                  value={editFormData.luas_lain___lain || ""}
-                  onChange={(e) =>
-                    setEditFormData({
-                      ...editFormData,
-                      luas_lain___lain: parseFloat(e.target.value) || 0,
-                    })
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-luas-garapan">Luas Garapan</Label>
-                <Input
-                  id="edit-luas-garapan"
-                  type="number"
-                  step="0.001"
-                  value={editFormData.luas_garapan || ""}
-                  onChange={(e) =>
-                    setEditFormData({
-                      ...editFormData,
-                      luas_garapan: parseFloat(e.target.value) || 0,
-                    })
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-luas-rawa">Luas Rawa</Label>
-                <Input
-                  id="edit-luas-rawa"
-                  type="number"
-                  step="0.001"
-                  value={editFormData.luas_rawa || ""}
-                  onChange={(e) =>
-                    setEditFormData({
-                      ...editFormData,
-                      luas_rawa: parseFloat(e.target.value) || 0,
-                    })
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-non-efektif">Non Efektif</Label>
-                <Input
-                  id="edit-non-efektif"
-                  type="number"
-                  step="0.001"
-                  value={editFormData.luas_area_non_efektif || ""}
-                  onChange={(e) =>
-                    setEditFormData({
-                      ...editFormData,
-                      luas_area_non_efektif: parseFloat(e.target.value) || 0,
-                    })
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-konservasi">Konservasi</Label>
-                <Input
-                  id="edit-konservasi"
-                  type="number"
-                  step="0.001"
-                  value={editFormData.luas_konservasi || ""}
-                  onChange={(e) =>
-                    setEditFormData({
-                      ...editFormData,
-                      luas_konservasi: parseFloat(e.target.value) || 0,
-                    })
-                  }
-                />
+
+              {/* Hasil Perhitungan (Read-only) */}
+              <div className="space-y-4">
+                <h3 className="text-sm font-bold text-white bg-orange-600 px-3 py-2 rounded">
+                  Hasil Perhitungan (Otomatis)
+                </h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Total Luas Non Tanaman</Label>
+                    <Input
+                      type="number"
+                      step="0.001"
+                      value={(() => {
+                        const landPrep =
+                          editFormData.luas_land_preparation || 0;
+                        const nursery = editFormData.luas_nursery || 0;
+                        const lebungan = editFormData.luas_lebungan || 0;
+                        const garapan = editFormData.luas_garapan || 0;
+                        const rawa = editFormData.luas_rawa || 0;
+                        const tanggul = editFormData.luas_tanggul || 0;
+                        const nonEfektif =
+                          editFormData.luas_area_non_efektif || 0;
+                        const konservasi = editFormData.luas_konservasi || 0;
+                        const pks = editFormData.luas_pks || 0;
+                        const jalan = editFormData.luas_jalan || 0;
+                        const drainase = editFormData.luas_drainase || 0;
+                        const perumahan = editFormData.luas_perumahan || 0;
+                        const sarana = editFormData.luas_sarana_prasanara || 0;
+                        const lain = editFormData.luas_lain___lain || 0;
+                        return (
+                          landPrep +
+                          nursery +
+                          lebungan +
+                          garapan +
+                          rawa +
+                          tanggul +
+                          nonEfektif +
+                          konservasi +
+                          pks +
+                          jalan +
+                          drainase +
+                          perumahan +
+                          sarana +
+                          lain
+                        ).toFixed(3);
+                      })()}
+                      disabled
+                      className="bg-gray-100 cursor-not-allowed"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Total Luas Tanam Awal</Label>
+                    <Input
+                      type="number"
+                      step="0.001"
+                      value={(editFormData.luas_tanam_ || 0).toFixed(3)}
+                      disabled
+                      className="bg-gray-100 cursor-not-allowed"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Luas Blok</Label>
+                    <Input
+                      type="number"
+                      step="0.001"
+                      value={(() => {
+                        const luasTanam = editFormData.luas_tanam_ || 0;
+                        const landPrep =
+                          editFormData.luas_land_preparation || 0;
+                        const nursery = editFormData.luas_nursery || 0;
+                        const lebungan = editFormData.luas_lebungan || 0;
+                        const garapan = editFormData.luas_garapan || 0;
+                        const rawa = editFormData.luas_rawa || 0;
+                        const tanggul = editFormData.luas_tanggul || 0;
+                        const nonEfektif =
+                          editFormData.luas_area_non_efektif || 0;
+                        const konservasi = editFormData.luas_konservasi || 0;
+                        const pks = editFormData.luas_pks || 0;
+                        const jalan = editFormData.luas_jalan || 0;
+                        const drainase = editFormData.luas_drainase || 0;
+                        const perumahan = editFormData.luas_perumahan || 0;
+                        const sarana = editFormData.luas_sarana_prasanara || 0;
+                        const lain = editFormData.luas_lain___lain || 0;
+                        const totalNonTanaman =
+                          landPrep +
+                          nursery +
+                          lebungan +
+                          garapan +
+                          rawa +
+                          tanggul +
+                          nonEfektif +
+                          konservasi +
+                          pks +
+                          jalan +
+                          drainase +
+                          perumahan +
+                          sarana +
+                          lain;
+                        return (luasTanam + totalNonTanaman).toFixed(3);
+                      })()}
+                      disabled
+                      className="bg-gray-100 cursor-not-allowed"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>SPH Akhir</Label>
+                    <Input
+                      type="number"
+                      step="0.001"
+                      value={(() => {
+                        const jumlahPokokSensus =
+                          editFormData.jumlah_pokok_sensus || 0;
+                        const luasTanam = editFormData.luas_tanam_ || 0;
+                        if (luasTanam === 0) return "0";
+                        return (jumlahPokokSensus / luasTanam).toFixed(3);
+                      })()}
+                      disabled
+                      className="bg-gray-100 cursor-not-allowed"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
             <DialogFooter>

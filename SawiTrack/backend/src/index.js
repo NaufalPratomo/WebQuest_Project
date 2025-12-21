@@ -1077,10 +1077,10 @@ app.get(`${API_BASE_PATH}/stats`, async (req, res) => {
 
     const percent = targets.length
       ? Math.round(
-          (targets.reduce((sum, t) => sum + (t.achieved || 0), 0) /
-            targets.reduce((sum, t) => sum + (t.target || 0), 0)) *
-            100
-        )
+        (targets.reduce((sum, t) => sum + (t.achieved || 0), 0) /
+          targets.reduce((sum, t) => sum + (t.target || 0), 0)) *
+        100
+      )
       : 0;
 
     res.json({
@@ -1603,8 +1603,8 @@ app.get(`${API_BASE_PATH}/reports/trend`, async (req, res) => {
       String(type) === "taksasi"
         ? Taksasi
         : String(type) === "angkut"
-        ? Angkut
-        : Panen;
+          ? Angkut
+          : Panen;
     const key = String(type) === "angkut" ? "weightKg" : "weightKg";
     const order = String(sort) === "asc" ? 1 : -1;
     const rows = await col
@@ -1742,13 +1742,23 @@ app.get("/activitylogs", handleActivityLogGet);
 
 console.log("✓ Activity log routes registered (all variants)");
 
-connectMongo()
-  .then(() => {
-    app.listen(PORT, () => {
-      console.log(`API listening on http://localhost:${PORT}${API_BASE_PATH}`);
+
+// Export app for Vercel
+export default app;
+
+// Only listen if NOT running on Vercel (e.g. local dev)
+if (!process.env.VERCEL) {
+  connectMongo()
+    .then(() => {
+      app.listen(PORT, () => {
+        console.log(`API listening on http://localhost:${PORT}${API_BASE_PATH}`);
+      });
+    })
+    .catch((err) => {
+      console.error("Failed to start server:", err);
+      process.exit(1);
     });
-  })
-  .catch((err) => {
-    console.error("Failed to start server:", err);
-    process.exit(1);
-  });
+} else {
+  // On Vercel, just ensure DB is connected for the handler
+  connectMongo().catch(e => console.error("Vercel DB Connect Error:", e));
+}

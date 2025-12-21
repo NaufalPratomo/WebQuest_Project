@@ -49,7 +49,14 @@ const corsOptions = {
   origin: (origin, callback) => {
     // Allow non-browser requests or same-origin
     if (!origin) return callback(null, true);
-    if (allowedOrigins.includes("*") || allowedOrigins.includes(origin)) {
+
+    // Check against allowed origins
+    const isAllowed = allowedOrigins.includes("*") || allowedOrigins.includes(origin);
+
+    // Auto-allow all Vercel domains if running on Vercel (includes previews)
+    const isVercel = process.env.VERCEL && origin.endsWith(".vercel.app");
+
+    if (isAllowed || isVercel) {
       return callback(null, true);
     }
     return callback(new Error(`CORS blocked for origin ${origin}`));

@@ -2,7 +2,7 @@
 import { getToken } from "./authStore";
 // Resolve API base; allow relative '/api' to be expanded to current origin
 const RAW_API_BASE =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api";
+  import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? "/api" : "http://localhost:5000/api");
 export const API_BASE =
   RAW_API_BASE.startsWith("/") && typeof window !== "undefined"
     ? `${window.location.origin}${RAW_API_BASE}`
@@ -555,10 +555,8 @@ export const api = {
           }).catch((inner) => {
             // Provide a clearer combined error
             throw new Error(
-              `Activity logs endpoint tidak ditemukan. Coba cek backend routes /activity-logs & /activitylogs. Asli: ${
-                err.message
-              }; Alias: ${
-                inner instanceof Error ? inner.message : String(inner)
+              `Activity logs endpoint tidak ditemukan. Coba cek backend routes /activity-logs & /activitylogs. Asli: ${err.message
+              }; Alias: ${inner instanceof Error ? inner.message : String(inner)
               }`
             );
           });

@@ -15,7 +15,7 @@ const FLUSH_INTERVAL = 3000; // 3 seconds
 
 // Lazy load API_BASE to avoid circular dependency
 function getEndpoint() {
-  const RAW_API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api";
+  const RAW_API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? "/api" : "http://localhost:5000/api");
   const API_BASE = RAW_API_BASE.startsWith('/') && typeof window !== 'undefined'
     ? `${window.location.origin}${RAW_API_BASE}`
     : RAW_API_BASE;
@@ -51,7 +51,7 @@ function getUserMeta() {
 export function logActivity(entry: LogEntry) {
   // Silently ignore if action contains activity-logs to prevent recursion
   if (entry.action?.includes('activity-log')) return;
-  
+
   const meta = getUserMeta();
   queue.push({
     ...entry,
@@ -67,10 +67,10 @@ export function logActivity(entry: LogEntry) {
 
 async function flush() {
   if (queue.length === 0) return;
-  
+
   const batch = queue.splice(0, BATCH_SIZE);
   const token = window.__AUTH_TOKEN;
-  
+
   try {
     await fetch(getEndpoint(), {
       method: 'POST',

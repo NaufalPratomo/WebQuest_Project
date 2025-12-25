@@ -1571,7 +1571,12 @@ const Locations = () => {
                       {company.company_name}
                     </h2>
                     <p className="text-sm text-muted-foreground font-normal">
-                      {company.address} • {companyEstates.length} Divisi
+                      {company.address} •{" "}
+                      {companyEstates.reduce((total, estate) => {
+                        const estateMeta = meta[estate._id];
+                        return total + (estateMeta?.divisions?.length || 0);
+                      }, 0)}{" "}
+                      divisi
                     </p>
                   </div>
                 </AccordionTrigger>
@@ -1736,8 +1741,12 @@ const Locations = () => {
                                     {es.estate_name}
                                   </span>
                                   <span className="text-sm text-muted-foreground">
-                                    {metaEs?.divisions?.length ?? 0} divisi —{" "}
-                                    {blocksFlat.length} blok
+                                    {
+                                      Object.keys(
+                                        metaEs?.blocksByDivision || {}
+                                      ).length
+                                    }{" "}
+                                    divisi — {blocksFlat.length} blok
                                   </span>
                                 </div>
                               </AccordionTrigger>

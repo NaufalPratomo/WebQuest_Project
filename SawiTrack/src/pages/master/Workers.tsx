@@ -10,7 +10,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
 import { Plus, Search, Edit, Upload, Download } from "lucide-react";
 import {
   Dialog,
@@ -23,7 +22,6 @@ import { Label } from "@/components/ui/label";
 import { api, type Employee, type Company, type User } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { Toaster } from "@/components/ui/toaster";
-import { TooltipButton } from "@/components/ui/TooltipButton";
 import {
   Select,
   SelectContent,
@@ -43,20 +41,13 @@ const Workers = () => {
   const [openAdd, setOpenAdd] = useState(false);
   const [openEdit, setOpenEdit] = useState(false);
   const [editingWorker, setEditingWorker] = useState<Employee | null>(null);
+
+  // Cleaned form state - matching table columns: No (calc), Nama, NIK, Mandor, Divisi
   const [form, setForm] = useState({
     nik: "",
     name: "",
-    companyId: "",
     mandorId: "",
-    position: "",
-    salary: 0,
-    address: "",
-    phone: "",
-    birthDate: "",
-    gender: "",
-    religion: "",
     division: "",
-    joinDate: "",
     status: "active",
   });
 
@@ -74,9 +65,6 @@ const Workers = () => {
       .then(([emps, comps, users]) => {
         setRows(emps);
         setCompanies(comps);
-        // Filter users for foremen (mandor)
-        setForemen(users.filter(u => u.role === 'foreman' || u.role === 'manager' || u.role === 'employee')); // Temporarily showing all users or just role foreman? Request said "role mandor". But let's stick to strict if data exists.
-        // Actually request says: relation bagian mandor diambil dari pengguna dengan role mandor
         setForemen(users.filter(u => u.role === 'foreman'));
       })
       .catch(() =>
@@ -105,17 +93,8 @@ const Workers = () => {
     setForm({
       nik: worker.nik,
       name: worker.name,
-      companyId: worker.companyId || "",
       mandorId: worker.mandorId || "",
-      position: worker.position || "",
-      salary: worker.salary || 0,
-      address: worker.address || "",
-      phone: worker.phone || "",
-      birthDate: worker.birthDate ? new Date(worker.birthDate).toISOString().split('T')[0] : "",
-      gender: worker.gender || "",
-      religion: worker.religion || "",
       division: worker.division || "",
-      joinDate: worker.joinDate ? new Date(worker.joinDate).toISOString().split('T')[0] : "",
       status: worker.status || "active",
     });
     setOpenEdit(true);
@@ -137,24 +116,24 @@ const Workers = () => {
       await api.updateEmployee(editingWorker._id, {
         nik: form.nik,
         name: form.name,
-        companyId: form.companyId || "",
+        companyId: "", // Legacy, send empty if not used or keep existing? API might require. Sending empty or undefined.
         mandorId: form.mandorId || "",
-        position: form.position || null,
-        salary: form.salary || null,
-        address: form.address || null,
-        phone: form.phone || null,
-        birthDate: form.birthDate || null,
-        gender: form.gender || null,
-        religion: form.religion || null,
+        position: null,
+        salary: null,
+        address: null,
+        phone: null,
+        birthDate: null,
+        gender: null,
+        religion: null,
         division: form.division || null,
-        joinDate: form.joinDate || null,
+        joinDate: null,
         status: form.status,
       });
 
       setRows((prev) =>
         prev.map((w) =>
           w._id === editingWorker._id
-            ? { ...w, ...form, companyId: form.companyId || undefined, mandorId: form.mandorId || undefined, status: form.status }
+            ? { ...w, ...form, companyId: undefined, mandorId: form.mandorId || undefined, status: form.status }
             : w
         )
       );
@@ -164,17 +143,8 @@ const Workers = () => {
       setForm({
         nik: "",
         name: "",
-        companyId: "",
         mandorId: "",
-        position: "",
-        salary: 0,
-        address: "",
-        phone: "",
-        birthDate: "",
-        gender: "",
-        religion: "",
         division: "",
-        joinDate: "",
         status: "active",
       });
 
@@ -191,6 +161,7 @@ const Workers = () => {
     }
   };
 
+  // CLEANED IMPORT: Only fields visible in table
   const handleImportExcel = () => {
     const input = document.createElement("input");
     input.type = "file";
@@ -207,21 +178,14 @@ const Workers = () => {
           const wb = XLSX.read(data, { type: "array", cellDates: true });
           const ws = wb.Sheets[wb.SheetNames[0]];
 
-          // Check first cell to see if it matches our new format (merged header)
-          const firstCell = ws['A1'] ? ws['A1'].v : null;
-          let range = 0;
-          if (firstCell && String(firstCell).includes("Data Karyawan sesuai Kartu Identitas")) {
-            range = 1; // Skip first row, headers are on row 2 (index 1)
-          }
-
-          const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { range });
+          const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws);
 
           const newEmployees: Partial<Employee>[] = [];
           const updatedEmployees: { employee: Partial<Employee>; oldEmployee: Employee }[] = [];
           const existingEmployees: Partial<Employee>[] = [];
 
           const areEmployeesEqual = (emp1: Partial<Employee>, emp2: Employee): boolean => {
-            const fields = ['name', 'companyId', 'position', 'address', 'phone', 'birthDate', 'gender', 'religion', 'division', 'joinDate'] as const;
+            const fields = ['name', 'mandorId', 'division'] as const;
 
             const normalize = (val: unknown): unknown => {
               if (val === undefined || val === null) return null;
@@ -232,31 +196,10 @@ const Workers = () => {
               return val;
             };
 
-            const getDatePart = (dateStr: unknown): string | null => {
-              if (!dateStr) return null;
-              try {
-                const d = new Date(dateStr as string);
-                if (isNaN(d.getTime())) return null;
-                return d.toISOString().split('T')[0];
-              } catch {
-                return null;
-              }
-            };
-
             for (const field of fields) {
               const val1 = emp1[field];
               const val2 = emp2[field];
-
-              const norm1 = normalize(val1);
-              const norm2 = normalize(val2);
-
-              if (field === 'birthDate' || field === 'joinDate') {
-                const d1 = getDatePart(norm1);
-                const d2 = getDatePart(norm2);
-                if (d1 !== d2) return false;
-              } else {
-                if (norm1 !== norm2) return false;
-              }
+              if (normalize(val1) !== normalize(val2)) return false;
             }
             return true;
           };
@@ -270,78 +213,19 @@ const Workers = () => {
             return newRow;
           });
 
-          console.log("Raw JSON Data:", jsonData);
-          console.log("Normalized JSON Data:", normalizedJsonData);
-
-          const parseDate = (dateStr: unknown): string | undefined => {
-            if (!dateStr) return undefined;
-
-            if (dateStr instanceof Date) {
-              const year = dateStr.getFullYear();
-              const month = String(dateStr.getMonth() + 1).padStart(2, '0');
-              const day = String(dateStr.getDate()).padStart(2, '0');
-              return `${year}-${month}-${day}T00:00:00.000Z`;
-            }
-
-            if (typeof dateStr === 'number') {
-              const date = new Date(Math.round((dateStr - 25569) * 86400 * 1000));
-              const year = date.getFullYear();
-              const month = String(date.getMonth() + 1).padStart(2, '0');
-              const day = String(date.getDate()).padStart(2, '0');
-              return `${year}-${month}-${day}T00:00:00.000Z`;
-            }
-
-            const str = String(dateStr).trim();
-
-            const dateMatch = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})$/);
-            if (dateMatch) {
-              const day = dateMatch[1].padStart(2, '0');
-              const month = dateMatch[2].padStart(2, '0');
-              let year = dateMatch[3];
-
-              if (year.length === 2) {
-                const y = parseInt(year, 10);
-                year = (y > 50 ? '19' : '20') + year;
-              }
-
-              return `${year}-${month}-${day}T00:00:00.000Z`;
-            }
-
-            if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
-              return new Date(str).toISOString();
-            }
-
-            return undefined;
-          };
-
           normalizedJsonData.forEach((row) => {
-            // Debug log for specific fields
-            console.log("Processing Row:", row);
-            console.log("Kelamin:", row["Kelamin"], "Agama:", row["Agama"], "Divisi:", row["Divisi"], "Tgl Masuk:", row["Tanggal Masuk Kerja"]);
-            const nik = String(row["NIK KTP"] || row["NIK"] || "").trim();
-            const name = String(row["Nama"] || "").trim();
-            const companyName = String(row["Perusahaan"] || "").trim();
-            const company = companies.find((c) => c.company_name.trim().toLowerCase() === companyName.toLowerCase());
+            const nik = String(row["NIK"] || "").trim();
+            const name = String(row["NAMA"] || "").trim();
+            const mandorName = String(row["Mandor"] || "").trim();
+            const mandor = foremen.find((f) => f.name.trim().toLowerCase() === mandorName.toLowerCase());
 
             if (!nik || !name) return;
 
             const employeeObj: Partial<Employee> = {
               nik,
               name,
-              companyId: company?._id,
-              position: row["Posisi"] ? String(row["Posisi"]).trim() : undefined,
-              address: row["Alamat"] ? String(row["Alamat"]).trim() : undefined,
-              phone: row["Telepon"] ? String(row["Telepon"]).trim() : undefined,
-              birthDate: parseDate(row["Tanggal Lahir"]),
-              gender: (() => {
-                const g = String(row["Kelamin"] || "").trim().toLowerCase();
-                if (g === "laki-laki" || g === "l") return "L";
-                if (g === "perempuan" || g === "p") return "P";
-                return undefined;
-              })(),
-              religion: row["Agama"] ? String(row["Agama"]).trim() : undefined,
+              mandorId: mandor?._id,
               division: row["Divisi"] ? String(row["Divisi"]).trim() : undefined,
-              joinDate: parseDate(row["Tanggal Masuk Kerja"]),
               status: "active",
             };
 
@@ -388,16 +272,16 @@ const Workers = () => {
           const created = await api.createEmployee({
             nik: emp.nik!,
             name: emp.name!,
-            companyId: emp.companyId,
+            companyId: undefined,
             mandorId: emp.mandorId,
-            position: emp.position,
-            address: emp.address,
-            phone: emp.phone,
-            birthDate: emp.birthDate,
-            gender: emp.gender,
-            religion: emp.religion,
+            position: undefined,
+            address: undefined,
+            phone: undefined,
+            birthDate: undefined,
+            gender: undefined,
+            religion: undefined,
             division: emp.division,
-            joinDate: emp.joinDate,
+            joinDate: undefined,
           });
           processedEmployees.push(created);
         } catch (e) {
@@ -411,26 +295,24 @@ const Workers = () => {
           await api.updateEmployee(oldEmployee._id, {
             nik: employee.nik!,
             name: employee.name!,
-            companyId: employee.companyId || "",
+            companyId: "",
             mandorId: employee.mandorId || "",
-            position: employee.position || null,
-            address: employee.address || null,
-            phone: employee.phone || null,
-            birthDate: employee.birthDate || null,
-            gender: employee.gender || null,
-            religion: employee.religion || null,
+            position: null,
+            address: null,
+            phone: null,
+            birthDate: null,
+            gender: null,
+            religion: null,
             division: employee.division || null,
-            joinDate: employee.joinDate || null,
+            joinDate: null,
             status: oldEmployee.status,
           });
-          // We don't get the updated object back from updateEmployee usually, so we construct it
           processedEmployees.push({ ...oldEmployee, ...employee } as Employee);
         } catch (e) {
           console.error(`Failed to update employee ${employee.nik}:`, e);
         }
       }
 
-      // Refresh data to be sure
       const latestEmployees = await api.employees();
       setRows(latestEmployees);
 
@@ -452,82 +334,33 @@ const Workers = () => {
     }
   };
 
+  // CLEANED EXPORT: Only columns in table
   const handleExportExcel = () => {
     try {
-      // Define headers
-      const mainHeader = [
-        "Data Karyawan sesuai Kartu Identitas", "", "", "", "", "", "",
-        "Data Karyawan Bekerja di Perusahaan", "", "", "", ""
-      ];
-      const subHeader = [
-        "Nama", "NIK KTP", "Kelamin", "Tanggal Lahir", "Agama", "Alamat", "Telepon",
-        "Mandor", "Divisi", "Posisi", "Tanggal Masuk Kerja", "Status"
-      ];
+      // Simple header matching table
+      const header = ["NO", "NAMA", "NIK", "Mandor", "Divisi"];
 
-      const dataRows = filteredWorkers.map((w) => {
+      const dataRows = filteredWorkers.map((w, index) => {
         const mandor = foremen.find((f) => f._id === w.mandorId);
-
-        let formattedDate = "-";
-        if (w.birthDate) {
-          const d = new Date(w.birthDate);
-          if (!isNaN(d.getTime())) {
-            const day = String(d.getDate()).padStart(2, '0');
-            const month = String(d.getMonth() + 1).padStart(2, '0');
-            const year = d.getFullYear();
-            formattedDate = `${day}-${month}-${year}`;
-          }
-        }
-
-        let formattedJoinDate = "-";
-        if (w.joinDate) {
-          const d = new Date(w.joinDate);
-          if (!isNaN(d.getTime())) {
-            const day = String(d.getDate()).padStart(2, '0');
-            const month = String(d.getMonth() + 1).padStart(2, '0');
-            const year = d.getFullYear();
-            formattedJoinDate = `${day}-${month}-${year}`;
-          }
-        }
-
         return [
+          index + 1,
           w.name,
           w.nik,
-          w.gender || "-",
-          formattedDate,
-          w.religion || "-",
-          w.address || "-",
-          w.phone || "-",
           mandor?.name || "-",
           w.division || "-",
-          w.position || "-",
-          formattedJoinDate,
-          w.status === "active" ? "Aktif" : "Nonaktif",
         ];
       });
 
-      const wsData = [mainHeader, subHeader, ...dataRows];
+      const wsData = [header, ...dataRows];
       const ws = XLSX.utils.aoa_to_sheet(wsData);
 
-      // Add merges
-      ws['!merges'] = [
-        { s: { r: 0, c: 0 }, e: { r: 0, c: 6 } }, // First group (Cols 0-6)
-        { s: { r: 0, c: 7 }, e: { r: 0, c: 11 } } // Second group (Cols 7-11)
-      ];
-
-      // Optional: Set column widths for better visibility
+      // Optional: Set column widths
       ws['!cols'] = [
-        { wch: 20 }, // Nama
+        { wch: 5 },  // NO
+        { wch: 25 }, // NAMA
         { wch: 15 }, // NIK
-        { wch: 10 }, // Kelamin
-        { wch: 15 }, // Tgl Lahir
-        { wch: 10 }, // Agama
-        { wch: 25 }, // Alamat
-        { wch: 15 }, // Telepon
         { wch: 20 }, // Mandor
         { wch: 15 }, // Divisi
-        { wch: 15 }, // Posisi
-        { wch: 15 }, // Tgl Masuk
-        { wch: 10 }, // Status
       ];
 
       const wb = XLSX.utils.book_new();
@@ -585,16 +418,16 @@ const Workers = () => {
                 Tambah Karyawan
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Tambah Karyawan Baru</DialogTitle>
               </DialogHeader>
               <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label>NIK KTP</Label>
+                    <Label>NIK</Label>
                     <Input
-                      placeholder="Masukkan NIK KTP"
+                      placeholder="Masukkan NIK"
                       value={form.nik}
                       onChange={(e) =>
                         setForm((f) => ({ ...f, nik: e.target.value }))
@@ -610,79 +443,6 @@ const Workers = () => {
                         setForm((f) => ({ ...f, name: e.target.value }))
                       }
                     />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Jenis Kelamin</Label>
-                    <Select
-                      value={form.gender}
-                      onValueChange={(v) =>
-                        setForm((f) => ({ ...f, gender: v }))
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Pilih jenis kelamin" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="L">Laki-laki</SelectItem>
-                        <SelectItem value="P">Perempuan</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Agama</Label>
-                    <Select
-                      value={form.religion}
-                      onValueChange={(v) =>
-                        setForm((f) => ({ ...f, religion: v }))
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Pilih agama" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Islam">Islam</SelectItem>
-                        <SelectItem value="Kristen">Kristen</SelectItem>
-                        <SelectItem value="Katolik">Katolik</SelectItem>
-                        <SelectItem value="Hindu">Hindu</SelectItem>
-                        <SelectItem value="Buddha">Buddha</SelectItem>
-                        <SelectItem value="Konghucu">Konghucu</SelectItem>
-                        <SelectItem value="Lainnya">Lainnya</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Tanggal Lahir</Label>
-                    <Input
-                      type="date"
-                      value={form.birthDate}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, birthDate: e.target.value }))
-                      }
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Telepon</Label>
-                    <Input
-                      placeholder="Contoh: 081234567890"
-                      value={form.phone}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, phone: e.target.value }))
-                      }
-                    />
-                  </div>
-                  <div className="col-span-2 space-y-2">
-                    <Label>Alamat</Label>
-                    <Input
-                      placeholder="Masukkan alamat lengkap"
-                      value={form.address}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, address: e.target.value }))
-                      }
-                    />
-                  </div>
-
-                  <div className="col-span-2 border-t pt-4 mt-2">
-                    <h3 className="font-semibold mb-4">Data Pekerjaan</h3>
                   </div>
 
                   <div className="space-y-2">
@@ -715,27 +475,6 @@ const Workers = () => {
                       }
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label>Posisi/Jabatan</Label>
-                    <Input
-                      placeholder="Contoh: Pemanen, Mandor"
-                      value={form.position}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, position: e.target.value }))
-                      }
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Tanggal Masuk Kerja</Label>
-                    <Input
-                      type="date"
-                      value={form.joinDate}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, joinDate: e.target.value }))
-                      }
-                    />
-                  </div>
-
                 </div>
                 <Button
                   type="button"
@@ -753,34 +492,25 @@ const Workers = () => {
                       const created = await api.createEmployee({
                         nik: form.nik,
                         name: form.name,
-                        companyId: form.companyId || undefined,
+                        companyId: undefined, // removed legacy
                         mandorId: form.mandorId || undefined,
-                        position: form.position || undefined,
-                        salary: form.salary || undefined,
-                        address: form.address || undefined,
-                        phone: form.phone || undefined,
-                        birthDate: form.birthDate || undefined,
-                        gender: form.gender || undefined,
-                        religion: form.religion || undefined,
+                        position: undefined,
+                        salary: undefined,
+                        address: undefined,
+                        phone: undefined,
+                        birthDate: undefined,
+                        gender: undefined,
+                        religion: undefined,
                         division: form.division || undefined,
-                        joinDate: form.joinDate || undefined,
+                        joinDate: undefined,
                       });
                       setRows((prev) => [created, ...prev]);
                       setOpenAdd(false);
                       setForm({
                         nik: "",
                         name: "",
-                        companyId: "",
                         mandorId: "",
-                        position: "",
-                        salary: 0,
-                        address: "",
-                        phone: "",
-                        birthDate: "",
-                        gender: "",
-                        religion: "",
                         division: "",
-                        joinDate: "",
                         status: "active",
                       });
                       toast({
@@ -868,15 +598,12 @@ const Workers = () => {
 
       {/* Dialog Edit Pekerja */}
       <Dialog open={openEdit} onOpenChange={setOpenEdit}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Data Karyawan</DialogTitle>
           </DialogHeader>
           <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="col-span-2 border-b pb-2 mb-2">
-                <h3 className="font-semibold">Data Identitas</h3>
-              </div>
+            <div className="space-y-4">
               <div className="space-y-2">
                 <Label>Nama Lengkap</Label>
                 <Input
@@ -888,87 +615,14 @@ const Workers = () => {
                 />
               </div>
               <div className="space-y-2">
-                <Label>NIK KTP</Label>
+                <Label>NIK</Label>
                 <Input
-                  placeholder="Masukkan NIK KTP"
+                  placeholder="Masukkan NIK"
                   value={form.nik}
                   onChange={(e) =>
                     setForm((f) => ({ ...f, nik: e.target.value }))
                   }
                 />
-              </div>
-              <div className="space-y-2">
-                <Label>Jenis Kelamin</Label>
-                <Select
-                  value={form.gender}
-                  onValueChange={(v) =>
-                    setForm((f) => ({ ...f, gender: v }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Pilih jenis kelamin" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="L">Laki-laki</SelectItem>
-                    <SelectItem value="P">Perempuan</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Tanggal Lahir</Label>
-                <Input
-                  type="date"
-                  value={form.birthDate}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, birthDate: e.target.value }))
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Agama</Label>
-                <Select
-                  value={form.religion}
-                  onValueChange={(v) =>
-                    setForm((f) => ({ ...f, religion: v }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Pilih agama" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Islam">Islam</SelectItem>
-                    <SelectItem value="Kristen">Kristen</SelectItem>
-                    <SelectItem value="Katolik">Katolik</SelectItem>
-                    <SelectItem value="Hindu">Hindu</SelectItem>
-                    <SelectItem value="Buddha">Buddha</SelectItem>
-                    <SelectItem value="Konghucu">Konghucu</SelectItem>
-                    <SelectItem value="Lainnya">Lainnya</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Telepon</Label>
-                <Input
-                  placeholder="Contoh: 081234567890"
-                  value={form.phone}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, phone: e.target.value }))
-                  }
-                />
-              </div>
-              <div className="col-span-2 space-y-2">
-                <Label>Alamat</Label>
-                <Input
-                  placeholder="Masukkan alamat lengkap"
-                  value={form.address}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, address: e.target.value }))
-                  }
-                />
-              </div>
-
-              <div className="col-span-2 border-t pt-4 mt-2 border-b pb-2 mb-2">
-                <h3 className="font-semibold">Data Pekerjaan</h3>
               </div>
 
               <div className="space-y-2">
@@ -1001,26 +655,6 @@ const Workers = () => {
                   }
                 />
               </div>
-              <div className="space-y-2">
-                <Label>Posisi/Jabatan</Label>
-                <Input
-                  placeholder="Contoh: Pemanen, Mandor"
-                  value={form.position}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, position: e.target.value }))
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Tanggal Masuk Kerja</Label>
-                <Input
-                  type="date"
-                  value={form.joinDate}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, joinDate: e.target.value }))
-                  }
-                />
-              </div>
 
               <div className="space-y-2">
                 <Label>Status</Label>
@@ -1049,17 +683,8 @@ const Workers = () => {
                   setForm({
                     nik: "",
                     name: "",
-                    companyId: "",
                     mandorId: "",
-                    position: "",
-                    salary: 0,
-                    address: "",
-                    phone: "",
-                    birthDate: "",
-                    gender: "",
-                    religion: "",
                     division: "",
-                    joinDate: "",
                     status: "active",
                   });
                 }}
@@ -1124,7 +749,7 @@ const Workers = () => {
                       <TableRow>
                         <TableHead>NIK</TableHead>
                         <TableHead>Nama</TableHead>
-                        <TableHead>Posisi</TableHead>
+                        <TableHead>Divisi</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1132,7 +757,7 @@ const Workers = () => {
                         <TableRow key={idx}>
                           <TableCell>{emp.nik}</TableCell>
                           <TableCell>{emp.name}</TableCell>
-                          <TableCell>{emp.position}</TableCell>
+                          <TableCell>{emp.division}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -1166,60 +791,26 @@ const Workers = () => {
                           return val;
                         };
 
-                        // Helper to format values for display
-                        const fmt = (v: unknown) => {
-                          const n = normalize(v);
-                          return n === null ? "-" : String(n);
-                        };
-
-                        const dateFmt = (v: unknown) => {
-                          if (!v) return "-";
-                          try { return new Date(v as string | number | Date).toLocaleDateString('id-ID'); } catch { return "-"; }
-                        };
-
                         if (normalize(employee.name) !== normalize(oldEmployee.name)) changes.push(`Nama: ${oldEmployee.name} -> ${employee.name}`);
 
-                        if (normalize(employee.companyId) !== normalize(oldEmployee.companyId)) {
-                          const oldComp = companies.find(c => c._id === oldEmployee.companyId)?.company_name || "-";
-                          const newComp = companies.find(c => c._id === employee.companyId)?.company_name || "-";
-                          if (oldComp !== newComp) changes.push(`Perusahaan: ${oldComp} -> ${newComp}`);
+                        if (normalize(employee.mandorId) !== normalize(oldEmployee.mandorId)) {
+                          const oldMandor = foremen.find(f => f._id === oldEmployee.mandorId)?.name || "-";
+                          const newMandor = foremen.find(f => f._id === employee.mandorId)?.name || "-";
+                          if (oldMandor !== newMandor) changes.push(`Mandor: ${oldMandor} -> ${newMandor}`);
                         }
 
-                        if (normalize(employee.position) !== normalize(oldEmployee.position)) changes.push(`Posisi: ${fmt(oldEmployee.position)} -> ${fmt(employee.position)}`);
-                        if (normalize(employee.address) !== normalize(oldEmployee.address)) changes.push(`Alamat: ${fmt(oldEmployee.address)} -> ${fmt(employee.address)}`);
-                        if (normalize(employee.phone) !== normalize(oldEmployee.phone)) changes.push(`Telepon: ${fmt(oldEmployee.phone)} -> ${fmt(employee.phone)}`);
-                        if (normalize(employee.gender) !== normalize(oldEmployee.gender)) {
-                          const n1 = normalize(oldEmployee.gender);
-                          const n2 = normalize(employee.gender);
-                          const gFmt = (v: unknown) => v === 'L' ? 'Laki-laki' : v === 'P' ? 'Perempuan' : fmt(v);
-                          if (n1 !== n2) changes.push(`Kelamin: ${gFmt(oldEmployee.gender)} -> ${gFmt(employee.gender)}`);
-                        }
-                        if (normalize(employee.religion) !== normalize(oldEmployee.religion)) {
-                          const n1 = normalize(oldEmployee.religion);
-                          const n2 = normalize(employee.religion);
-                          if (n1 !== n2) changes.push(`Agama: ${fmt(oldEmployee.religion)} -> ${fmt(employee.religion)}`);
-                        }
                         if (normalize(employee.division) !== normalize(oldEmployee.division)) {
                           const n1 = normalize(oldEmployee.division);
                           const n2 = normalize(employee.division);
-                          if (n1 !== n2) changes.push(`Divisi: ${fmt(oldEmployee.division)} -> ${fmt(employee.division)}`);
+                          if (n1 !== n2) changes.push(`Divisi: ${n1} -> ${n2}`);
                         }
-
-                        // Date comparisons for display
-                        const d1 = employee.birthDate ? new Date(employee.birthDate).toISOString().split('T')[0] : null;
-                        const d2 = oldEmployee.birthDate ? new Date(oldEmployee.birthDate).toISOString().split('T')[0] : null;
-                        if (d1 !== d2) changes.push(`Tgl Lahir: ${dateFmt(oldEmployee.birthDate)} -> ${dateFmt(employee.birthDate)}`);
-
-                        const j1 = employee.joinDate ? new Date(employee.joinDate).toISOString().split('T')[0] : null;
-                        const j2 = oldEmployee.joinDate ? new Date(oldEmployee.joinDate).toISOString().split('T')[0] : null;
-                        if (j1 !== j2) changes.push(`Tgl Masuk: ${dateFmt(oldEmployee.joinDate)} -> ${dateFmt(employee.joinDate)}`);
 
                         return (
                           <TableRow key={idx}>
                             <TableCell>{employee.nik}</TableCell>
                             <TableCell>{employee.name}</TableCell>
                             <TableCell className="text-sm text-muted-foreground">
-                              {changes.length > 0 ? changes.join(", ") : "Perubahan format data (trim/spasi)"}
+                              {changes.length > 0 ? changes.join(", ") : "Perubahan format data"}
                             </TableCell>
                           </TableRow>
                         );

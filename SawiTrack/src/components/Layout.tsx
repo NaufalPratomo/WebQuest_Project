@@ -1,9 +1,23 @@
-import { ReactNode, useState, type ComponentType } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
-import { Button } from '@/components/ui/button';
-import { LayoutDashboard, Users, MapPin, FileText, CheckSquare, BarChart3, Download, LogOut, Menu, Truck, Activity, Building2, UserCog } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { ReactNode, useState, type ComponentType } from "react";
+import { Link, useNavigate, useLocation } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
+import { Button } from "@/components/ui/button";
+import {
+  LayoutDashboard,
+  Users,
+  MapPin,
+  FileText,
+  CheckSquare,
+  BarChart3,
+  Download,
+  LogOut,
+  Menu,
+  Truck,
+  Activity,
+  Building2,
+  UserCog,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface LayoutProps {
   children: ReactNode;
@@ -17,58 +31,149 @@ const Layout = ({ children }: LayoutProps) => {
 
   const handleLogout = () => {
     logout();
-    navigate('/login');
+    navigate("/login");
   };
 
   type IconType = ComponentType<{ className?: string }>;
-  type MenuItem = { path: string; icon: IconType; label: string; roles: Array<'manager' | 'foreman' | 'employee'> };
+  type MenuItem = {
+    path: string;
+    icon: IconType;
+    label: string;
+    roles: Array<"manager" | "foreman" | "employee">;
+  };
   type MenuGroup = { label: string; items: MenuItem[] };
 
   const topLevel: MenuItem[] = [
-    { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', roles: ['manager', 'foreman'] },
+    {
+      path: "/dashboard",
+      icon: LayoutDashboard,
+      label: "Dashboard",
+      roles: ["manager", "foreman"],
+    },
   ];
 
   const groups: MenuGroup[] = [
     {
-      label: 'Master Data',
+      label: "Master Data",
       items: [
-        { path: '/master/users', icon: UserCog, label: 'Pengguna (Login)', roles: ['manager'] },
-        { path: '/master/workers', icon: Users, label: 'Karyawan', roles: ['manager'] },
-        { path: '/master/companies', icon: Building2, label: 'Perusahaan', roles: ['manager'] },
-        { path: '/master/locations', icon: MapPin, label: 'Data Aresta', roles: ['manager'] },
-        { path: '/transactions/closing', icon: FileText, label: 'Periode Closing Transaksi', roles: ['manager'] },
+        {
+          path: "/master/users",
+          icon: UserCog,
+          label: "Pengguna (Login)",
+          roles: ["manager"],
+        },
+        {
+          path: "/master/workers",
+          icon: Users,
+          label: "Karyawan",
+          roles: ["manager"],
+        },
+        {
+          path: "/master/companies",
+          icon: Building2,
+          label: "Perusahaan",
+          roles: ["manager"],
+        },
+        {
+          path: "/master/pekerjaan",
+          icon: FileText,
+          label: "Pekerjaan",
+          roles: ["manager"],
+        },
+        {
+          path: "/master/locations",
+          icon: MapPin,
+          label: "Data Aresta",
+          roles: ["manager"],
+        },
+        {
+          path: "/transactions/closing",
+          icon: FileText,
+          label: "Periode Closing Transaksi",
+          roles: ["manager"],
+        },
       ],
     },
     {
-      label: 'Transaksi',
+      label: "Transaksi",
       items: [
-        { path: '/taksasi', icon: FileText, label: 'Taksasi', roles: ['manager'] },
-        { path: '/transactions/attendance', icon: CheckSquare, label: 'Absensi Harian', roles: ['manager', 'foreman'] },
-        { path: '/master/targets', icon: FileText, label: 'Realisasi', roles: ['manager'] },
-        { path: '/transactions/angkut', icon: Truck, label: 'Angkutan', roles: ['manager', 'foreman'] },
+        {
+          path: "/taksasi",
+          icon: FileText,
+          label: "Taksasi",
+          roles: ["manager"],
+        },
+        {
+          path: "/transactions/attendance",
+          icon: CheckSquare,
+          label: "Absensi Harian",
+          roles: ["manager", "foreman"],
+        },
+        {
+          path: "/master/targets",
+          icon: FileText,
+          label: "Realisasi",
+          roles: ["manager"],
+        },
+        {
+          path: "/transactions/angkut",
+          icon: Truck,
+          label: "Angkutan",
+          roles: ["manager", "foreman"],
+        },
       ],
     },
     {
-      label: 'Report Panen',
+      label: "Report Panen",
       items: [
-        { path: '/reports/taksasi', icon: BarChart3, label: 'Report Taksasi', roles: ['manager', 'foreman'] },
-        { path: '/reports/statement', icon: Download, label: 'Report Realisasi', roles: ['manager', 'foreman'] },
-        { path: '/reports/trend', icon: BarChart3, label: 'Laporan Tren', roles: ['manager', 'foreman'] },
+        {
+          path: "/reports/taksasi",
+          icon: BarChart3,
+          label: "Report Taksasi",
+          roles: ["manager", "foreman"],
+        },
+        {
+          path: "/reports/statement",
+          icon: Download,
+          label: "Report Realisasi",
+          roles: ["manager", "foreman"],
+        },
+        {
+          path: "/reports/trend",
+          icon: BarChart3,
+          label: "Laporan Tren",
+          roles: ["manager", "foreman"],
+        },
       ],
     },
   ];
 
   const others: MenuItem[] = [
-    { path: '/verification', icon: CheckSquare, label: 'Verifikasi', roles: ['foreman'] },
-    { path: '/recap', icon: BarChart3, label: 'Rekapitulasi', roles: ['manager'] },
-    { path: '/activity-logs', icon: Activity, label: 'Log Aktivitas', roles: ['manager'] },
+    {
+      path: "/verification",
+      icon: CheckSquare,
+      label: "Verifikasi",
+      roles: ["foreman"],
+    },
+    {
+      path: "/recap",
+      icon: BarChart3,
+      label: "Rekapitulasi",
+      roles: ["manager"],
+    },
+    {
+      path: "/activity-logs",
+      icon: Activity,
+      label: "Log Aktivitas",
+      roles: ["manager"],
+    },
   ];
 
   const canSee = (item: MenuItem) => user && item.roles.includes(user.role);
   const visibleTop = topLevel.filter(canSee);
   const visibleGroups = groups
-    .map(g => ({ label: g.label, items: g.items.filter(canSee) }))
-    .filter(g => g.items.length > 0);
+    .map((g) => ({ label: g.label, items: g.items.filter(canSee) }))
+    .filter((g) => g.items.length > 0);
   const visibleOthers = others.filter(canSee);
 
   return (
@@ -76,8 +181,8 @@ const Layout = ({ children }: LayoutProps) => {
       {/* Sidebar */}
       <aside
         className={cn(
-          'bg-card border-r border-border transition-all duration-300 flex flex-col',
-          sidebarOpen ? 'w-64' : 'w-16'
+          "bg-card border-r border-border transition-all duration-300 flex flex-col",
+          sidebarOpen ? "w-64" : "w-16"
         )}
       >
         <div className="flex h-16 items-center justify-between px-4 border-b border-border">
@@ -109,8 +214,10 @@ const Layout = ({ children }: LayoutProps) => {
                 key={item.path}
                 to={item.path}
                 className={cn(
-                  'flex items-center gap-3 px-3 py-2 rounded-md transition-colors',
-                  isActive ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-secondary hover:text-secondary-foreground'
+                  "flex items-center gap-3 px-3 py-2 rounded-md transition-colors",
+                  isActive
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:bg-secondary hover:text-secondary-foreground"
                 )}
               >
                 <Icon className="h-5 w-5 shrink-0" />
@@ -122,9 +229,11 @@ const Layout = ({ children }: LayoutProps) => {
           {/* Groups */}
           {visibleGroups.map((group) => (
             <div key={group.label} className="mt-3">
-              <div className={cn('px-3 py-2 text-muted-foreground')}>
+              <div className={cn("px-3 py-2 text-muted-foreground")}>
                 {sidebarOpen ? (
-                  <span className="text-xs font-semibold uppercase tracking-wide">{group.label}</span>
+                  <span className="text-xs font-semibold uppercase tracking-wide">
+                    {group.label}
+                  </span>
                 ) : (
                   <div className="h-2 w-2 rounded-full bg-muted-foreground" />
                 )}
@@ -138,8 +247,10 @@ const Layout = ({ children }: LayoutProps) => {
                       key={item.path}
                       to={item.path}
                       className={cn(
-                        'ml-6 flex items-center gap-3 px-3 py-2 rounded-md transition-colors',
-                        isActive ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-secondary hover:text-secondary-foreground'
+                        "ml-6 flex items-center gap-3 px-3 py-2 rounded-md transition-colors",
+                        isActive
+                          ? "bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:bg-secondary hover:text-secondary-foreground"
                       )}
                     >
                       <Icon className="h-4 w-4 shrink-0" />
@@ -160,8 +271,10 @@ const Layout = ({ children }: LayoutProps) => {
                 key={item.path}
                 to={item.path}
                 className={cn(
-                  'flex items-center gap-3 px-3 py-2 rounded-md transition-colors',
-                  isActive ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-secondary hover:text-secondary-foreground'
+                  "flex items-center gap-3 px-3 py-2 rounded-md transition-colors",
+                  isActive
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:bg-secondary hover:text-secondary-foreground"
                 )}
               >
                 <Icon className="h-5 w-5 shrink-0" />
@@ -199,7 +312,9 @@ const Layout = ({ children }: LayoutProps) => {
           <div className="flex items-center gap-4">
             <div className="text-right">
               <p className="text-sm font-medium">{user?.name}</p>
-              <p className="text-xs text-muted-foreground capitalize">{user?.role}</p>
+              <p className="text-xs text-muted-foreground capitalize">
+                {user?.role}
+              </p>
             </div>
             <Button variant="outline" size="icon" onClick={handleLogout}>
               <LogOut className="h-5 w-5" />
@@ -208,9 +323,7 @@ const Layout = ({ children }: LayoutProps) => {
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 overflow-auto p-6">
-          {children}
-        </main>
+        <main className="flex-1 overflow-auto p-6">{children}</main>
       </div>
     </div>
   );

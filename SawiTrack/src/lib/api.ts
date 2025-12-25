@@ -2,7 +2,8 @@
 import { getToken } from "./authStore";
 // Resolve API base; allow relative '/api' to be expanded to current origin
 const RAW_API_BASE =
-  import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? "/api" : "http://localhost:5000/api");
+  import.meta.env.VITE_API_BASE_URL ||
+  (import.meta.env.PROD ? "/api" : "http://localhost:5000/api");
 export const API_BASE =
   RAW_API_BASE.startsWith("/") && typeof window !== "undefined"
     ? `${window.location.origin}${RAW_API_BASE}`
@@ -79,6 +80,18 @@ export interface Company {
   email?: string;
   estates?: Array<{ _id: string; estate_name: string }>;
   status?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface Pekerjaan {
+  _id: string;
+  no_akun: string;
+  jenis_pekerjaan: string;
+  aktivitas: string;
+  satuan?: string;
+  tipe?: string;
+  status: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -558,8 +571,10 @@ export const api = {
           }).catch((inner) => {
             // Provide a clearer combined error
             throw new Error(
-              `Activity logs endpoint tidak ditemukan. Coba cek backend routes /activity-logs & /activitylogs. Asli: ${err.message
-              }; Alias: ${inner instanceof Error ? inner.message : String(inner)
+              `Activity logs endpoint tidak ditemukan. Coba cek backend routes /activity-logs & /activitylogs. Asli: ${
+                err.message
+              }; Alias: ${
+                inner instanceof Error ? inner.message : String(inner)
               }`
             );
           });
@@ -587,4 +602,26 @@ export const api = {
     }),
   deleteClosingPeriod: (id: string) =>
     http<{ ok: boolean }>(`/closing-periods/${id}`, { method: "DELETE" }),
+
+  // Pekerjaan (Master Data)
+  pekerjaan: () => http<Pekerjaan[]>(`/pekerjaan`),
+  pekerjaanDetail: (id: string) => http<Pekerjaan>(`/pekerjaan/${id}`),
+  createPekerjaan: (body: {
+    no_akun: string;
+    jenis_pekerjaan: string;
+    aktivitas: string;
+    satuan?: string;
+    tipe?: string;
+  }) =>
+    http<Pekerjaan>(`/pekerjaan`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  updatePekerjaan: (id: string, body: Partial<Pekerjaan>) =>
+    http<Pekerjaan>(`/pekerjaan/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+  deletePekerjaan: (id: string) =>
+    http<{ ok: boolean }>(`/pekerjaan/${id}`, { method: "DELETE" }),
 };

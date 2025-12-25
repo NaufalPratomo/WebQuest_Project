@@ -19,6 +19,7 @@ import Attendance from "./models/Attendance.js";
 import JobCode from "./models/JobCode.js";
 import ClosingPeriod from "./models/ClosingPeriod.js";
 import ActivityLog from "./models/ActivityLog.js";
+import Pekerjaan from "./models/Pekerjaan.js";
 import path from "path";
 import { fileURLToPath } from "url";
 import bcrypt from "bcryptjs";
@@ -51,7 +52,8 @@ const corsOptions = {
     if (!origin) return callback(null, true);
 
     // Check against allowed origins
-    const isAllowed = allowedOrigins.includes("*") || allowedOrigins.includes(origin);
+    const isAllowed =
+      allowedOrigins.includes("*") || allowedOrigins.includes(origin);
 
     // Auto-allow all Vercel domains if running on Vercel (includes previews)
     const isVercel = process.env.VERCEL && origin.endsWith(".vercel.app");
@@ -772,6 +774,73 @@ app.get(`${API_BASE_PATH}/closing-periods`, async (_req, res) => {
   }
 });
 
+// Pekerjaan (Master Data)
+app.get(`${API_BASE_PATH}/pekerjaan`, async (_req, res) => {
+  try {
+    const docs = await Pekerjaan.find({}).sort({ createdAt: -1 }).lean();
+    res.json(docs);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get(`${API_BASE_PATH}/pekerjaan/:id`, async (req, res) => {
+  try {
+    const doc = await Pekerjaan.findById(req.params.id).lean();
+    if (!doc) return res.status(404).json({ error: "Not found" });
+    res.json(doc);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post(`${API_BASE_PATH}/pekerjaan`, async (req, res) => {
+  try {
+    const { no_akun, jenis_pekerjaan, aktivitas, satuan, tipe } = req.body;
+    if (!no_akun || !jenis_pekerjaan) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+    const created = await Pekerjaan.create({
+      no_akun,
+      jenis_pekerjaan,
+      aktivitas,
+      satuan,
+      tipe,
+    });
+    logActivity(req, "CREATE_PEKERJAAN", { no_akun, jenis_pekerjaan });
+    res.status(201).json(created);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put(`${API_BASE_PATH}/pekerjaan/:id`, async (req, res) => {
+  try {
+    const updated = await Pekerjaan.findByIdAndUpdate(req.params.id, req.body, {
+      new: true,
+    }).lean();
+    if (!updated) return res.status(404).json({ error: "Not found" });
+    logActivity(req, "UPDATE_PEKERJAAN", {
+      id: req.params.id,
+      updates: req.body,
+    });
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete(`${API_BASE_PATH}/pekerjaan/:id`, async (req, res) => {
+  try {
+    const deleted = await Pekerjaan.findByIdAndDelete(req.params.id);
+    if (!deleted) return res.status(404).json({ error: "Not found" });
+    logActivity(req, "DELETE_PEKERJAAN", { id: req.params.id });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post(`${API_BASE_PATH}/closing-periods`, async (req, res) => {
   try {
     const { startDate, endDate, notes, month, year } = req.body;
@@ -794,11 +863,9 @@ app.post(`${API_BASE_PATH}/closing-periods`, async (req, res) => {
       $or: [{ startDate: { $lte: end }, endDate: { $gte: start } }],
     });
     if (overlap) {
-      return res
-        .status(400)
-        .json({
-          error: "Periode ini bertabrakan dengan periode yang sudah ditutup.",
-        });
+      return res.status(400).json({
+        error: "Periode ini bertabrakan dengan periode yang sudah ditutup.",
+      });
     }
 
     const created = await ClosingPeriod.create({
@@ -869,19 +936,15 @@ app.put(`${API_BASE_PATH}/reports/:id`, async (req, res) => {
     if (!current) return res.status(404).json({ error: "Not found" });
 
     if (await checkDateClosed(current.date)) {
-      return res
-        .status(400)
-        .json({
-          error:
-            "Periode transaksi ini sudah ditutup. Tidak dapat mengubah data.",
-        });
+      return res.status(400).json({
+        error:
+          "Periode transaksi ini sudah ditutup. Tidak dapat mengubah data.",
+      });
     }
     if (req.body.date && (await checkDateClosed(req.body.date))) {
-      return res
-        .status(400)
-        .json({
-          error: "Tanggal baru berada dalam periode yang sudah ditutup.",
-        });
+      return res.status(400).json({
+        error: "Tanggal baru berada dalam periode yang sudah ditutup.",
+      });
     }
 
     const updated = await Report.findByIdAndUpdate(req.params.id, req.body, {
@@ -903,12 +966,10 @@ app.delete(`${API_BASE_PATH}/reports/:id`, async (req, res) => {
     if (!current) return res.status(404).json({ error: "Not found" });
 
     if (await checkDateClosed(current.date)) {
-      return res
-        .status(400)
-        .json({
-          error:
-            "Periode transaksi ini sudah ditutup. Tidak dapat menghapus data.",
-        });
+      return res.status(400).json({
+        error:
+          "Periode transaksi ini sudah ditutup. Tidak dapat menghapus data.",
+      });
     }
 
     const deleted = await Report.findByIdAndDelete(req.params.id).lean();
@@ -1084,10 +1145,10 @@ app.get(`${API_BASE_PATH}/stats`, async (req, res) => {
 
     const percent = targets.length
       ? Math.round(
-        (targets.reduce((sum, t) => sum + (t.achieved || 0), 0) /
-          targets.reduce((sum, t) => sum + (t.target || 0), 0)) *
-        100
-      )
+          (targets.reduce((sum, t) => sum + (t.achieved || 0), 0) /
+            targets.reduce((sum, t) => sum + (t.target || 0), 0)) *
+            100
+        )
       : 0;
 
     res.json({
@@ -1365,11 +1426,9 @@ app.delete(`${API_BASE_PATH}/panen/:id`, async (req, res) => {
 
     // Check if date is closed
     if (await checkDateClosed(existing.date_panen)) {
-      return res
-        .status(400)
-        .json({
-          error: `Periode untuk tanggal ${existing.date_panen} sudah ditutup.`,
-        });
+      return res.status(400).json({
+        error: `Periode untuk tanggal ${existing.date_panen} sudah ditutup.`,
+      });
     }
 
     await Panen.findByIdAndDelete(req.params.id);
@@ -1497,11 +1556,9 @@ app.put(`${API_BASE_PATH}/attendance/:id`, async (req, res) => {
     if (filter.division_id != null) req.body.division_id = filter.division_id;
 
     if (await checkDateClosed(req.body.date)) {
-      return res
-        .status(400)
-        .json({
-          error: `Periode untuk tanggal ${req.body.date} sudah ditutup.`,
-        });
+      return res.status(400).json({
+        error: `Periode untuk tanggal ${req.body.date} sudah ditutup.`,
+      });
     }
 
     const updated = await Attendance.findByIdAndUpdate(
@@ -1610,8 +1667,8 @@ app.get(`${API_BASE_PATH}/reports/trend`, async (req, res) => {
       String(type) === "taksasi"
         ? Taksasi
         : String(type) === "angkut"
-          ? Angkut
-          : Panen;
+        ? Angkut
+        : Panen;
     const key = String(type) === "angkut" ? "weightKg" : "weightKg";
     const order = String(sort) === "asc" ? 1 : -1;
     const rows = await col
@@ -1749,7 +1806,6 @@ app.get("/activitylogs", handleActivityLogGet);
 
 console.log("✓ Activity log routes registered (all variants)");
 
-
 // Export app for Vercel
 export default app;
 
@@ -1758,7 +1814,9 @@ if (!process.env.VERCEL) {
   connectMongo()
     .then(() => {
       app.listen(PORT, () => {
-        console.log(`API listening on http://localhost:${PORT}${API_BASE_PATH}`);
+        console.log(
+          `API listening on http://localhost:${PORT}${API_BASE_PATH}`
+        );
       });
     })
     .catch((err) => {
@@ -1767,5 +1825,5 @@ if (!process.env.VERCEL) {
     });
 } else {
   // On Vercel, just ensure DB is connected for the handler
-  connectMongo().catch(e => console.error("Vercel DB Connect Error:", e));
+  connectMongo().catch((e) => console.error("Vercel DB Connect Error:", e));
 }

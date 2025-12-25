@@ -285,7 +285,7 @@ const Users = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold">Pengguna Sistem</h1>
+          <h1 className="text-3xl font-bold">Pengguna</h1>
           <p className="text-muted-foreground">Kelola akun pengguna web (login)</p>
         </div>
         <div className="flex gap-2">
@@ -332,7 +332,7 @@ const Users = () => {
                     <SelectTrigger><SelectValue placeholder="Pilih role" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="manager">Manager</SelectItem>
-                      <SelectItem value="foreman">Foreman</SelectItem>
+                      <SelectItem value="foreman">Mandor</SelectItem>
                       <SelectItem value="employee">Employee</SelectItem>
                     </SelectContent>
                   </Select>
@@ -399,7 +399,7 @@ const Users = () => {
                 <TableRow key={user.id}>
                   <TableCell className="font-medium">{user.name}</TableCell>
                   <TableCell>{user.email}</TableCell>
-                  <TableCell><Badge variant="outline" className="capitalize">{user.role}</Badge></TableCell>
+                  <TableCell><Badge variant="outline" className="capitalize">{user.role === 'foreman' ? 'Mandor' : user.role}</Badge></TableCell>
                   <TableCell><Badge variant={user.status === "active" ? "default" : "secondary"}>{user.status === "active" ? "Aktif" : "Nonaktif"}</Badge></TableCell>
                   <TableCell className="text-right">
                     <Button variant="ghost" size="icon" onClick={() => handleEdit(user)}><Edit className="h-4 w-4" /></Button>
@@ -432,7 +432,7 @@ const Users = () => {
                 <SelectTrigger><SelectValue placeholder="Pilih role" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="manager">Manager</SelectItem>
-                  <SelectItem value="foreman">Foreman</SelectItem>
+                  <SelectItem value="foreman">Mandor</SelectItem>
                   <SelectItem value="employee">Employee</SelectItem>
                 </SelectContent>
               </Select>

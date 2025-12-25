@@ -20,7 +20,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { api, type Employee, type Company } from "@/lib/api";
+import { api, type Employee, type Company, type User } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipButton } from "@/components/ui/TooltipButton";
@@ -39,6 +39,7 @@ const Workers = () => {
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState<Employee[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
+  const [foremen, setForemen] = useState<User[]>([]);
   const [openAdd, setOpenAdd] = useState(false);
   const [openEdit, setOpenEdit] = useState(false);
   const [editingWorker, setEditingWorker] = useState<Employee | null>(null);
@@ -46,6 +47,7 @@ const Workers = () => {
     nik: "",
     name: "",
     companyId: "",
+    mandorId: "",
     position: "",
     salary: 0,
     address: "",
@@ -68,10 +70,14 @@ const Workers = () => {
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([api.employees(), api.companies()])
-      .then(([emps, comps]) => {
+    Promise.all([api.employees(), api.companies(), api.users()])
+      .then(([emps, comps, users]) => {
         setRows(emps);
         setCompanies(comps);
+        // Filter users for foremen (mandor)
+        setForemen(users.filter(u => u.role === 'foreman' || u.role === 'manager' || u.role === 'employee')); // Temporarily showing all users or just role foreman? Request said "role mandor". But let's stick to strict if data exists.
+        // Actually request says: relation bagian mandor diambil dari pengguna dengan role mandor
+        setForemen(users.filter(u => u.role === 'foreman'));
       })
       .catch(() =>
         toast({
@@ -100,6 +106,7 @@ const Workers = () => {
       nik: worker.nik,
       name: worker.name,
       companyId: worker.companyId || "",
+      mandorId: worker.mandorId || "",
       position: worker.position || "",
       salary: worker.salary || 0,
       address: worker.address || "",
@@ -131,6 +138,7 @@ const Workers = () => {
         nik: form.nik,
         name: form.name,
         companyId: form.companyId || "",
+        mandorId: form.mandorId || "",
         position: form.position || null,
         salary: form.salary || null,
         address: form.address || null,
@@ -146,7 +154,7 @@ const Workers = () => {
       setRows((prev) =>
         prev.map((w) =>
           w._id === editingWorker._id
-            ? { ...w, ...form, companyId: form.companyId || undefined, status: form.status }
+            ? { ...w, ...form, companyId: form.companyId || undefined, mandorId: form.mandorId || undefined, status: form.status }
             : w
         )
       );
@@ -157,6 +165,7 @@ const Workers = () => {
         nik: "",
         name: "",
         companyId: "",
+        mandorId: "",
         position: "",
         salary: 0,
         address: "",
@@ -265,7 +274,6 @@ const Workers = () => {
           console.log("Normalized JSON Data:", normalizedJsonData);
 
           const parseDate = (dateStr: unknown): string | undefined => {
-            // ... (keep existing parseDate logic)
             if (!dateStr) return undefined;
 
             if (dateStr instanceof Date) {
@@ -381,6 +389,7 @@ const Workers = () => {
             nik: emp.nik!,
             name: emp.name!,
             companyId: emp.companyId,
+            mandorId: emp.mandorId,
             position: emp.position,
             address: emp.address,
             phone: emp.phone,
@@ -403,6 +412,7 @@ const Workers = () => {
             nik: employee.nik!,
             name: employee.name!,
             companyId: employee.companyId || "",
+            mandorId: employee.mandorId || "",
             position: employee.position || null,
             address: employee.address || null,
             phone: employee.phone || null,
@@ -451,11 +461,11 @@ const Workers = () => {
       ];
       const subHeader = [
         "Nama", "NIK KTP", "Kelamin", "Tanggal Lahir", "Agama", "Alamat", "Telepon",
-        "Perusahaan", "Divisi", "Posisi", "Tanggal Masuk Kerja", "Status"
+        "Mandor", "Divisi", "Posisi", "Tanggal Masuk Kerja", "Status"
       ];
 
       const dataRows = filteredWorkers.map((w) => {
-        const company = companies.find((c) => c._id === w.companyId);
+        const mandor = foremen.find((f) => f._id === w.mandorId);
 
         let formattedDate = "-";
         if (w.birthDate) {
@@ -487,7 +497,7 @@ const Workers = () => {
           w.religion || "-",
           w.address || "-",
           w.phone || "-",
-          company?.company_name || "-",
+          mandor?.name || "-",
           w.division || "-",
           w.position || "-",
           formattedJoinDate,
@@ -513,7 +523,7 @@ const Workers = () => {
         { wch: 10 }, // Agama
         { wch: 25 }, // Alamat
         { wch: 15 }, // Telepon
-        { wch: 20 }, // Perusahaan
+        { wch: 20 }, // Mandor
         { wch: 15 }, // Divisi
         { wch: 15 }, // Posisi
         { wch: 15 }, // Tgl Masuk
@@ -676,20 +686,20 @@ const Workers = () => {
                   </div>
 
                   <div className="space-y-2">
-                    <Label>Perusahaan</Label>
+                    <Label>Mandor</Label>
                     <Select
-                      value={form.companyId}
+                      value={form.mandorId}
                       onValueChange={(v) =>
-                        setForm((f) => ({ ...f, companyId: v }))
+                        setForm((f) => ({ ...f, mandorId: v }))
                       }
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Pilih perusahaan" />
+                        <SelectValue placeholder="Pilih mandor" />
                       </SelectTrigger>
                       <SelectContent>
-                        {companies.map((c) => (
-                          <SelectItem key={c._id} value={c._id}>
-                            {c.company_name}
+                        {foremen.map((f) => (
+                          <SelectItem key={f._id} value={f._id}>
+                            {f.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -744,6 +754,7 @@ const Workers = () => {
                         nik: form.nik,
                         name: form.name,
                         companyId: form.companyId || undefined,
+                        mandorId: form.mandorId || undefined,
                         position: form.position || undefined,
                         salary: form.salary || undefined,
                         address: form.address || undefined,
@@ -760,6 +771,7 @@ const Workers = () => {
                         nik: "",
                         name: "",
                         companyId: "",
+                        mandorId: "",
                         position: "",
                         salary: 0,
                         address: "",
@@ -811,69 +823,32 @@ const Workers = () => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead colSpan={7} className="text-center border-r bg-muted/50">Data Karyawan sesuai Kartu Identitas</TableHead>
-                <TableHead colSpan={5} className="text-center bg-muted/50">Data Karyawan Bekerja di Perusahaan</TableHead>
-                <TableHead rowSpan={2} className="text-right bg-muted/50">Aksi</TableHead>
-              </TableRow>
-              <TableRow>
-                <TableHead>Nama</TableHead>
-                <TableHead>NIK KTP</TableHead>
-                <TableHead>Kelamin</TableHead>
-                <TableHead>Tanggal Lahir</TableHead>
-                <TableHead>Agama</TableHead>
-                <TableHead>Alamat</TableHead>
-                <TableHead className="border-r">Telepon</TableHead>
-                <TableHead>Perusahaan</TableHead>
+                <TableHead className="w-[50px] text-center">NO</TableHead>
+                <TableHead>NAMA</TableHead>
+                <TableHead>NIK</TableHead>
+                <TableHead>Mandor</TableHead>
                 <TableHead>Divisi</TableHead>
-                <TableHead>Posisi</TableHead>
-                <TableHead>Tanggal Masuk Kerja</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Aksi</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading && (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center">
+                  <TableCell colSpan={6} className="text-center">
                     Memuat...
                   </TableCell>
                 </TableRow>
               )}
               {!loading &&
-                filteredWorkers.map((worker) => {
-                  const company = companies.find(
-                    (c) => c._id === worker.companyId
-                  );
+                filteredWorkers.map((worker, index) => {
+                  const mandor = foremen.find((f) => f._id === worker.mandorId);
                   return (
                     <TableRow key={worker._id}>
+                      <TableCell className="text-center">{index + 1}</TableCell>
                       <TableCell className="font-medium">{worker.name}</TableCell>
                       <TableCell className="font-mono">{worker.nik}</TableCell>
-                      <TableCell>{worker.gender === 'L' ? 'Laki-laki' : worker.gender === 'P' ? 'Perempuan' : worker.gender || "-"}</TableCell>
-                      <TableCell>
-                        {worker.birthDate
-                          ? new Date(worker.birthDate).toLocaleDateString("id-ID")
-                          : "-"}
-                      </TableCell>
-                      <TableCell>{worker.religion || "-"}</TableCell>
-                      <TableCell>{worker.address || "-"}</TableCell>
-                      <TableCell className="border-r">{worker.phone || "-"}</TableCell>
-
-                      <TableCell>{company?.company_name || "-"}</TableCell>
+                      <TableCell>{mandor?.name || "-"}</TableCell>
                       <TableCell>{worker.division || "-"}</TableCell>
-                      <TableCell>{worker.position || "-"}</TableCell>
-                      <TableCell>
-                        {worker.joinDate
-                          ? new Date(worker.joinDate).toLocaleDateString("id-ID")
-                          : "-"}
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={
-                            worker.status === "active" ? "default" : "secondary"
-                          }
-                        >
-                          {worker.status === "active" ? "Aktif" : "Nonaktif"}
-                        </Badge>
-                      </TableCell>
                       <TableCell className="text-right">
                         <Button
                           variant="ghost"
@@ -997,20 +972,20 @@ const Workers = () => {
               </div>
 
               <div className="space-y-2">
-                <Label>Perusahaan</Label>
+                <Label>Mandor</Label>
                 <Select
-                  value={form.companyId}
+                  value={form.mandorId}
                   onValueChange={(v) =>
-                    setForm((f) => ({ ...f, companyId: v }))
+                    setForm((f) => ({ ...f, mandorId: v }))
                   }
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Pilih perusahaan" />
+                    <SelectValue placeholder="Pilih mandor" />
                   </SelectTrigger>
                   <SelectContent>
-                    {companies.map((c) => (
-                      <SelectItem key={c._id} value={c._id}>
-                        {c.company_name}
+                    {foremen.map((f) => (
+                      <SelectItem key={f._id} value={f._id}>
+                        {f.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -1075,6 +1050,7 @@ const Workers = () => {
                     nik: "",
                     name: "",
                     companyId: "",
+                    mandorId: "",
                     position: "",
                     salary: 0,
                     address: "",

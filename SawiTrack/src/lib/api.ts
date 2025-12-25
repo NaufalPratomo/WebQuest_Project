@@ -27,6 +27,7 @@ export interface Employee {
   nik: string;
   name: string;
   companyId?: string;
+  mandorId?: string;
   position?: string;
   salary?: number;
   address?: string;
@@ -218,6 +219,7 @@ export const api = {
     nik: string;
     name: string;
     companyId?: string;
+    mandorId?: string;
     position?: string;
     salary?: number;
     address?: string;
@@ -238,6 +240,7 @@ export const api = {
       nik: string;
       name: string;
       companyId: string;
+      mandorId: string;
       position: string;
       salary: number;
       address: string;

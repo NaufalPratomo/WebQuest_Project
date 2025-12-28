@@ -556,6 +556,8 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(body),
     }),
+  attendanceDelete: (id: string) =>
+    http<{ ok: boolean }>(`/attendance/${id}`, { method: "DELETE" }),
   // Activity Logs
   activityLogs: (params?: { limit?: number; page?: number }) => {
     const search = toQS(params as Record<string, string | number | undefined>);

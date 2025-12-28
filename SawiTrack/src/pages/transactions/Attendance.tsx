@@ -1,486 +1,306 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus } from 'lucide-react';
-import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { api, Employee } from '@/lib/api';
-import { logActivity } from '@/lib/activityLogger';
-import { toast } from 'sonner';
-import { useAuth } from '@/contexts/AuthContext';
+import { useState, useEffect, useMemo } from "react";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { api, type Employee, type User } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
+import { Loader2 } from "lucide-react";
 
-type AttendanceRow = {
-  _id?: string;
-  date: string;
-  employeeId: string;
-  // derived metadata from taksasi context
-  estateId?: string;
-  estateName?: string;
-  division_id?: number;
-  block_no?: string;
-  mandorId?: string;
-  status: string;
-  hk?: number;
-  notes?: string;
+interface AttendanceRecord {
+    _id: string;
+    date: string;
+    employeeId: string;
+    status: string;
+    division_id?: number;
+    notes?: string;
+    hk?: number;
+}
+
+const Attendance = () => {
+    const { user } = useAuth();
+    const { toast } = useToast();
+    const [loading, setLoading] = useState(false);
+    const [isUpdating, setIsUpdating] = useState(false);
+    const [employees, setEmployees] = useState<Employee[]>([]);
+    const [users, setUsers] = useState<User[]>([]);
+    const [attendanceData, setAttendanceData] = useState<AttendanceRecord[]>([]);
+
+    const currentYear = new Date().getFullYear();
+    const currentMonth = new Date().getMonth();
+
+    const [selectedMonth, setSelectedMonth] = useState<string>(String(currentMonth));
+    const [selectedYear, setSelectedYear] = useState<string>(String(currentYear));
+
+    useEffect(() => {
+        fetchMasterData();
+    }, []);
+
+    useEffect(() => {
+        fetchAttendance();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedMonth, selectedYear]);
+
+    const fetchMasterData = async () => {
+        try {
+            const [empData, userData] = await Promise.all([
+                api.employees(),
+                api.users()
+            ]);
+            setEmployees(empData);
+            setUsers(userData);
+        } catch (error) {
+            console.error("Failed to fetch master data", error);
+            toast({
+                title: "Error",
+                description: "Gagal memuat data master",
+                variant: "destructive",
+            });
+        }
+    };
+
+    const fetchAttendance = async () => {
+        setLoading(true);
+        try {
+            const year = parseInt(selectedYear);
+            const month = parseInt(selectedMonth);
+
+            const startDate = new Date(year, month, 1).toISOString().split('T')[0];
+            const endDate = new Date(year, month + 1, 0).toISOString().split('T')[0];
+
+            const res = await api.attendanceList({ startDate, endDate } as any);
+            setAttendanceData(res as any);
+
+        } catch (error) {
+            console.error("Failed to fetch attendance", error);
+            toast({
+                title: "Error",
+                description: "Gagal memuat data absensi",
+                variant: "destructive",
+            });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const getDaysInMonth = (year: number, month: number) => {
+        return new Date(year, month + 1, 0).getDate();
+    };
+
+    const daysInMonth = getDaysInMonth(parseInt(selectedYear), parseInt(selectedMonth));
+    const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+
+    const getMandorName = (mandorId?: string) => {
+        if (!mandorId) return "-";
+        const user = users.find(u => u._id === mandorId);
+        return user ? user.name : "-";
+    };
+
+    const handleCellClick = async (employeeId: string, day: number) => {
+        if (!user || (user.role !== 'foreman' && user.role !== 'manager')) return;
+        if (loading || isUpdating) return;
+
+        const dateObj = new Date(parseInt(selectedYear), parseInt(selectedMonth), day);
+        // Adjust for timezone offset if necessary to strictly match local date string "YYYY-MM-DD"
+        // Safe way: create date with year, month, day and get component values padded.
+        const y = dateObj.getFullYear();
+        const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const d = String(dateObj.getDate()).padStart(2, '0');
+        const dateStr = `${y}-${m}-${d}`;
+
+        // Find existing attendance
+        // We need to match date string accurately.
+        // Our attendanceData usually has full ISO string "2025-12-01T00:00:00.000Z" coming from backend?
+        // Let's verify how we compare in tableData logic: `new Date(a.date)`.
+        // The `attendanceData` comes from `api.attendanceList`.
+
+        // We search locally for the record
+        const existingRecord = attendanceData.find(a => {
+            const aDate = new Date(a.date);
+            return a.employeeId === employeeId &&
+                aDate.getDate() === day &&
+                aDate.getMonth() === parseInt(selectedMonth) &&
+                aDate.getFullYear() === parseInt(selectedYear);
+        });
+
+        setIsUpdating(true);
+        try {
+            if (existingRecord) {
+                // Delete
+                await api.attendanceDelete(existingRecord._id);
+                setAttendanceData(prev => prev.filter(a => a._id !== existingRecord._id));
+                toast({ description: "Status: Tidak Hadir", duration: 1500 });
+            } else {
+                // Create
+                // We use simple "present" status for now as implied by "1"
+                const res = await api.attendanceCreate({
+                    date: dateStr,
+                    employeeId,
+                    status: 'present',
+                    division_id: undefined, // Optional, can fetch from employee if needed
+                    notes: ''
+                });
+
+                // Add to local state
+                // Backend should return _id, we construct the object
+                // Use dateStr or an ISO string? Backend usually expects ISO or YYYY-MM-DD.
+                // If we send YYYY-MM-DD to `create`, assume it stores correctly.
+                // We need to push an object that satisfies `AttendanceRecord`.
+                // Let's try to match existing format.
+                setAttendanceData(prev => [...prev, {
+                    _id: res._id,
+                    date: dateStr, // logic below parses this correctly as long as new Date(dateStr) works
+                    employeeId,
+                    status: 'present'
+                }]);
+                toast({ description: "Status: Hadir", duration: 1500 });
+            }
+        } catch (error) {
+            console.error("Failed to update attendance", error);
+            toast({
+                title: "Gagal",
+                description: error instanceof Error ? error.message : "Gagal mengupdate absensi",
+                variant: "destructive"
+            });
+        } finally {
+            setIsUpdating(false);
+        }
+    };
+
+    const tableData = useMemo(() => {
+        return employees.map(emp => {
+            const empAttendance = attendanceData.filter(a => a.employeeId === emp._id);
+
+            const attendanceDays = new Set<number>();
+            empAttendance.forEach(a => {
+                const d = new Date(a.date);
+                if (d.getMonth() === parseInt(selectedMonth) && d.getFullYear() === parseInt(selectedYear)) {
+                    attendanceDays.add(d.getDate());
+                }
+            });
+
+            return {
+                ...emp,
+                mandorName: getMandorName(emp.mandorId),
+                attendanceDays,
+                totalPresence: attendanceDays.size
+            };
+        });
+    }, [employees, attendanceData, selectedMonth, selectedYear, users]);
+
+    const sortedData = [...tableData].sort((a, b) => {
+        if (a.mandorName !== b.mandorName) return a.mandorName.localeCompare(b.mandorName);
+        return a.name.localeCompare(b.name);
+    });
+
+    return (
+        <div className="space-y-6">
+            <div className="flex justify-between items-center">
+                <div>
+                    <h1 className="text-3xl font-bold">Absensi Harian</h1>
+                    <p className="text-muted-foreground">Rekap kehadiran karyawan harian</p>
+                </div>
+                <div className="flex gap-2 items-center">
+                    <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                        <SelectTrigger className="w-[140px]">
+                            <SelectValue placeholder="Pilih Bulan" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {Array.from({ length: 12 }, (_, i) => (
+                                <SelectItem key={i} value={String(i)}>
+                                    {new Date(0, i).toLocaleString('id-ID', { month: 'long' })}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <Select value={selectedYear} onValueChange={setSelectedYear}>
+                        <SelectTrigger className="w-[100px]">
+                            <SelectValue placeholder="Tahun" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {Array.from({ length: 3 }, (_, i) => String(currentYear - 1 + i)).map(y => (
+                                <SelectItem key={y} value={y}>{y}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <Button onClick={fetchAttendance} disabled={loading}>
+                        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Refresh"}
+                    </Button>
+                </div>
+            </div>
+
+            <Card>
+                <CardHeader className="pb-2">
+                </CardHeader>
+                <CardContent>
+                    <div className="relative w-full overflow-auto border rounded-md max-h-[75vh]">
+                        <Table className="w-max min-w-full border-collapse">
+                            <TableHeader className="bg-muted sticky top-0 z-30 shadow-sm">
+                                <TableRow>
+                                    <TableHead className="w-[60px] border font-bold text-center bg-muted sticky left-0 z-30">PT</TableHead>
+                                    <TableHead className="w-[80px] border font-bold text-center bg-muted sticky left-[60px] z-30">DIVISI</TableHead>
+                                    <TableHead className="w-[150px] border font-bold text-center bg-muted sticky left-[140px] z-30">Mandoran</TableHead>
+                                    <TableHead className="w-[200px] border font-bold text-center bg-muted sticky left-[290px] z-30 shadow-[4px_0_5px_-2px_rgba(0,0,0,0.1)]">Nama Karyawan</TableHead>
+                                    {daysArray.map(day => (
+                                        <TableHead key={day} className="w-[35px] min-w-[35px] border text-center p-1 text-xs font-medium">
+                                            {day}
+                                        </TableHead>
+                                    ))}
+                                    <TableHead className="w-[80px] border font-bold text-center bg-muted sticky right-0 z-30">Total</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {sortedData.map((row) => (
+                                    <TableRow key={row._id} className="hover:bg-muted/10">
+                                        <TableCell className="border text-center sticky left-0 bg-background z-20">PALMA</TableCell>
+                                        <TableCell className="border text-center sticky left-[60px] bg-background z-20">{row.division || "-"}</TableCell>
+                                        <TableCell className="border text-center font-medium sticky left-[140px] bg-background z-20 truncate max-w-[150px]">{row.mandorName}</TableCell>
+                                        <TableCell className="border font-medium sticky left-[290px] bg-background z-20 whitespace-nowrap shadow-[4px_0_5px_-2px_rgba(0,0,0,0.1)]">{row.name}</TableCell>
+                                        {daysArray.map(day => (
+                                            <TableCell
+                                                key={day}
+                                                className={`border text-center p-0 h-8 transition-colors ${(user?.role === 'foreman' || user?.role === 'manager')
+                                                    ? "cursor-pointer hover:bg-muted/30"
+                                                    : ""
+                                                    }`}
+                                                onClick={() => handleCellClick(row._id, day)}
+                                            >
+                                                {row.attendanceDays.has(day) ? (
+                                                    <div className="flex items-center justify-center w-full h-full text-green-600 font-bold bg-green-50">1</div>
+                                                ) : null}
+                                            </TableCell>
+                                        ))}
+                                        <TableCell className="border text-center font-bold sticky right-0 bg-background z-20">{row.totalPresence}</TableCell>
+                                    </TableRow>
+                                ))}
+                                {sortedData.length === 0 && (
+                                    <TableRow>
+                                        <TableCell colSpan={4 + daysArray.length + 1} className="text-center py-8 text-muted-foreground">
+                                            Tidak ada data untuk periode ini
+                                        </TableCell>
+                                    </TableRow>
+                                )}
+                            </TableBody>
+                        </Table>
+                    </div>
+                </CardContent>
+            </Card>
+        </div>
+    );
 };
 
-// map localized status to backend enum and vice versa
-type BackendStatus = 'present' | 'absent' | 'leave';
-function toBackendStatus(local: string): { backend: BackendStatus; note?: string } {
-  switch (local) {
-    case 'hadir':
-      return { backend: 'present', note: 'status_local=hadir' };
-    case 'izin_dibayar':
-      return { backend: 'leave', note: 'status_local=izin_dibayar' };
-    case 'sakit':
-    case 'tidak_hadir_diganti':
-    case 'mangkir':
-      return { backend: 'absent', note: `status_local=${local}` };
-    case 'present':
-    case 'absent':
-    case 'leave':
-    default:
-      // already backend or unknown -> pass through best effort
-      return { backend: (['present', 'absent', 'leave'].includes(local) ? (local as BackendStatus) : 'absent'), note: undefined };
-  }
-}
-
-function toLocalStatus(backendOrLocal: string): string {
-  // If already one of our localized set, return as-is
-  const localized = ['hadir', 'sakit', 'tidak_hadir_diganti', 'mangkir', 'izin_dibayar'];
-  if (localized.includes(backendOrLocal)) return backendOrLocal;
-  // Map backend enums to our defaults
-  if (backendOrLocal === 'present') return 'hadir';
-  if (backendOrLocal === 'leave') return 'izin_dibayar';
-  if (backendOrLocal === 'absent') return 'sakit';
-  return '';
-}
-
-export default function Attendance() {
-  const { user } = useAuth();
-  const [date, setDate] = useState<string>(new Date().toISOString().slice(0, 10));
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [employeeId, setEmployeeId] = useState<string>('');
-  const [status, setStatus] = useState<string>('hadir');
-  const [notes] = useState<string>('');
-  const [rows, setRows] = useState<AttendanceRow[]>([]);
-  // Removed legacy localStorage keys; data now fully server-driven
-
-  // compute taksasi context for the date (use the latest entry for that day)
-  const [taksasiContext, setTaksasiContext] = useState<Pick<AttendanceRow, 'estateId' | 'estateName' | 'division_id' | 'block_no' | 'mandorId'> | null>(null);
-  const [estates, setEstates] = useState<Array<{ _id: string; estate_name: string }>>([]);
-  
-  useEffect(() => {
-    api.estates().then(setEstates).catch(() => setEstates([]));
-  }, []);
-  
-  useEffect(() => {
-    (async () => {
-      try {
-        const list = await api.taksasiList({ date });
-        if (list && list.length > 0) {
-          // pick latest by updatedAt or _id order
-            const sorted = [...list].sort((a,b)=> String(a._id).localeCompare(String(b._id)));
-            const latest = sorted.at(-1)!;
-            const estateName = estates.find(e => e._id === latest.estateId)?.estate_name || latest.estateId;
-            setTaksasiContext({
-              estateId: latest.estateId,
-              estateName: estateName,
-              division_id: latest.division_id,
-              block_no: latest.block_no,
-              mandorId: (user?.id || user?._id) as string | undefined,
-            });
-        } else setTaksasiContext(null);
-      } catch { setTaksasiContext(null); }
-    })();
-  }, [date, user?.id, user?._id, estates]);
-
-  useEffect(() => {
-    api.employees()
-      .then(base => {
-        api.customWorkers()
-          .then(custom => {
-            const merged: Employee[] = [ ...(base||[]), ...((custom||[]).map(c => ({ _id: c._id, nik: '', name: c.name, status: 'active' as const })) ) ];
-            setEmployees(merged);
-          })
-          .catch(() => setEmployees(base||[]));
-      })
-      .catch(() => setEmployees([]));
-  }, [date]);
-
-  useEffect(() => {
-    // load existing entries for the date and merge with taksasi selection
-    (async () => {
-      try {
-        const list = await api.attendanceList({ date });
-        const serverRows = (list.map(r => ({
-          ...r,
-          estateId: taksasiContext?.estateId,
-          estateName: taksasiContext?.estateName,
-          division_id: r.division_id ?? taksasiContext?.division_id,
-          block_no: taksasiContext?.block_no,
-          mandorId: taksasiContext?.mandorId,
-          status: toLocalStatus(r.status),
-        })) as AttendanceRow[]);
-        // fetch taksasi selection employeeIds
-        let selected: string[] = [];
-        if (taksasiContext) {
-          console.log('Loading taksasi selections with context:', taksasiContext);
-          const selDocs = await api.taksasiSelections({ date, estateId: taksasiContext.estateId, division_id: taksasiContext.division_id, block_no: taksasiContext.block_no });
-          if (selDocs && selDocs.length > 0) {
-            selected = selDocs[0].employeeIds || [];
-            console.log('Found selected employees:', selected);
-          }
-        }
-        const missing: AttendanceRow[] = selected
-          .filter(empId => !serverRows.some(sr => sr.employeeId === empId))
-          .map(empId => ({
-            date,
-            employeeId: empId,
-            status: '',
-            estateId: taksasiContext?.estateId,
-            estateName: taksasiContext?.estateName,
-            division_id: taksasiContext?.division_id,
-            block_no: taksasiContext?.block_no,
-            mandorId: taksasiContext?.mandorId,
-          }));
-        console.log('Missing employees to add to attendance table:', missing.length);
-        setRows([...serverRows, ...missing]);
-      } catch { setRows([]); }
-    })();
-  }, [date, taksasiContext]);
-
-  // Attendance now only records presence status; wages handled in Upah page
-
-  const filtered = useMemo(() => rows.filter(r => r.date.startsWith(date)), [rows, date]);
-
-  const noteVal = (notes: string | undefined, key: string): string => {
-    if (!notes) return '';
-    try {
-      const parts = notes.split(/;\s*/);
-      for (const p of parts) {
-        const [k, v] = p.split('=');
-        if (k && k.trim() === key) return v ?? '';
-      }
-      return '';
-    } catch { return ''; }
-  };
-
-  const addRow = async () => {
-    try {
-      if (!date || !employeeId || !status) {
-        toast.error('Lengkapi input');
-        return;
-      }
-      const map = toBackendStatus(status);
-      const body = { date, employeeId, status: map.backend, division_id: taksasiContext?.division_id, notes: map.note } as const;
-      await api.attendanceCreate(body);
-      toast.success('Absensi tersimpan');
-      logActivity({ action: 'attendance_create', category: 'attendance', level: 'info', details: { date, employeeId, status: map.backend } });
-      // if present/hadir, auto-generate placeholder in Real Harvest storage
-      if (map.backend === 'present' && taksasiContext) {
-        const emp = employees.find(e => e._id === employeeId);
-        try {
-          await api.panenCreate({
-            date_panen: date,
-            estateId: taksasiContext.estateId,
-            division_id: taksasiContext.division_id,
-            block_no: taksasiContext.block_no,
-            weightKg: 0,
-            employeeId,
-            employeeName: emp?.name || employeeId,
-            mandorId: taksasiContext.mandorId,
-            mandorName: user?.name,
-            janjangTBS: 0,
-            jobCode: 'panen',
-            notes: 'placeholder=1'
-          });
-        } catch { /* ignore placeholder failure */ }
-      }
-      // reload list
-      const latest = await api.attendanceList({ date });
-      // re-merge with selection
-      let selected: string[] = [];
-      try {
-        if (taksasiContext) {
-          const selDocs = await api.taksasiSelections({ date, estateId: taksasiContext.estateId, division_id: taksasiContext.division_id, block_no: taksasiContext.block_no });
-          if (selDocs && selDocs.length > 0) selected = selDocs[0].employeeIds || [];
-        }
-      } catch { selected = []; }
-      const serverRows = (latest as AttendanceRow[]).map(r => ({
-        ...r,
-        estateId: taksasiContext?.estateId,
-        estateName: taksasiContext?.estateName,
-        division_id: r.division_id ?? taksasiContext?.division_id,
-        block_no: taksasiContext?.block_no,
-        mandorId: taksasiContext?.mandorId,
-        status: toLocalStatus(r.status),
-      }));
-      const missing: AttendanceRow[] = selected
-        .filter(id => !serverRows.some(sr => sr.employeeId === id))
-        .map(id => ({
-          date,
-          employeeId: id,
-          status: '',
-          estateId: taksasiContext?.estateId,
-          estateName: taksasiContext?.estateName,
-          division_id: taksasiContext?.division_id,
-          block_no: taksasiContext?.block_no,
-          mandorId: taksasiContext?.mandorId,
-        }));
-      setRows([...serverRows, ...missing]);
-      // reset some inputs
-      setEmployeeId('');
-      setStatus('hadir');
-    } catch (e: unknown) {
-      let msg = e instanceof Error ? e.message : 'Gagal menyimpan';
-      try {
-        const parsed = JSON.parse(msg);
-        if (parsed && typeof parsed === 'object' && 'error' in parsed) {
-          const maybeError = (parsed as { error?: string }).error;
-          if (maybeError) msg = maybeError;
-        }
-      } catch { /* ignore */ }
-      toast.error(msg);
-    }
-  };
-
-  const saveInline = async (r: AttendanceRow) => {
-    if (!r.employeeId || !r.status) {
-      toast.error('Pilih status');
-      return;
-    }
-    try {
-      const map = toBackendStatus(r.status);
-      const body = { date, employeeId: r.employeeId, status: map.backend, division_id: r.division_id ?? taksasiContext?.division_id, notes: map.note };
-      
-      // Check if attendance already exists (has _id)
-      let savedId = r._id;
-      if (r._id && r._id !== 'saved') {
-        // Update existing attendance
-        await api.attendanceUpdate(r._id, body);
-      } else {
-        // Create new attendance
-        const created = await api.attendanceCreate(body);
-        savedId = created._id;
-      }
-
-      // Handle panen placeholder based on status change
-      if (taksasiContext) {
-        const emp = employees.find(e => e._id === r.employeeId);
-        
-        // If changing to hadir/present, ensure panen placeholder exists
-        if (map.backend === 'present') {
-          try {
-            await api.panenCreate({
-              date_panen: date,
-              estateId: taksasiContext.estateId,
-              division_id: taksasiContext.division_id,
-              block_no: taksasiContext.block_no,
-              weightKg: 0,
-              employeeId: r.employeeId,
-              employeeName: emp?.name || r.employeeId,
-              mandorId: taksasiContext.mandorId,
-              mandorName: user?.name,
-              janjangTBS: 0,
-              jobCode: 'panen',
-              notes: 'placeholder=1'
-            });
-          } catch { /* ignore - placeholder may already exist */ }
-        } 
-        // If changing to non-hadir (sakit/mangkir/izin), delete panen placeholder
-        else if (map.backend === 'absent' || map.backend === 'leave') {
-          try {
-            // Find and delete panen for this employee on this date
-            const panenList = await api.panenList({ 
-              date_panen: date, 
-              estateId: taksasiContext.estateId,
-              division_id: taksasiContext.division_id,
-              block_no: taksasiContext.block_no
-            });
-            const employeePanen = panenList.filter(p => p.employeeId === r.employeeId);
-            for (const p of employeePanen) {
-              if (p._id) {
-                await api.panenDelete(p._id);
-              }
-            }
-          } catch { /* ignore - panen may not exist */ }
-        }
-      }
-
-      // Update only this row, keep other rows' unsaved status
-      setRows(prev => prev.map(row => 
-        row.employeeId === r.employeeId 
-          ? { ...row, _id: savedId, status: r.status } 
-          : row
-      ));
-      toast.success('Status diperbarui');
-      logActivity({ action: 'attendance_update', category: 'attendance', level: 'info', details: { date, employeeId: r.employeeId, status: map.backend } });
-    } catch (e: unknown) {
-      let msg = e instanceof Error ? e.message : 'Gagal memperbarui';
-      try {
-        const parsed = JSON.parse(msg);
-        if (parsed && typeof parsed === 'object' && 'error' in parsed) {
-          const maybeError = (parsed as { error?: string }).error;
-          if (maybeError) msg = maybeError;
-        }
-      } catch { /* ignore */ }
-      toast.error(msg);
-    }
-  };
-
-  return (
-    <div className="space-y-4">
-      <Card>
-        <CardHeader>
-          <h3 className="text-lg font-semibold">Absensi Harian</h3>
-        </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
-          <div>
-            <Label>Tanggal</Label>
-            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-          </div>
-          <div className="col-span-2 md:col-span-4">
-            {/* Add attendance via dialog */}
-            <Dialog>
-              <DialogTrigger asChild>
-                <Button className="bg-orange-500 hover:bg-orange-600"><Plus className="mr-2 h-4 w-4" />Tambah Absensi</Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Tambah Absensi Harian</DialogTitle>
-                </DialogHeader>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label>Tgl_Panen</Label>
-                    <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-                  </div>
-                  <div>
-                    <Label>Pemanen</Label>
-                    <Select value={employeeId} onValueChange={(v) => setEmployeeId(v)}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Pilih pemanen" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {employees.map(emp => (
-                          <SelectItem key={emp._id} value={emp._id}>{emp.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>sts_hadir</Label>
-                    <Select value={status} onValueChange={(v) => setStatus(v)}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Pilih status" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="hadir">hadir</SelectItem>
-                        <SelectItem value="sakit">sakit</SelectItem>
-                        <SelectItem value="mangkir">mangkir/alpha</SelectItem>
-                        <SelectItem value="izin_dibayar">izin dibayar</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div className="flex gap-2 mt-2">
-                  <Button onClick={addRow}>Simpan</Button>
-                </div>
-              </DialogContent>
-            </Dialog>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <h3 className="text-lg font-semibold">Data Absensi Tanggal {date}</h3>
-          <div className="flex gap-4 mt-2 text-sm">
-            <span className="px-3 py-1 bg-green-100 text-green-700 rounded">Hadir: {filtered.filter(r => r.status === 'hadir').length}</span>
-            <span className="px-3 py-1 bg-yellow-100 text-yellow-700 rounded">Sakit: {filtered.filter(r => r.status === 'sakit').length}</span>
-            <span className="px-3 py-1 bg-red-100 text-red-700 rounded">Mangkir: {filtered.filter(r => r.status === 'mangkir').length}</span>
-            <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded">Izin: {filtered.filter(r => r.status === 'izin_dibayar').length}</span>
-            <span className="px-3 py-1 bg-gray-100 text-gray-700 rounded">Belum diisi: {filtered.filter(r => !r.status).length}</span>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Tgl_Panen</TableHead>
-                  <TableHead>Estate</TableHead>
-                  <TableHead>Div</TableHead>
-                  <TableHead>Blok</TableHead>
-                  <TableHead>Mandor</TableHead>
-                  <TableHead>Pemanen</TableHead>
-                  <TableHead>sts_hadir</TableHead>
-                  <TableHead>Aksi</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map((r, idx) => {
-                  const emp = employees.find(e => e._id === r.employeeId);
-                  const divFromNotes = noteVal(r.notes, 'div');
-                  const blokFromNotes = noteVal(r.notes, 'blok');
-                  const mandorFromNotes = noteVal(r.notes, 'mandor');
-                  const pemanenFromNotes = noteVal(r.notes, 'pemanen');
-                  // Extract status from notes (first part before semicolon, or from status field)
-                  let statusLabel = '';
-                  if (r.notes) {
-                    const firstPart = r.notes.split(';')[0].trim();
-                    if (['hadir', 'sakit', 'alpha', 'izin_dibayar'].includes(firstPart)) {
-                      statusLabel = firstPart;
-                    }
-                  }
-                  // Fallback to mapped status if not found in notes
-                  if (!statusLabel) {
-                    if (r.status === 'present') statusLabel = 'hadir';
-                    else if (r.status === 'absent') statusLabel = 'alpha';
-                    else if (r.status === 'leave') statusLabel = 'sakit';
-                    else statusLabel = r.status;
-                  }
-                  return (
-                    <TableRow key={r._id || idx}>
-                      <TableCell>{r.date ? new Date(r.date).toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'}</TableCell>
-                      <TableCell>{r.estateName ?? '-'}</TableCell>
-                      <TableCell>{r.division_id ? `Divisi ${r.division_id}` : '-'}</TableCell>
-                      <TableCell>{r.block_no ?? '-'}</TableCell>
-                      <TableCell>{user?.name || '-'}</TableCell>
-                      <TableCell>{emp?.name || r.employeeId}</TableCell>
-                      <TableCell>
-                        <select
-                          className="h-9 border rounded px-2"
-                          value={toLocalStatus(r.status) || ''}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setRows(prev => prev.map((row, i) => i === idx ? { ...row, status: val } : row));
-                          }}
-                        >
-                          <option value="">- pilih -</option>
-                          <option value="hadir">Hadir</option>
-                          <option value="sakit">Sakit</option>
-                          <option value="mangkir">Mangkir/Alpha</option>
-                          <option value="izin_dibayar">Izin dibayar</option>
-                        </select>
-                      </TableCell>
-                      <TableCell>
-                        <Button size="sm" onClick={() => saveInline(r)}>Simpan</Button>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-                {filtered.length === 0 && (
-                  <TableRow><TableCell colSpan={8} className="text-center text-sm text-muted-foreground">Tidak ada data</TableCell></TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
+export default Attendance;

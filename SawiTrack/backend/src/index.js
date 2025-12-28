@@ -1589,6 +1589,23 @@ app.put(`${API_BASE_PATH}/attendance/:id`, async (req, res) => {
   }
 });
 
+app.delete(`${API_BASE_PATH}/attendance/:id`, async (req, res) => {
+  try {
+    const existing = await Attendance.findById(req.params.id);
+    if (!existing) return res.status(404).json({ error: "Attendance not found" });
+
+    if (await checkDateClosed(existing.date)) {
+      return res.status(400).json({ error: `Periode untuk tanggal ${existing.date} sudah ditutup.` });
+    }
+
+    await Attendance.findByIdAndDelete(req.params.id);
+    logActivity(req, "DELETE_ATTENDANCE", { id: req.params.id });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Job Codes
 app.get(`${API_BASE_PATH}/jobcodes`, async (_req, res) => {
   try {

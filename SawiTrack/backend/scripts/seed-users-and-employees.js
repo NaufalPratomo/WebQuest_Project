@@ -37,6 +37,11 @@ const lastNames = ['Nasiliu','Ismail','Husuna','Bakoja','Lamara','Malopo','Taman
     await mongoose.connect(MONGO_URI, { dbName: DB_NAME });
     console.log('Connected to DB');
 
+    // Remove any existing demo users/employees created earlier to keep seeder idempotent
+    await User.deleteMany({ email: /@demo\.local$/ });
+    await Employee.deleteMany({ nik: { $regex: '^7501' } });
+    await ForemanGroup.deleteMany({});
+
     // Create some foremen users + their employee record
     const foremenCount = 5;
     const assistantCount = 4;

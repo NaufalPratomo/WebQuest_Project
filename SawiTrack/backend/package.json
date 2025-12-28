@@ -7,7 +7,9 @@
     "start": "node src/index.js",
     "dev": "node src/index.js",
     "test:db": "node scripts/test-mongo-connection.js",
-    "inspect:db": "node scripts/db-inspect.js"
+    "inspect:db": "node scripts/db-inspect.js",
+    "seed:foreman-groups": "node scripts/seed-foreman-groups.js",
+    "seed:demo-data": "node scripts/seed-users-and-employees.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",

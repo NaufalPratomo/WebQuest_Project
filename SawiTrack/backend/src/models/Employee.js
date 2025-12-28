@@ -17,6 +17,8 @@ const EmployeeSchema = new mongoose.Schema(
     gender: { type: String },
     religion: { type: String },
     division: { type: String },
+    mandorId: { type: String }, // reference to a foreman (user._id)
+    position: { type: String, enum: ['mandor','asisten','admin','pemanen','lainnya'], default: 'pemanen' },
     joinDate: { type: Date },
   },
   { timestamps: true, collection: 'employees', strict: false }

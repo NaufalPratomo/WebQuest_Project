@@ -338,37 +338,75 @@ const Workers = () => {
   const handleExportExcel = () => {
     try {
       // Simple header matching table
+      // First sheet: simple flat list (NO, NAMA, NIK, Mandor, Divisi)
       const header = ["NO", "NAMA", "NIK", "Mandor", "Divisi"];
 
       const dataRows = filteredWorkers.map((w, index) => {
         const mandor = foremen.find((f) => f._id === w.mandorId);
-        return [
-          index + 1,
-          w.name,
-          w.nik,
-          mandor?.name || "-",
-          w.division || "-",
-        ];
+        return [index + 1, w.name, w.nik, mandor?.name || "", w.division || ""];
       });
 
-      const wsData = [header, ...dataRows];
-      const ws = XLSX.utils.aoa_to_sheet(wsData);
+      const ws1Data = [header, ...dataRows];
+      const ws1 = XLSX.utils.aoa_to_sheet(ws1Data);
+      ws1['!cols'] = [{ wch: 5 }, { wch: 30 }, { wch: 20 }, { wch: 25 }, { wch: 20 }];
 
-      // Optional: Set column widths
-      ws['!cols'] = [
-        { wch: 5 },  // NO
-        { wch: 25 }, // NAMA
-        { wch: 15 }, // NIK
-        { wch: 20 }, // Mandor
-        { wch: 15 }, // Divisi
-      ];
+      // Second sheet: grouped by Mandor -> Divisi -> list pemanen (Nama, NIK)
+      // Build map mandorId -> { name, divisions: Map<divName, members[]> }
+      const groups: Record<string, { name: string; divisions: Record<string, Employee[]> }> = {};
+
+      rows.forEach((r) => {
+        // only pemanen should appear in group listings
+        if (r.position !== 'pemanen') return;
+        const mid = r.mandorId || '';
+        const mandorName = (foremen.find(f => f._id === mid)?.name) || '';
+        if (!groups[mid]) groups[mid] = { name: mandorName, divisions: {} };
+        const div = r.division || '';
+        if (!groups[mid].divisions[div]) groups[mid].divisions[div] = [];
+        groups[mid].divisions[div].push(r);
+      });
+
+      // Build worksheet data with merged Mandor/Divisi cells similar to provided template
+      const ws2Data: any[][] = [];
+      // Header rows for grouped sheet
+      ws2Data.push(["Mandor", "Divisi", "NAMA", "NIK"]);
+
+      const merges: { s: { r: number; c: number }; e: { r: number; c: number } }[] = [];
+      let rowPtr = 1; // 0-based index already used by header
+
+      for (const [mandorId, grp] of Object.entries(groups)) {
+        const mandorStartRow = rowPtr;
+        let mandorHasAny = false;
+        for (const [divName, members] of Object.entries(grp.divisions)) {
+          if (!members || members.length === 0) continue;
+          mandorHasAny = true;
+          const divStartRow = rowPtr;
+          // add rows for each member
+          for (const m of members) {
+            ws2Data.push([grp.name || '', divName || '', m.name || '', m.nik || '']);
+            rowPtr++;
+          }
+          const divEndRow = rowPtr - 1;
+          // merge Divisi cell vertically if more than 1 row
+          if (divEndRow > divStartRow) {
+            merges.push({ s: { r: divStartRow, c: 1 }, e: { r: divEndRow, c: 1 } });
+          }
+        }
+        const mandorEndRow = rowPtr - 1;
+        if (mandorHasAny && mandorEndRow >= mandorStartRow) {
+          // merge Mandor column cell across its block
+          merges.push({ s: { r: mandorStartRow, c: 0 }, e: { r: mandorEndRow, c: 0 } });
+        }
+      }
+
+      const ws2 = XLSX.utils.aoa_to_sheet(ws2Data);
+      ws2['!cols'] = [{ wch: 25 }, { wch: 15 }, { wch: 30 }, { wch: 20 }];
+      // Apply merges
+      ws2['!merges'] = merges as any;
 
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Karyawan");
-      XLSX.writeFile(
-        wb,
-        `Karyawan_${new Date().toISOString().split("T")[0]}.xlsx`
-      );
+      XLSX.utils.book_append_sheet(wb, ws1, "Karyawan");
+      XLSX.utils.book_append_sheet(wb, ws2, "Grup Mandor");
+      XLSX.writeFile(wb, `Karyawan_${new Date().toISOString().split("T")[0]}.xlsx`);
 
       toast({
         title: "Berhasil",
@@ -577,8 +615,8 @@ const Workers = () => {
                       <TableCell className="text-center">{index + 1}</TableCell>
                       <TableCell className="font-medium">{worker.name}</TableCell>
                       <TableCell className="font-mono">{worker.nik}</TableCell>
-                      <TableCell>{mandor?.name || "-"}</TableCell>
-                      <TableCell>{worker.division || "-"}</TableCell>
+                      <TableCell>{mandor?.name || ""}</TableCell>
+                      <TableCell>{worker.division || ""}</TableCell>
                       <TableCell className="text-right">
                         <Button
                           variant="ghost"

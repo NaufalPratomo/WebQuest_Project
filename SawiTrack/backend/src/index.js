@@ -7,6 +7,7 @@ import mongoose from "mongoose";
 import Estate from "./models/Estate.js";
 import Company from "./models/Company.js";
 import Employee from "./models/Employee.js";
+import ForemanGroup from "./models/ForemanGroup.js";
 import User from "./models/User.js";
 import Target from "./models/Target.js";
 import Report from "./models/Report.js";
@@ -557,6 +558,7 @@ app.get(`${API_BASE_PATH}/employees`, async (_req, res) => {
         nik: 1,
         name: 1,
         companyId: 1,
+        mandorId: 1,
         position: 1,
         salary: 1,
         address: 1,
@@ -610,6 +612,7 @@ app.post(`${API_BASE_PATH}/employees`, async (req, res) => {
       nik,
       name,
       companyId: companyId || null,
+      mandorId: req.body.mandorId || null,
       position: position || null,
       salary: salary || null,
       address: address || null,
@@ -650,6 +653,7 @@ app.put(`${API_BASE_PATH}/employees/:id`, async (req, res) => {
       nik,
       name,
       companyId: companyId || null,
+      mandorId: req.body.mandorId || null,
       position: position || null,
       salary: salary || null,
       address: address || null,
@@ -691,6 +695,16 @@ app.delete(`${API_BASE_PATH}/employees/:id`, async (req, res) => {
       name: deleted.name,
     });
     res.status(204).send();
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Foreman groups (grup mandor) - grouping pemanen under a mandor
+app.get(`${API_BASE_PATH}/foreman-groups`, async (_req, res) => {
+  try {
+    const groups = await ForemanGroup.find({}).lean();
+    res.json(groups);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

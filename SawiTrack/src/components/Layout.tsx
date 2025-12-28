@@ -127,6 +127,12 @@ const Layout = ({ children }: LayoutProps) => {
       label: "Report Panen",
       items: [
         {
+          path: "/reports/daily-input",
+          icon: FileText,
+          label: "Input Laporan Harian",
+          roles: ["manager", "foreman"],
+        },
+        {
           path: "/reports/taksasi",
           icon: BarChart3,
           label: "Report Taksasi",

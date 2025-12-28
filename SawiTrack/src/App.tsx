@@ -32,6 +32,7 @@ import TaksasiPerBlock from "./pages/reports/TaksasiPerBlock";
 import Trend from "./pages/reports/Trend";
 import Statement from "./pages/reports/Statement";
 import ActivityLog from "./pages/ActivityLog";
+import InputDailyReport from "./pages/reports/InputDailyReport";
 
 const queryClient = new QueryClient();
 
@@ -176,6 +177,16 @@ const App = () => (
               />
 
               {/* Reports */}
+              <Route
+                path="/reports/daily-input"
+                element={
+                  <ProtectedRoute allowedRoles={["manager", "foreman"]}>
+                    <Layout>
+                      <InputDailyReport />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
               <Route
                 path="/reports/taksasi"
                 element={

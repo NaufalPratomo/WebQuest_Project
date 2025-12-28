@@ -158,6 +158,34 @@ export type AngkutRow = {
   notes?: string;
 };
 
+export interface DailyReport {
+  _id: string;
+  date: string;
+  pt?: string;
+  division?: string;
+  nik?: string;
+  employeeName: string;
+  mandorName?: string;
+  coa?: string;
+  activity?: string;
+  jobType?: string;
+  block?: string;
+  yearPlanted?: string;
+  location?: string;
+  hk?: number;
+  hkPrice?: number;
+  premi?: number;
+  hkPremi?: number;
+  rpPremi?: number;
+  unit?: string;
+  result?: number;
+  janjang?: number;
+  materialName?: string;
+  materialQty?: number;
+  materialUnit?: string;
+  notes?: string;
+}
+
 function toQS(params?: Record<string, string | number | undefined>): string {
   if (!params) return "";
   const entries = Object.entries(params)
@@ -573,10 +601,8 @@ export const api = {
           }).catch((inner) => {
             // Provide a clearer combined error
             throw new Error(
-              `Activity logs endpoint tidak ditemukan. Coba cek backend routes /activity-logs & /activitylogs. Asli: ${
-                err.message
-              }; Alias: ${
-                inner instanceof Error ? inner.message : String(inner)
+              `Activity logs endpoint tidak ditemukan. Coba cek backend routes /activity-logs & /activitylogs. Asli: ${err.message
+              }; Alias: ${inner instanceof Error ? inner.message : String(inner)
               }`
             );
           });
@@ -626,4 +652,16 @@ export const api = {
     }),
   deletePekerjaan: (id: string) =>
     http<{ ok: boolean }>(`/pekerjaan/${id}`, { method: "DELETE" }),
+
+  // Daily Reports
+  dailyReports: (params?: { date?: string; startDate?: string; endDate?: string; mandorName?: string; division?: string }) => {
+    const search = toQS(params as any);
+    return http<DailyReport[]>(`/daily-reports${search}`);
+  },
+  dailyReportCreate: (body: Partial<DailyReport> | Array<Partial<DailyReport>>) =>
+    http<DailyReport | DailyReport[]>(`/daily-reports`, { method: "POST", body: JSON.stringify(body) }),
+  dailyReportUpdate: (id: string, body: Partial<DailyReport>) =>
+    http<DailyReport>(`/daily-reports/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+  dailyReportDelete: (id: string) =>
+    http<{ ok: boolean }>(`/daily-reports/${id}`, { method: "DELETE" }),
 };

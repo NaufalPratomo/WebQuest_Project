@@ -1159,10 +1159,10 @@ app.get(`${API_BASE_PATH}/stats`, async (req, res) => {
 
     const percent = targets.length
       ? Math.round(
-          (targets.reduce((sum, t) => sum + (t.achieved || 0), 0) /
-            targets.reduce((sum, t) => sum + (t.target || 0), 0)) *
-            100
-        )
+        (targets.reduce((sum, t) => sum + (t.achieved || 0), 0) /
+          targets.reduce((sum, t) => sum + (t.target || 0), 0)) *
+        100
+      )
       : 0;
 
     res.json({
@@ -1698,8 +1698,8 @@ app.get(`${API_BASE_PATH}/reports/trend`, async (req, res) => {
       String(type) === "taksasi"
         ? Taksasi
         : String(type) === "angkut"
-        ? Angkut
-        : Panen;
+          ? Angkut
+          : Panen;
     const key = String(type) === "angkut" ? "weightKg" : "weightKg";
     const order = String(sort) === "asc" ? 1 : -1;
     const rows = await col
@@ -1835,7 +1835,110 @@ app.get("/activity-logs", handleActivityLogGet);
 app.post("/activitylogs", handleActivityLogPost);
 app.get("/activitylogs", handleActivityLogGet);
 
-console.log("✓ Activity log routes registered (all variants)");
+// Daily Reports (Laporan Harian - Complex)
+import DailyReport from "./models/DailyReport.js";
+
+app.get(`${API_BASE_PATH}/daily-reports`, async (req, res) => {
+  try {
+    const { date, startDate, endDate, mandorName, division } = req.query;
+    const q = {};
+    if (date) q.date = new Date(String(date));
+    else if (startDate || endDate) {
+      q.date = {};
+      if (startDate) q.date.$gte = new Date(String(startDate));
+      if (endDate) q.date.$lte = new Date(String(endDate));
+    }
+    if (mandorName) q.mandorName = mandorName;
+    if (division) q.division = division;
+
+    const docs = await DailyReport.find(q).sort({ date: -1, employeeName: 1 }).lean();
+    res.json(docs);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post(`${API_BASE_PATH}/daily-reports`, async (req, res) => {
+  try {
+    const body = req.body;
+    const RATE = 128869.24;
+
+    // Process single or batch
+    const items = Array.isArray(body) ? body : [body];
+
+    // Check closing
+    for (const i of items) {
+      if (!i.date) return res.status(400).json({ error: "Date is required" });
+      if (await checkDateClosed(i.date)) {
+        return res.status(400).json({ error: `Periode untuk tanggal ${i.date} sudah ditutup.` });
+      }
+
+      // Auto-calc values if missing but base exists
+      if (i.hk != null && (i.hkPrice == null || i.hkPrice === 0)) {
+        i.hkPrice = i.hk * RATE;
+      }
+      if (i.hkPremi != null && (i.rpPremi == null || i.rpPremi === 0)) {
+        i.rpPremi = i.hkPremi * RATE;
+      }
+    }
+
+    if (Array.isArray(body)) {
+      const created = await DailyReport.insertMany(items);
+      return res.status(201).json(created);
+    } else {
+      const created = await DailyReport.create(items[0]);
+      logActivity(req, "CREATE_DAILY_REPORT", { employee: items[0].employeeName });
+      return res.status(201).json(created);
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put(`${API_BASE_PATH}/daily-reports/:id`, async (req, res) => {
+  try {
+    const existing = await DailyReport.findById(req.params.id);
+    if (!existing) return res.status(404).json({ error: "Report not found" });
+
+    const newDate = req.body.date || existing.date;
+    if (await checkDateClosed(existing.date) || (req.body.date && await checkDateClosed(req.body.date))) {
+      return res.status(400).json({ error: "Periode sudah ditutup." });
+    }
+
+    // Recalculate if fields changed
+    const RATE = 128869.24;
+    const updates = { ...req.body };
+    if (updates.hk != null) {
+      updates.hkPrice = updates.hk * RATE;
+    }
+    if (updates.hkPremi != null) {
+      updates.rpPremi = updates.hkPremi * RATE;
+    }
+
+    const updated = await DailyReport.findByIdAndUpdate(req.params.id, updates, { new: true });
+    logActivity(req, "UPDATE_DAILY_REPORT", { id: req.params.id });
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete(`${API_BASE_PATH}/daily-reports/:id`, async (req, res) => {
+  try {
+    const existing = await DailyReport.findById(req.params.id);
+    if (!existing) return res.status(404).json({ error: "Report not found" });
+    if (await checkDateClosed(existing.date)) {
+      return res.status(400).json({ error: "Periode sudah ditutup." });
+    }
+    await DailyReport.findByIdAndDelete(req.params.id);
+    logActivity(req, "DELETE_DAILY_REPORT", { id: req.params.id });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Activity logs endpoint
 
 // Export app for Vercel
 export default app;

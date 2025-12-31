@@ -1159,10 +1159,10 @@ app.get(`${API_BASE_PATH}/stats`, async (req, res) => {
 
     const percent = targets.length
       ? Math.round(
-        (targets.reduce((sum, t) => sum + (t.achieved || 0), 0) /
-          targets.reduce((sum, t) => sum + (t.target || 0), 0)) *
-        100
-      )
+          (targets.reduce((sum, t) => sum + (t.achieved || 0), 0) /
+            targets.reduce((sum, t) => sum + (t.target || 0), 0)) *
+            100
+        )
       : 0;
 
     res.json({
@@ -1592,10 +1592,15 @@ app.put(`${API_BASE_PATH}/attendance/:id`, async (req, res) => {
 app.delete(`${API_BASE_PATH}/attendance/:id`, async (req, res) => {
   try {
     const existing = await Attendance.findById(req.params.id);
-    if (!existing) return res.status(404).json({ error: "Attendance not found" });
+    if (!existing)
+      return res.status(404).json({ error: "Attendance not found" });
 
     if (await checkDateClosed(existing.date)) {
-      return res.status(400).json({ error: `Periode untuk tanggal ${existing.date} sudah ditutup.` });
+      return res
+        .status(400)
+        .json({
+          error: `Periode untuk tanggal ${existing.date} sudah ditutup.`,
+        });
     }
 
     await Attendance.findByIdAndDelete(req.params.id);
@@ -1698,8 +1703,8 @@ app.get(`${API_BASE_PATH}/reports/trend`, async (req, res) => {
       String(type) === "taksasi"
         ? Taksasi
         : String(type) === "angkut"
-          ? Angkut
-          : Panen;
+        ? Angkut
+        : Panen;
     const key = String(type) === "angkut" ? "weightKg" : "weightKg";
     const order = String(sort) === "asc" ? 1 : -1;
     const rows = await col
@@ -1851,7 +1856,9 @@ app.get(`${API_BASE_PATH}/daily-reports`, async (req, res) => {
     if (mandorName) q.mandorName = mandorName;
     if (division) q.division = division;
 
-    const docs = await DailyReport.find(q).sort({ date: -1, employeeName: 1 }).lean();
+    const docs = await DailyReport.find(q)
+      .sort({ date: -1, employeeName: 1 })
+      .lean();
     res.json(docs);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1870,7 +1877,9 @@ app.post(`${API_BASE_PATH}/daily-reports`, async (req, res) => {
     for (const i of items) {
       if (!i.date) return res.status(400).json({ error: "Date is required" });
       if (await checkDateClosed(i.date)) {
-        return res.status(400).json({ error: `Periode untuk tanggal ${i.date} sudah ditutup.` });
+        return res
+          .status(400)
+          .json({ error: `Periode untuk tanggal ${i.date} sudah ditutup.` });
       }
 
       // Auto-calc values if missing but base exists
@@ -1887,7 +1896,9 @@ app.post(`${API_BASE_PATH}/daily-reports`, async (req, res) => {
       return res.status(201).json(created);
     } else {
       const created = await DailyReport.create(items[0]);
-      logActivity(req, "CREATE_DAILY_REPORT", { employee: items[0].employeeName });
+      logActivity(req, "CREATE_DAILY_REPORT", {
+        employee: items[0].employeeName,
+      });
       return res.status(201).json(created);
     }
   } catch (err) {
@@ -1901,7 +1912,10 @@ app.put(`${API_BASE_PATH}/daily-reports/:id`, async (req, res) => {
     if (!existing) return res.status(404).json({ error: "Report not found" });
 
     const newDate = req.body.date || existing.date;
-    if (await checkDateClosed(existing.date) || (req.body.date && await checkDateClosed(req.body.date))) {
+    if (
+      (await checkDateClosed(existing.date)) ||
+      (req.body.date && (await checkDateClosed(req.body.date)))
+    ) {
       return res.status(400).json({ error: "Periode sudah ditutup." });
     }
 
@@ -1915,7 +1929,11 @@ app.put(`${API_BASE_PATH}/daily-reports/:id`, async (req, res) => {
       updates.rpPremi = updates.hkPremi * RATE;
     }
 
-    const updated = await DailyReport.findByIdAndUpdate(req.params.id, updates, { new: true });
+    const updated = await DailyReport.findByIdAndUpdate(
+      req.params.id,
+      updates,
+      { new: true }
+    );
     logActivity(req, "UPDATE_DAILY_REPORT", { id: req.params.id });
     res.json(updated);
   } catch (err) {

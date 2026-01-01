@@ -42,10 +42,11 @@ const Workers = () => {
   const [openEdit, setOpenEdit] = useState(false);
   const [editingWorker, setEditingWorker] = useState<Employee | null>(null);
 
-  // Cleaned form state - matching table columns: No (calc), Nama, NIK, Mandor, Divisi
+  // Cleaned form state - matching table columns: No (calc), Nama, NIK, Perusahaan, Mandor, Divisi
   const [form, setForm] = useState({
     nik: "",
     name: "",
+    companyId: "",
     mandorId: "",
     division: "",
     status: "active",
@@ -92,6 +93,7 @@ const Workers = () => {
     setForm({
       nik: "",
       name: "",
+      companyId: "",
       mandorId: "",
       division: "",
       status: "active",
@@ -103,6 +105,7 @@ const Workers = () => {
     setForm({
       nik: worker.nik,
       name: worker.name,
+      companyId: worker.companyId || "",
       mandorId: worker.mandorId || "",
       division: worker.division || "",
       status: worker.status || "active",
@@ -142,7 +145,7 @@ const Workers = () => {
       await api.updateEmployee(editingWorker._id, {
         nik: form.nik,
         name: form.name,
-        companyId: "", // Legacy, send empty if not used or keep existing? API might require. Sending empty or undefined.
+        companyId: form.companyId || "", // Legacy, send empty if not used or keep existing? API might require. Sending empty or undefined.
         mandorId: form.mandorId || "",
         position: null,
         salary: null,
@@ -162,7 +165,7 @@ const Workers = () => {
             ? {
                 ...w,
                 ...form,
-                companyId: undefined,
+                companyId: form.companyId || undefined,
                 mandorId: form.mandorId || undefined,
                 status: form.status,
               }
@@ -175,6 +178,7 @@ const Workers = () => {
       setForm({
         nik: "",
         name: "",
+        companyId: "",
         mandorId: "",
         division: "",
         status: "active",
@@ -566,6 +570,27 @@ const Workers = () => {
                   </div>
 
                   <div className="space-y-2">
+                    <Label>Perusahaan</Label>
+                    <Select
+                      value={form.companyId}
+                      onValueChange={(v) =>
+                        setForm((f) => ({ ...f, companyId: v }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Pilih perusahaan" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {companies.map((c) => (
+                          <SelectItem key={c._id} value={c._id}>
+                            {c.company_name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
                     <Label>Mandor</Label>
                     <Select
                       value={form.mandorId}
@@ -612,7 +637,7 @@ const Workers = () => {
                       const created = await api.createEmployee({
                         nik: form.nik,
                         name: form.name,
-                        companyId: undefined, // removed legacy
+                        companyId: form.companyId || undefined,
                         mandorId: form.mandorId || undefined,
                         position: undefined,
                         salary: undefined,
@@ -629,6 +654,7 @@ const Workers = () => {
                       setForm({
                         nik: "",
                         name: "",
+                        companyId: "",
                         mandorId: "",
                         division: "",
                         status: "active",
@@ -676,6 +702,7 @@ const Workers = () => {
                 <TableHead className="w-[50px] text-center">NO</TableHead>
                 <TableHead>NAMA</TableHead>
                 <TableHead>NIK</TableHead>
+                <TableHead>Perusahaan</TableHead>
                 <TableHead>Mandor</TableHead>
                 <TableHead>Divisi</TableHead>
                 <TableHead className="text-right">Aksi</TableHead>
@@ -684,7 +711,7 @@ const Workers = () => {
             <TableBody>
               {loading && (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center">
+                  <TableCell colSpan={7} className="text-center">
                     Memuat...
                   </TableCell>
                 </TableRow>
@@ -692,6 +719,9 @@ const Workers = () => {
               {!loading &&
                 filteredWorkers.map((worker, index) => {
                   const mandor = foremen.find((f) => f._id === worker.mandorId);
+                  const company = companies.find(
+                    (c) => c._id === worker.companyId
+                  );
                   return (
                     <TableRow key={worker._id}>
                       <TableCell className="text-center">{index + 1}</TableCell>
@@ -699,6 +729,7 @@ const Workers = () => {
                         {worker.name}
                       </TableCell>
                       <TableCell className="font-mono">{worker.nik}</TableCell>
+                      <TableCell>{company?.company_name || "-"}</TableCell>
                       <TableCell>{mandor?.name || ""}</TableCell>
                       <TableCell>{worker.division || ""}</TableCell>
                       <TableCell className="text-right">
@@ -748,6 +779,27 @@ const Workers = () => {
                     setForm((f) => ({ ...f, nik: e.target.value }))
                   }
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Perusahaan</Label>
+                <Select
+                  value={form.companyId}
+                  onValueChange={(v) =>
+                    setForm((f) => ({ ...f, companyId: v }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Pilih perusahaan" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {companies.map((c) => (
+                      <SelectItem key={c._id} value={c._id}>
+                        {c.company_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-2">

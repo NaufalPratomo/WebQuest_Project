@@ -37,6 +37,8 @@ export interface Employee {
   gender?: string;
   religion?: string;
   division?: string;
+  division_id?: number;
+  pt?: string;
   joinDate?: string;
   status: string;
 }
@@ -546,7 +548,12 @@ export const api = {
     }),
 
   // Attendance
-  attendanceList: (params?: { date?: string; employeeId?: string }) => {
+  attendanceList: (params?: {
+    date?: string;
+    startDate?: string;
+    endDate?: string;
+    employeeId?: string;
+  }) => {
     const search = toQS(params);
     return http<
       Array<{
@@ -556,6 +563,7 @@ export const api = {
         status: string;
         division_id?: number;
         notes?: string;
+        hk?: number;
       }>
     >(`/attendance${search}`);
   },
@@ -655,7 +663,7 @@ export const api = {
 
   // Daily Reports
   dailyReports: (params?: { date?: string; startDate?: string; endDate?: string; mandorName?: string; division?: string }) => {
-    const search = toQS(params as any);
+    const search = toQS(params);
     return http<DailyReport[]>(`/daily-reports${search}`);
   },
   dailyReportCreate: (body: Partial<DailyReport> | Array<Partial<DailyReport>>) =>
@@ -667,7 +675,7 @@ export const api = {
 
   // Operational Cost (Recap)
   recapCostsList: (params: { month: string | number; year: string | number }) => {
-    const search = toQS(params as any);
+    const search = toQS(params);
     return http<RecapDataRow[]>(`/recap-costs${search}`);
   },
   recapCostCreate: (body: Partial<RecapDataRow>) =>

@@ -6,6 +6,7 @@ const CompanySchema = new mongoose.Schema(
     address: { type: String, required: true },
     phone: { type: String },
     email: { type: String },
+    status: { type: String, enum: ["active", "inactive"], default: "active" },
     estates: [{ type: String, ref: "Estate" }], // Array of estate IDs
   },
   {

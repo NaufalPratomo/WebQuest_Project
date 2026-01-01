@@ -43,7 +43,7 @@ interface RecapCategory {
 
 const Recap = () => {
   const [selectedMonth, setSelectedMonth] = useState<string>(String(new Date().getMonth()));
-  const [selectedYear, setSelectedYear] = useState<string>(String(new Date().getFullYear()));
+  const [selectedYear, setSelectedYear] = useState<string>(String(new Date().getFullYear() - 1));
   const [data, setData] = useState<RecapCategory[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);

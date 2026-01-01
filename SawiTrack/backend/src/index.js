@@ -281,7 +281,7 @@ app.get(`${API_BASE_PATH}/companies/:id`, async (req, res) => {
 app.post(`${API_BASE_PATH}/companies`, async (req, res) => {
   try {
     console.log("POST /companies - Body:", req.body);
-    const { company_name, address, phone, email, estates } = req.body;
+    const { company_name, address, phone, email, estates, status } = req.body;
     if (!company_name || !address)
       return res
         .status(400)
@@ -291,6 +291,7 @@ app.post(`${API_BASE_PATH}/companies`, async (req, res) => {
       address,
       phone,
       email,
+      status: status || "active",
       estates: estates || [],
     });
     console.log("Company created:", created);
@@ -304,12 +305,13 @@ app.post(`${API_BASE_PATH}/companies`, async (req, res) => {
 
 app.put(`${API_BASE_PATH}/companies/:id`, async (req, res) => {
   try {
-    const { company_name, address, phone, email, estates } = req.body;
+    const { company_name, address, phone, email, estates, status } = req.body;
     const update = {};
     if (company_name !== undefined) update.company_name = company_name;
     if (address !== undefined) update.address = address;
     if (phone !== undefined) update.phone = phone;
     if (email !== undefined) update.email = email;
+    if (status !== undefined) update.status = status;
     if (estates !== undefined) update.estates = estates;
     const updated = await Company.findByIdAndUpdate(req.params.id, update, {
       new: true,
@@ -558,6 +560,7 @@ app.get(`${API_BASE_PATH}/employees`, async (_req, res) => {
         nik: 1,
         name: 1,
         companyId: 1,
+        pt: 1,
         mandorId: 1,
         position: 1,
         salary: 1,
@@ -567,6 +570,7 @@ app.get(`${API_BASE_PATH}/employees`, async (_req, res) => {
         gender: 1,
         religion: 1,
         division: 1,
+        division_id: 1,
         joinDate: 1,
         status: 1,
       }
@@ -593,6 +597,7 @@ app.post(`${API_BASE_PATH}/employees`, async (req, res) => {
       nik,
       name,
       companyId,
+      pt,
       position,
       salary,
       address,
@@ -601,6 +606,7 @@ app.post(`${API_BASE_PATH}/employees`, async (req, res) => {
       gender,
       religion,
       division,
+      division_id,
       joinDate,
     } = req.body;
     if (!nik || !name)
@@ -612,6 +618,7 @@ app.post(`${API_BASE_PATH}/employees`, async (req, res) => {
       nik,
       name,
       companyId: companyId || null,
+      pt: pt || null,
       mandorId: req.body.mandorId || null,
       position: position || null,
       salary: salary || null,
@@ -621,6 +628,7 @@ app.post(`${API_BASE_PATH}/employees`, async (req, res) => {
       gender: gender || null,
       religion: religion || null,
       division: division || null,
+      division_id: division_id ?? null,
       joinDate: joinDate || null,
       status: "active",
     });
@@ -637,6 +645,7 @@ app.put(`${API_BASE_PATH}/employees/:id`, async (req, res) => {
       nik,
       name,
       companyId,
+      pt,
       position,
       salary,
       address,
@@ -645,6 +654,7 @@ app.put(`${API_BASE_PATH}/employees/:id`, async (req, res) => {
       gender,
       religion,
       division,
+      division_id,
       joinDate,
       status,
     } = req.body;
@@ -653,6 +663,7 @@ app.put(`${API_BASE_PATH}/employees/:id`, async (req, res) => {
       nik,
       name,
       companyId: companyId || null,
+      pt: pt ?? null,
       mandorId: req.body.mandorId || null,
       position: position || null,
       salary: salary || null,
@@ -662,6 +673,7 @@ app.put(`${API_BASE_PATH}/employees/:id`, async (req, res) => {
       gender: gender || null,
       religion: religion || null,
       division: division || null,
+      division_id: division_id ?? null,
       joinDate: joinDate || null,
       status,
     };
@@ -1554,9 +1566,21 @@ app.post(`${API_BASE_PATH}/attendance`, async (req, res) => {
 });
 app.get(`${API_BASE_PATH}/attendance`, async (req, res) => {
   try {
-    const { date, employeeId } = req.query;
+    const { date, startDate, endDate, employeeId } = req.query;
     const q = restrictByDivision(req, {});
-    if (date) q.date = new Date(String(date));
+
+    if (startDate || endDate) {
+      q.date = {};
+      if (startDate) q.date.$gte = new Date(String(startDate));
+      if (endDate) {
+        const end = new Date(String(endDate));
+        end.setHours(23, 59, 59, 999);
+        q.date.$lte = end;
+      }
+    } else if (date) {
+      q.date = new Date(String(date));
+    }
+
     if (employeeId) q.employeeId = String(employeeId);
     const rows = await Attendance.find(q).lean();
     res.json(rows);

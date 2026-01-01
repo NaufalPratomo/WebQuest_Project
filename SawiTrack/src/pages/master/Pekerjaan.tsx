@@ -83,6 +83,16 @@ const PekerjaanPage = () => {
     }
   };
 
+  const resetForm = () => {
+    setForm({
+      no_akun: "",
+      jenis_pekerjaan: "",
+      aktivitas: "",
+      satuan: "",
+      tipe: "",
+    });
+  };
+
   const handleEdit = (item: Pekerjaan) => {
     setEditingPekerjaan(item);
     setForm({
@@ -93,6 +103,22 @@ const PekerjaanPage = () => {
       tipe: item.tipe || "",
     });
     setOpenEdit(true);
+  };
+
+  const handleCloseEdit = () => {
+    setOpenEdit(false);
+    setEditingPekerjaan(null);
+    resetForm();
+  };
+
+  const handleCloseAdd = () => {
+    setOpenAdd(false);
+    resetForm();
+  };
+
+  const handleOpenAdd = () => {
+    resetForm(); // Ensure form is clean
+    setOpenAdd(true);
   };
 
   const handleDelete = async () => {
@@ -190,13 +216,17 @@ const PekerjaanPage = () => {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold">Pekerjaan</h1>
-          <p className="text-muted-foreground">
-            Kelola daftar pekerjaan
-          </p>
+          <p className="text-muted-foreground">Kelola daftar pekerjaan</p>
         </div>
-        <Dialog open={openAdd} onOpenChange={setOpenAdd}>
+        <Dialog
+          open={openAdd}
+          onOpenChange={(open) => !open && handleCloseAdd()}
+        >
           <DialogTrigger asChild>
-            <Button className="bg-orange-500 hover:bg-orange-600">
+            <Button
+              className="bg-orange-500 hover:bg-orange-600"
+              onClick={handleOpenAdd}
+            >
               <Plus className="h-4 w-4 mr-2" />
               Tambah Data
             </Button>
@@ -295,7 +325,7 @@ const PekerjaanPage = () => {
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setOpenAdd(false)}>
+              <Button variant="outline" onClick={handleCloseAdd}>
                 Batal
               </Button>
               <Button onClick={() => handleSubmit(false)}>Simpan</Button>
@@ -399,7 +429,10 @@ const PekerjaanPage = () => {
       </Card>
 
       {/* Edit Dialog */}
-      <Dialog open={openEdit} onOpenChange={setOpenEdit}>
+      <Dialog
+        open={openEdit}
+        onOpenChange={(open) => !open && handleCloseEdit()}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Edit Pekerjaan</DialogTitle>
@@ -474,7 +507,7 @@ const PekerjaanPage = () => {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpenEdit(false)}>
+            <Button variant="outline" onClick={handleCloseEdit}>
               Batal
             </Button>
             <Button onClick={() => handleSubmit(true)}>Simpan Perubahan</Button>

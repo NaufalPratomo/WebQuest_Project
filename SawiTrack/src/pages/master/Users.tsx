@@ -2,12 +2,31 @@ import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Search, Edit } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Toaster } from "@/components/ui/toaster";
 import { api, type Role } from "@/lib/api";
@@ -50,18 +69,51 @@ const Users = () => {
 
   useEffect(() => {
     setLoading(true);
-    api.users()
-      .then((list) => setRows(list.map((u) => ({ id: u._id, name: u.name, email: u.email, role: u.role, division: u.division, status: u.status }))))
-      .catch(() => toast({
-        title: "Gagal",
-        description: "Gagal memuat user",
-        variant: "destructive"
-      }))
+    api
+      .users()
+      .then((list) =>
+        setRows(
+          list.map((u) => ({
+            id: u._id,
+            name: u.name,
+            email: u.email,
+            role: u.role,
+            division: u.division,
+            status: u.status,
+          }))
+        )
+      )
+      .catch(() =>
+        toast({
+          title: "Gagal",
+          description: "Gagal memuat user",
+          variant: "destructive",
+        })
+      )
       .finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const filteredUsers = useMemo(() => rows.filter((u) => u.name.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase())), [rows, search]);
+  const filteredUsers = useMemo(
+    () =>
+      rows.filter(
+        (u) =>
+          u.name.toLowerCase().includes(search.toLowerCase()) ||
+          u.email.toLowerCase().includes(search.toLowerCase())
+      ),
+    [rows, search]
+  );
+
+  const resetForm = () => {
+    setForm({
+      name: "",
+      email: "",
+      role: "",
+      division: "",
+      status: "active",
+      password: "",
+    });
+  };
 
   const handleEdit = (user: UserRow) => {
     setEditingUser(user);
@@ -76,6 +128,22 @@ const Users = () => {
     setOpenEdit(true);
   };
 
+  const handleCloseEdit = () => {
+    setOpenEdit(false);
+    setEditingUser(null);
+    resetForm();
+  };
+
+  const handleCloseAdd = () => {
+    setOpenAdd(false);
+    resetForm();
+  };
+
+  const handleOpenAdd = () => {
+    resetForm(); // Ensure form is clean
+    setOpenAdd(true);
+  };
+
   const handleUpdateUser = async () => {
     if (!editingUser) return;
 
@@ -84,7 +152,7 @@ const Users = () => {
         toast({
           title: "Gagal",
           description: "Lengkapi form",
-          variant: "destructive"
+          variant: "destructive",
         });
         return;
       }
@@ -110,25 +178,41 @@ const Users = () => {
 
       await api.updateUser(editingUser.id, updateData);
 
-      setRows(prev => prev.map(u =>
-        u.id === editingUser.id
-          ? { ...u, name: form.name, email: form.email, role: form.role, division: form.division, status: form.status }
-          : u
-      ));
+      setRows((prev) =>
+        prev.map((u) =>
+          u.id === editingUser.id
+            ? {
+                ...u,
+                name: form.name,
+                email: form.email,
+                role: form.role,
+                division: form.division,
+                status: form.status,
+              }
+            : u
+        )
+      );
 
       setOpenEdit(false);
       setEditingUser(null);
-      setForm({ name: "", email: "", role: "", division: "", status: "active", password: "" });
+      setForm({
+        name: "",
+        email: "",
+        role: "",
+        division: "",
+        status: "active",
+        password: "",
+      });
 
       toast({
         title: "Berhasil",
-        description: "Pengguna berhasil diperbarui"
+        description: "Pengguna berhasil diperbarui",
       });
     } catch (e) {
       toast({
         title: "Gagal",
         description: e instanceof Error ? e.message : "Gagal memperbarui",
-        variant: "destructive"
+        variant: "destructive",
       });
     }
   };
@@ -147,7 +231,8 @@ const Users = () => {
           const data = new Uint8Array(event.target?.result as ArrayBuffer);
           const workbook = XLSX.read(data, { type: "array" });
           const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-          const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet);
+          const jsonData =
+            XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet);
 
           const newUsers: UserRow[] = [];
           const existingUsers: UserRow[] = [];
@@ -158,12 +243,16 @@ const Users = () => {
             const role = String(row["Role"] || "").toLowerCase() as Role;
             const status = String(row["Status"] || "active").toLowerCase();
             const division = row["Divisi"] ? String(row["Divisi"]) : null;
-            const password = row["Password"] ? String(row["Password"]) : "password123"; // Default password if not provided
+            const password = row["Password"]
+              ? String(row["Password"])
+              : "password123"; // Default password if not provided
 
             if (!email || !name || !role) return;
 
             // Check if user already exists
-            const exists = rows.find((u) => u.email.toLowerCase() === email.toLowerCase());
+            const exists = rows.find(
+              (u) => u.email.toLowerCase() === email.toLowerCase()
+            );
 
             const userObj: UserRow = {
               id: exists ? exists.id : `temp_${Date.now()}_${Math.random()}`, // Temp ID for new, existing ID for existing
@@ -174,7 +263,7 @@ const Users = () => {
               status,
             };
 
-            // We also need password for creation, so we'll store it in a temporary property if needed, 
+            // We also need password for creation, so we'll store it in a temporary property if needed,
             // but UserRow doesn't have password. We can attach it to the object we pass to create.
             // For simplicity in preview, we just show UserRow data.
             // We'll store the full data for creation in a separate way or just use this object and cast it.
@@ -217,7 +306,9 @@ const Users = () => {
             name: user.name,
             email: user.email,
             role: user.role as Role,
-            password: (user as UserRow & { password?: string }).password || 'default123',
+            password:
+              (user as UserRow & { password?: string }).password ||
+              "default123",
             division: user.division || null,
           });
           createdUsers.push({
@@ -266,7 +357,10 @@ const Users = () => {
       const ws = XLSX.utils.json_to_sheet(exportData);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Pengguna");
-      XLSX.writeFile(wb, `Pengguna_${new Date().toISOString().split("T")[0]}.xlsx`);
+      XLSX.writeFile(
+        wb,
+        `Pengguna_${new Date().toISOString().split("T")[0]}.xlsx`
+      );
 
       toast({
         title: "Berhasil",
@@ -286,7 +380,9 @@ const Users = () => {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold">Pengguna</h1>
-          <p className="text-muted-foreground">Kelola akun pengguna web (login)</p>
+          <p className="text-muted-foreground">
+            Kelola akun pengguna web (login)
+          </p>
         </div>
         <div className="flex gap-2">
           <Button
@@ -306,9 +402,16 @@ const Users = () => {
             <Download className="mr-2 h-4 w-4" />
             Export Excel
           </Button>
-          <Dialog open={openAdd} onOpenChange={setOpenAdd}>
+          <Dialog
+            open={openAdd}
+            onOpenChange={(open) => !open && handleCloseAdd()}
+          >
             <DialogTrigger asChild>
-              <Button size="sm" className="bg-orange-500 hover:bg-orange-600">
+              <Button
+                size="sm"
+                className="bg-orange-500 hover:bg-orange-600"
+                onClick={handleOpenAdd}
+              >
                 <Plus className="h-4 w-4 mr-2" />
                 Tambah Pengguna
               </Button>
@@ -320,16 +423,36 @@ const Users = () => {
               <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
                 <div className="space-y-2">
                   <Label>Nama</Label>
-                  <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+                  <Input
+                    placeholder="Masukkan nama lengkap"
+                    value={form.name}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, name: e.target.value }))
+                    }
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Email</Label>
-                  <Input type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />
+                  <Input
+                    type="email"
+                    placeholder="Masukkan alamat email"
+                    value={form.email}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, email: e.target.value }))
+                    }
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Role</Label>
-                  <Select value={form.role} onValueChange={(v) => setForm((f) => ({ ...f, role: v as typeof form.role }))}>
-                    <SelectTrigger><SelectValue placeholder="Pilih role" /></SelectTrigger>
+                  <Select
+                    value={form.role}
+                    onValueChange={(v) =>
+                      setForm((f) => ({ ...f, role: v as typeof form.role }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Pilih role" />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="manager">Manager</SelectItem>
                       <SelectItem value="foreman">Mandor</SelectItem>
@@ -339,34 +462,76 @@ const Users = () => {
                 </div>
                 <div className="space-y-2">
                   <Label>Password</Label>
-                  <Input type="password" value={form.password} onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))} />
+                  <Input
+                    type="password"
+                    placeholder="Masukkan password"
+                    value={form.password}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, password: e.target.value }))
+                    }
+                  />
                 </div>
-                <Button type="button" className="w-full" onClick={async () => {
-                  try {
-                    if (!form.name || !form.email || !form.role || !form.password) {
+                <Button
+                  type="button"
+                  className="w-full"
+                  onClick={async () => {
+                    try {
+                      if (
+                        !form.name ||
+                        !form.email ||
+                        !form.role ||
+                        !form.password
+                      ) {
+                        toast({
+                          title: "Gagal",
+                          description: "Lengkapi form",
+                          variant: "destructive",
+                        });
+                        return;
+                      }
+                      const created = await api.createUser({
+                        name: form.name,
+                        email: form.email,
+                        role: form.role,
+                        password: form.password,
+                        division: form.division || null,
+                      });
+                      setRows((prev) => [
+                        {
+                          id: created._id,
+                          name: created.name,
+                          email: created.email,
+                          role: created.role,
+                          division: created.division,
+                          status: created.status,
+                        },
+                        ...prev,
+                      ]);
+                      setOpenAdd(false);
+                      setForm({
+                        name: "",
+                        email: "",
+                        role: "",
+                        division: "",
+                        status: "active",
+                        password: "",
+                      });
+                      toast({
+                        title: "Berhasil",
+                        description: "Pengguna berhasil ditambahkan",
+                      });
+                    } catch (e) {
                       toast({
                         title: "Gagal",
-                        description: "Lengkapi form",
-                        variant: "destructive"
+                        description:
+                          e instanceof Error ? e.message : "Gagal menyimpan",
+                        variant: "destructive",
                       });
-                      return;
                     }
-                    const created = await api.createUser({ name: form.name, email: form.email, role: form.role, password: form.password, division: form.division || null });
-                    setRows((prev) => [{ id: created._id, name: created.name, email: created.email, role: created.role, division: created.division, status: created.status }, ...prev]);
-                    setOpenAdd(false);
-                    setForm({ name: "", email: "", role: "", division: "", status: "active", password: "" });
-                    toast({
-                      title: "Berhasil",
-                      description: "Pengguna berhasil ditambahkan"
-                    });
-                  } catch (e) {
-                    toast({
-                      title: "Gagal",
-                      description: e instanceof Error ? e.message : "Gagal menyimpan",
-                      variant: "destructive"
-                    });
-                  }
-                }}>Simpan</Button>
+                  }}
+                >
+                  Simpan
+                </Button>
               </form>
             </DialogContent>
           </Dialog>
@@ -378,7 +543,12 @@ const Users = () => {
           <div className="flex items-center gap-4">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Cari pengguna..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" />
+              <Input
+                placeholder="Cari pengguna..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-10"
+              />
             </div>
           </div>
         </CardHeader>
@@ -394,25 +564,53 @@ const Users = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {loading && <TableRow><TableCell colSpan={5} className="text-center">Memuat...</TableCell></TableRow>}
-              {!loading && filteredUsers.map((user) => (
-                <TableRow key={user.id}>
-                  <TableCell className="font-medium">{user.name}</TableCell>
-                  <TableCell>{user.email}</TableCell>
-                  <TableCell><Badge variant="outline" className="capitalize">{user.role === 'foreman' ? 'Mandor' : user.role}</Badge></TableCell>
-                  <TableCell><Badge variant={user.status === "active" ? "default" : "secondary"}>{user.status === "active" ? "Aktif" : "Nonaktif"}</Badge></TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="ghost" size="icon" onClick={() => handleEdit(user)}><Edit className="h-4 w-4" /></Button>
+              {loading && (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center">
+                    Memuat...
                   </TableCell>
                 </TableRow>
-              ))}
+              )}
+              {!loading &&
+                filteredUsers.map((user) => (
+                  <TableRow key={user.id}>
+                    <TableCell className="font-medium">{user.name}</TableCell>
+                    <TableCell>{user.email}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="capitalize">
+                        {user.role === "foreman" ? "Mandor" : user.role}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={
+                          user.status === "active" ? "default" : "secondary"
+                        }
+                      >
+                        {user.status === "active" ? "Aktif" : "Nonaktif"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleEdit(user)}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
 
       {/* Dialog Edit Pengguna */}
-      <Dialog open={openEdit} onOpenChange={setOpenEdit}>
+      <Dialog
+        open={openEdit}
+        onOpenChange={(open) => !open && handleCloseEdit()}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Edit Pengguna</DialogTitle>
@@ -420,16 +618,35 @@ const Users = () => {
           <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
             <div className="space-y-2">
               <Label>Nama</Label>
-              <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+              <Input
+                placeholder="Masukkan nama lengkap"
+                value={form.name}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, name: e.target.value }))
+                }
+              />
             </div>
             <div className="space-y-2">
               <Label>Email</Label>
-              <Input type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />
+              <Input
+                type="email"
+                value={form.email}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, email: e.target.value }))
+                }
+              />
             </div>
             <div className="space-y-2">
               <Label>Role</Label>
-              <Select value={form.role} onValueChange={(v) => setForm((f) => ({ ...f, role: v as typeof form.role }))}>
-                <SelectTrigger><SelectValue placeholder="Pilih role" /></SelectTrigger>
+              <Select
+                value={form.role}
+                onValueChange={(v) =>
+                  setForm((f) => ({ ...f, role: v as typeof form.role }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Pilih role" />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="manager">Manager</SelectItem>
                   <SelectItem value="foreman">Mandor</SelectItem>
@@ -439,8 +656,13 @@ const Users = () => {
             </div>
             <div className="space-y-2">
               <Label>Status</Label>
-              <Select value={form.status} onValueChange={(v) => setForm((f) => ({ ...f, status: v }))}>
-                <SelectTrigger><SelectValue placeholder="Pilih status" /></SelectTrigger>
+              <Select
+                value={form.status}
+                onValueChange={(v) => setForm((f) => ({ ...f, status: v }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Pilih status" />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="active">Aktif</SelectItem>
                   <SelectItem value="inactive">Nonaktif</SelectItem>
@@ -449,18 +671,17 @@ const Users = () => {
             </div>
             <div className="space-y-2">
               <Label>Password Baru (kosongkan jika tidak ingin mengubah)</Label>
-              <Input type="password" value={form.password} onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))} />
+              <Input
+                type="password"
+                placeholder="Masukkan password baru (opsional)"
+                value={form.password}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, password: e.target.value }))
+                }
+              />
             </div>
             <div className="flex gap-2 justify-end">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  setOpenEdit(false);
-                  setEditingUser(null);
-                  setForm({ name: "", email: "", role: "", division: "", status: "active", password: "" });
-                }}
-              >
+              <Button type="button" variant="outline" onClick={handleCloseEdit}>
                 Batal
               </Button>
               <Button type="button" onClick={handleUpdateUser}>
@@ -482,7 +703,9 @@ const Users = () => {
             <div className="grid grid-cols-2 gap-4">
               <Card>
                 <CardHeader className="pb-3">
-                  <p className="text-sm text-muted-foreground">Data Baru (Akan Ditambahkan)</p>
+                  <p className="text-sm text-muted-foreground">
+                    Data Baru (Akan Ditambahkan)
+                  </p>
                 </CardHeader>
                 <CardContent>
                   <p className="text-2xl font-bold text-green-600">
@@ -492,7 +715,9 @@ const Users = () => {
               </Card>
               <Card>
                 <CardHeader className="pb-3">
-                  <p className="text-sm text-muted-foreground">Duplikat (Akan Diabaikan)</p>
+                  <p className="text-sm text-muted-foreground">
+                    Duplikat (Akan Diabaikan)
+                  </p>
                 </CardHeader>
                 <CardContent>
                   <p className="text-2xl font-bold text-gray-600">
@@ -530,31 +755,34 @@ const Users = () => {
               </div>
             )}
 
-            {importPreviewData && importPreviewData.existingUsers.length > 0 && (
-              <div>
-                <h3 className="font-semibold text-lg mb-2">Data Duplikat (Email sudah ada)</h3>
-                <div className="border rounded-lg overflow-auto max-h-40 bg-muted/50">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Nama</TableHead>
-                        <TableHead>Email</TableHead>
-                        <TableHead>Role</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {importPreviewData.existingUsers.map((u, idx) => (
-                        <TableRow key={idx} className="opacity-50">
-                          <TableCell>{u.name}</TableCell>
-                          <TableCell>{u.email}</TableCell>
-                          <TableCell>{u.role}</TableCell>
+            {importPreviewData &&
+              importPreviewData.existingUsers.length > 0 && (
+                <div>
+                  <h3 className="font-semibold text-lg mb-2">
+                    Data Duplikat (Email sudah ada)
+                  </h3>
+                  <div className="border rounded-lg overflow-auto max-h-40 bg-muted/50">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Nama</TableHead>
+                          <TableHead>Email</TableHead>
+                          <TableHead>Role</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {importPreviewData.existingUsers.map((u, idx) => (
+                          <TableRow key={idx} className="opacity-50">
+                            <TableCell>{u.name}</TableCell>
+                            <TableCell>{u.email}</TableCell>
+                            <TableCell>{u.role}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
             {importPreviewData && importPreviewData.newUsers.length === 0 && (
               <div className="text-center py-8 text-muted-foreground">
@@ -564,12 +792,17 @@ const Users = () => {
           </div>
 
           <div className="flex justify-end gap-2 mt-4">
-            <Button variant="outline" onClick={() => setIsImportPreviewOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setIsImportPreviewOpen(false)}
+            >
               Batal
             </Button>
             <Button
               onClick={handleConfirmImport}
-              disabled={!importPreviewData || importPreviewData.newUsers.length === 0}
+              disabled={
+                !importPreviewData || importPreviewData.newUsers.length === 0
+              }
               className="bg-green-600 hover:bg-green-700"
             >
               Import {importPreviewData?.newUsers.length} Data

@@ -65,7 +65,7 @@ const Workers = () => {
       .then(([emps, comps, users]) => {
         setRows(emps);
         setCompanies(comps);
-        setForemen(users.filter(u => u.role === 'foreman'));
+        setForemen(users.filter((u) => u.role === "foreman"));
       })
       .catch(() =>
         toast({
@@ -88,6 +88,16 @@ const Workers = () => {
     [rows, search]
   );
 
+  const resetForm = () => {
+    setForm({
+      nik: "",
+      name: "",
+      mandorId: "",
+      division: "",
+      status: "active",
+    });
+  };
+
   const handleEdit = (worker: Employee) => {
     setEditingWorker(worker);
     setForm({
@@ -98,6 +108,22 @@ const Workers = () => {
       status: worker.status || "active",
     });
     setOpenEdit(true);
+  };
+
+  const handleCloseEdit = () => {
+    setOpenEdit(false);
+    setEditingWorker(null);
+    resetForm();
+  };
+
+  const handleCloseAdd = () => {
+    setOpenAdd(false);
+    resetForm();
+  };
+
+  const handleOpenAdd = () => {
+    resetForm(); // Ensure form is clean
+    setOpenAdd(true);
   };
 
   const handleUpdateWorker = async () => {
@@ -133,7 +159,13 @@ const Workers = () => {
       setRows((prev) =>
         prev.map((w) =>
           w._id === editingWorker._id
-            ? { ...w, ...form, companyId: undefined, mandorId: form.mandorId || undefined, status: form.status }
+            ? {
+                ...w,
+                ...form,
+                companyId: undefined,
+                mandorId: form.mandorId || undefined,
+                status: form.status,
+              }
             : w
         )
       );
@@ -178,18 +210,25 @@ const Workers = () => {
           const wb = XLSX.read(data, { type: "array", cellDates: true });
           const ws = wb.Sheets[wb.SheetNames[0]];
 
-          const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws);
+          const jsonData =
+            XLSX.utils.sheet_to_json<Record<string, unknown>>(ws);
 
           const newEmployees: Partial<Employee>[] = [];
-          const updatedEmployees: { employee: Partial<Employee>; oldEmployee: Employee }[] = [];
+          const updatedEmployees: {
+            employee: Partial<Employee>;
+            oldEmployee: Employee;
+          }[] = [];
           const existingEmployees: Partial<Employee>[] = [];
 
-          const areEmployeesEqual = (emp1: Partial<Employee>, emp2: Employee): boolean => {
-            const fields = ['name', 'mandorId', 'division'] as const;
+          const areEmployeesEqual = (
+            emp1: Partial<Employee>,
+            emp2: Employee
+          ): boolean => {
+            const fields = ["name", "mandorId", "division"] as const;
 
             const normalize = (val: unknown): unknown => {
               if (val === undefined || val === null) return null;
-              if (typeof val === 'string') {
+              if (typeof val === "string") {
                 const trimmed = val.trim();
                 return trimmed === "" ? null : trimmed;
               }
@@ -205,7 +244,7 @@ const Workers = () => {
           };
 
           // Normalize keys to handle potential whitespace in headers
-          const normalizedJsonData = jsonData.map(row => {
+          const normalizedJsonData = jsonData.map((row) => {
             const newRow: Record<string, unknown> = {};
             for (const key in row) {
               newRow[key.trim()] = row[key];
@@ -217,7 +256,9 @@ const Workers = () => {
             const nik = String(row["NIK"] || "").trim();
             const name = String(row["NAMA"] || "").trim();
             const mandorName = String(row["Mandor"] || "").trim();
-            const mandor = foremen.find((f) => f.name.trim().toLowerCase() === mandorName.toLowerCase());
+            const mandor = foremen.find(
+              (f) => f.name.trim().toLowerCase() === mandorName.toLowerCase()
+            );
 
             if (!nik || !name) return;
 
@@ -225,7 +266,9 @@ const Workers = () => {
               nik,
               name,
               mandorId: mandor?._id,
-              division: row["Divisi"] ? String(row["Divisi"]).trim() : undefined,
+              division: row["Divisi"]
+                ? String(row["Divisi"]).trim()
+                : undefined,
               status: "active",
             };
 
@@ -235,14 +278,21 @@ const Workers = () => {
               if (areEmployeesEqual(employeeObj, existing)) {
                 existingEmployees.push(employeeObj);
               } else {
-                updatedEmployees.push({ employee: employeeObj, oldEmployee: existing });
+                updatedEmployees.push({
+                  employee: employeeObj,
+                  oldEmployee: existing,
+                });
               }
             } else {
               newEmployees.push(employeeObj);
             }
           });
 
-          setImportPreviewData({ newEmployees, updatedEmployees, existingEmployees });
+          setImportPreviewData({
+            newEmployees,
+            updatedEmployees,
+            existingEmployees,
+          });
           setIsImportPreviewOpen(true);
         } catch (error) {
           console.error("Error importing Excel:", error);
@@ -348,19 +398,28 @@ const Workers = () => {
 
       const ws1Data = [header, ...dataRows];
       const ws1 = XLSX.utils.aoa_to_sheet(ws1Data);
-      ws1['!cols'] = [{ wch: 5 }, { wch: 30 }, { wch: 20 }, { wch: 25 }, { wch: 20 }];
+      ws1["!cols"] = [
+        { wch: 5 },
+        { wch: 30 },
+        { wch: 20 },
+        { wch: 25 },
+        { wch: 20 },
+      ];
 
       // Second sheet: grouped by Mandor -> Divisi -> list pemanen (Nama, NIK)
       // Build map mandorId -> { name, divisions: Map<divName, members[]> }
-      const groups: Record<string, { name: string; divisions: Record<string, Employee[]> }> = {};
+      const groups: Record<
+        string,
+        { name: string; divisions: Record<string, Employee[]> }
+      > = {};
 
       rows.forEach((r) => {
         // only pemanen should appear in group listings
-        if (r.position !== 'pemanen') return;
-        const mid = r.mandorId || '';
-        const mandorName = (foremen.find(f => f._id === mid)?.name) || '';
+        if (r.position !== "pemanen") return;
+        const mid = r.mandorId || "";
+        const mandorName = foremen.find((f) => f._id === mid)?.name || "";
         if (!groups[mid]) groups[mid] = { name: mandorName, divisions: {} };
-        const div = r.division || '';
+        const div = r.division || "";
         if (!groups[mid].divisions[div]) groups[mid].divisions[div] = [];
         groups[mid].divisions[div].push(r);
       });
@@ -370,7 +429,10 @@ const Workers = () => {
       // Header rows for grouped sheet
       ws2Data.push(["Mandor", "Divisi", "NAMA", "NIK"]);
 
-      const merges: { s: { r: number; c: number }; e: { r: number; c: number } }[] = [];
+      const merges: {
+        s: { r: number; c: number };
+        e: { r: number; c: number };
+      }[] = [];
       let rowPtr = 1; // 0-based index already used by header
 
       for (const [mandorId, grp] of Object.entries(groups)) {
@@ -382,31 +444,45 @@ const Workers = () => {
           const divStartRow = rowPtr;
           // add rows for each member
           for (const m of members) {
-            ws2Data.push([grp.name || '', divName || '', m.name || '', m.nik || '']);
+            ws2Data.push([
+              grp.name || "",
+              divName || "",
+              m.name || "",
+              m.nik || "",
+            ]);
             rowPtr++;
           }
           const divEndRow = rowPtr - 1;
           // merge Divisi cell vertically if more than 1 row
           if (divEndRow > divStartRow) {
-            merges.push({ s: { r: divStartRow, c: 1 }, e: { r: divEndRow, c: 1 } });
+            merges.push({
+              s: { r: divStartRow, c: 1 },
+              e: { r: divEndRow, c: 1 },
+            });
           }
         }
         const mandorEndRow = rowPtr - 1;
         if (mandorHasAny && mandorEndRow >= mandorStartRow) {
           // merge Mandor column cell across its block
-          merges.push({ s: { r: mandorStartRow, c: 0 }, e: { r: mandorEndRow, c: 0 } });
+          merges.push({
+            s: { r: mandorStartRow, c: 0 },
+            e: { r: mandorEndRow, c: 0 },
+          });
         }
       }
 
       const ws2 = XLSX.utils.aoa_to_sheet(ws2Data);
-      ws2['!cols'] = [{ wch: 25 }, { wch: 15 }, { wch: 30 }, { wch: 20 }];
+      ws2["!cols"] = [{ wch: 25 }, { wch: 15 }, { wch: 30 }, { wch: 20 }];
       // Apply merges
-      ws2['!merges'] = merges as any;
+      ws2["!merges"] = merges as any;
 
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws1, "Karyawan");
       XLSX.utils.book_append_sheet(wb, ws2, "Grup Mandor");
-      XLSX.writeFile(wb, `Karyawan_${new Date().toISOString().split("T")[0]}.xlsx`);
+      XLSX.writeFile(
+        wb,
+        `Karyawan_${new Date().toISOString().split("T")[0]}.xlsx`
+      );
 
       toast({
         title: "Berhasil",
@@ -420,7 +496,6 @@ const Workers = () => {
       });
     }
   };
-
 
   return (
     <div className="space-y-6">
@@ -449,9 +524,16 @@ const Workers = () => {
             <Download className="mr-2 h-4 w-4" />
             Export Excel
           </Button>
-          <Dialog open={openAdd} onOpenChange={setOpenAdd}>
+          <Dialog
+            open={openAdd}
+            onOpenChange={(open) => !open && handleCloseAdd()}
+          >
             <DialogTrigger asChild>
-              <Button size="sm" className="bg-orange-500 hover:bg-orange-600">
+              <Button
+                size="sm"
+                className="bg-orange-500 hover:bg-orange-600"
+                onClick={handleOpenAdd}
+              >
                 <Plus className="h-4 w-4 mr-2" />
                 Tambah Karyawan
               </Button>
@@ -570,8 +652,8 @@ const Workers = () => {
               </form>
             </DialogContent>
           </Dialog>
-        </div >
-      </div >
+        </div>
+      </div>
 
       <Card>
         <CardHeader>
@@ -613,7 +695,9 @@ const Workers = () => {
                   return (
                     <TableRow key={worker._id}>
                       <TableCell className="text-center">{index + 1}</TableCell>
-                      <TableCell className="font-medium">{worker.name}</TableCell>
+                      <TableCell className="font-medium">
+                        {worker.name}
+                      </TableCell>
                       <TableCell className="font-mono">{worker.nik}</TableCell>
                       <TableCell>{mandor?.name || ""}</TableCell>
                       <TableCell>{worker.division || ""}</TableCell>
@@ -635,7 +719,10 @@ const Workers = () => {
       </Card>
 
       {/* Dialog Edit Pekerja */}
-      <Dialog open={openEdit} onOpenChange={setOpenEdit}>
+      <Dialog
+        open={openEdit}
+        onOpenChange={(open) => !open && handleCloseEdit()}
+      >
         <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Data Karyawan</DialogTitle>
@@ -667,9 +754,7 @@ const Workers = () => {
                 <Label>Mandor</Label>
                 <Select
                   value={form.mandorId}
-                  onValueChange={(v) =>
-                    setForm((f) => ({ ...f, mandorId: v }))
-                  }
+                  onValueChange={(v) => setForm((f) => ({ ...f, mandorId: v }))}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Pilih mandor" />
@@ -712,33 +797,19 @@ const Workers = () => {
             </div>
 
             <div className="flex gap-2 justify-end">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  setOpenEdit(false);
-                  setEditingWorker(null);
-                  setForm({
-                    nik: "",
-                    name: "",
-                    mandorId: "",
-                    division: "",
-                    status: "active",
-                  });
-                }}
-              >
+              <Button type="button" variant="outline" onClick={handleCloseEdit}>
                 Batal
               </Button>
               <Button type="button" onClick={handleUpdateWorker}>
                 Simpan
               </Button>
             </div>
-          </form >
-        </DialogContent >
-      </Dialog >
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Dialog Import Preview */}
-      < Dialog open={isImportPreviewOpen} onOpenChange={setIsImportPreviewOpen} >
+      <Dialog open={isImportPreviewOpen} onOpenChange={setIsImportPreviewOpen}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Preview Import Data Karyawan</DialogTitle>
@@ -768,7 +839,9 @@ const Workers = () => {
               </Card>
               <Card>
                 <CardHeader className="pb-3">
-                  <p className="text-sm text-muted-foreground">Sama (Diabaikan)</p>
+                  <p className="text-sm text-muted-foreground">
+                    Sama (Diabaikan)
+                  </p>
                 </CardHeader>
                 <CardContent>
                   <p className="text-2xl font-bold text-gray-600">
@@ -780,7 +853,9 @@ const Workers = () => {
 
             {importPreviewData && importPreviewData.newEmployees.length > 0 && (
               <div>
-                <h3 className="font-semibold text-lg mb-2">Data Baru (Akan Ditambahkan)</h3>
+                <h3 className="font-semibold text-lg mb-2">
+                  Data Baru (Akan Ditambahkan)
+                </h3>
                 <div className="border rounded-lg overflow-auto max-h-60">
                   <Table>
                     <TableHeader>
@@ -804,85 +879,123 @@ const Workers = () => {
               </div>
             )}
 
-            {importPreviewData && importPreviewData.updatedEmployees.length > 0 && (
-              <div>
-                <h3 className="font-semibold text-lg mb-2">Data Diubah (Akan Diupdate)</h3>
-                <div className="border rounded-lg overflow-auto max-h-60">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>NIK</TableHead>
-                        <TableHead>Nama</TableHead>
-                        <TableHead>Perubahan</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {importPreviewData.updatedEmployees.map(({ employee, oldEmployee }, idx) => {
-                        const changes: string[] = [];
+            {importPreviewData &&
+              importPreviewData.updatedEmployees.length > 0 && (
+                <div>
+                  <h3 className="font-semibold text-lg mb-2">
+                    Data Diubah (Akan Diupdate)
+                  </h3>
+                  <div className="border rounded-lg overflow-auto max-h-60">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>NIK</TableHead>
+                          <TableHead>Nama</TableHead>
+                          <TableHead>Perubahan</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {importPreviewData.updatedEmployees.map(
+                          ({ employee, oldEmployee }, idx) => {
+                            const changes: string[] = [];
 
-                        const normalize = (val: unknown): unknown => {
-                          if (val === undefined || val === null) return null;
-                          if (typeof val === 'string') {
-                            const trimmed = val.trim();
-                            return trimmed === "" ? null : trimmed;
+                            const normalize = (val: unknown): unknown => {
+                              if (val === undefined || val === null)
+                                return null;
+                              if (typeof val === "string") {
+                                const trimmed = val.trim();
+                                return trimmed === "" ? null : trimmed;
+                              }
+                              return val;
+                            };
+
+                            if (
+                              normalize(employee.name) !==
+                              normalize(oldEmployee.name)
+                            )
+                              changes.push(
+                                `Nama: ${oldEmployee.name} -> ${employee.name}`
+                              );
+
+                            if (
+                              normalize(employee.mandorId) !==
+                              normalize(oldEmployee.mandorId)
+                            ) {
+                              const oldMandor =
+                                foremen.find(
+                                  (f) => f._id === oldEmployee.mandorId
+                                )?.name || "-";
+                              const newMandor =
+                                foremen.find((f) => f._id === employee.mandorId)
+                                  ?.name || "-";
+                              if (oldMandor !== newMandor)
+                                changes.push(
+                                  `Mandor: ${oldMandor} -> ${newMandor}`
+                                );
+                            }
+
+                            if (
+                              normalize(employee.division) !==
+                              normalize(oldEmployee.division)
+                            ) {
+                              const n1 = normalize(oldEmployee.division);
+                              const n2 = normalize(employee.division);
+                              if (n1 !== n2)
+                                changes.push(`Divisi: ${n1} -> ${n2}`);
+                            }
+
+                            return (
+                              <TableRow key={idx}>
+                                <TableCell>{employee.nik}</TableCell>
+                                <TableCell>{employee.name}</TableCell>
+                                <TableCell className="text-sm text-muted-foreground">
+                                  {changes.length > 0
+                                    ? changes.join(", ")
+                                    : "Perubahan format data"}
+                                </TableCell>
+                              </TableRow>
+                            );
                           }
-                          return val;
-                        };
-
-                        if (normalize(employee.name) !== normalize(oldEmployee.name)) changes.push(`Nama: ${oldEmployee.name} -> ${employee.name}`);
-
-                        if (normalize(employee.mandorId) !== normalize(oldEmployee.mandorId)) {
-                          const oldMandor = foremen.find(f => f._id === oldEmployee.mandorId)?.name || "-";
-                          const newMandor = foremen.find(f => f._id === employee.mandorId)?.name || "-";
-                          if (oldMandor !== newMandor) changes.push(`Mandor: ${oldMandor} -> ${newMandor}`);
-                        }
-
-                        if (normalize(employee.division) !== normalize(oldEmployee.division)) {
-                          const n1 = normalize(oldEmployee.division);
-                          const n2 = normalize(employee.division);
-                          if (n1 !== n2) changes.push(`Divisi: ${n1} -> ${n2}`);
-                        }
-
-                        return (
-                          <TableRow key={idx}>
-                            <TableCell>{employee.nik}</TableCell>
-                            <TableCell>{employee.name}</TableCell>
-                            <TableCell className="text-sm text-muted-foreground">
-                              {changes.length > 0 ? changes.join(", ") : "Perubahan format data"}
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {importPreviewData && importPreviewData.newEmployees.length === 0 && importPreviewData.updatedEmployees.length === 0 && (
-              <div className="text-center py-8 text-muted-foreground">
-                Tidak ada data baru atau perubahan.
-              </div>
-            )}
+            {importPreviewData &&
+              importPreviewData.newEmployees.length === 0 &&
+              importPreviewData.updatedEmployees.length === 0 && (
+                <div className="text-center py-8 text-muted-foreground">
+                  Tidak ada data baru atau perubahan.
+                </div>
+              )}
           </div>
 
           <div className="flex justify-end gap-2 mt-4">
-            <Button variant="outline" onClick={() => setIsImportPreviewOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setIsImportPreviewOpen(false)}
+            >
               Batal
             </Button>
             <Button
               onClick={handleConfirmImport}
-              disabled={!importPreviewData || (importPreviewData.newEmployees.length === 0 && importPreviewData.updatedEmployees.length === 0)}
+              disabled={
+                !importPreviewData ||
+                (importPreviewData.newEmployees.length === 0 &&
+                  importPreviewData.updatedEmployees.length === 0)
+              }
               className="bg-green-600 hover:bg-green-700"
             >
               Proses Import
             </Button>
           </div>
         </DialogContent>
-      </Dialog >
+      </Dialog>
 
       <Toaster />
-    </div >
+    </div>
   );
 };
 

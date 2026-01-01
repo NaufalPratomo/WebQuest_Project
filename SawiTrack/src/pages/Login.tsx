@@ -156,7 +156,7 @@ const Login = () => {
                   <Input
                     id="email"
                     type="email"
-                    placeholder="nama@email.com"
+                    placeholder="Masukkan alamat email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
@@ -174,7 +174,7 @@ const Login = () => {
                   <Input
                     id="password"
                     type={showPassword ? "text" : "password"}
-                    placeholder="••••••••"
+                    placeholder="Masukkan password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required

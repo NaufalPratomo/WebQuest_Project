@@ -71,6 +71,15 @@ const Companies = () => {
       .finally(() => setLoading(false));
   }, [toast]);
 
+  const resetForm = () => {
+    setForm({
+      company_name: "",
+      address: "",
+      phone: "",
+      email: "",
+    });
+  };
+
   const handleEdit = (company: Company) => {
     setEditingCompany(company);
     setForm({
@@ -80,6 +89,22 @@ const Companies = () => {
       email: company.email || "",
     });
     setOpenEdit(true);
+  };
+
+  const handleCloseEdit = () => {
+    setOpenEdit(false);
+    setEditingCompany(null);
+    resetForm();
+  };
+
+  const handleCloseAdd = () => {
+    setOpenAdd(false);
+    resetForm();
+  };
+
+  const handleOpenAdd = () => {
+    resetForm(); // Ensure form is clean
+    setOpenAdd(true);
   };
 
   const handleUpdateCompany = async () => {
@@ -109,11 +134,11 @@ const Companies = () => {
         prev.map((c) =>
           c._id === editingCompany._id
             ? {
-              ...c,
-              ...form,
-              phone: form.phone || undefined,
-              email: form.email || undefined,
-            }
+                ...c,
+                ...form,
+                phone: form.phone || undefined,
+                email: form.email || undefined,
+              }
             : c
         )
       );
@@ -150,7 +175,8 @@ const Companies = () => {
           const data = new Uint8Array(event.target?.result as ArrayBuffer);
           const workbook = XLSX.read(data, { type: "array" });
           const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-          const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet);
+          const jsonData =
+            XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet);
 
           const newCompanies: Company[] = [];
           const existingCompanies: Company[] = [];
@@ -164,7 +190,9 @@ const Companies = () => {
             if (!company_name || !address) return;
 
             // Check if company already exists
-            const exists = rows.find((c) => c.company_name.toLowerCase() === company_name.toLowerCase());
+            const exists = rows.find(
+              (c) => c.company_name.toLowerCase() === company_name.toLowerCase()
+            );
 
             const companyObj: Company = {
               _id: exists ? exists._id : `temp_${Date.now()}_${Math.random()}`,
@@ -243,15 +271,18 @@ const Companies = () => {
     try {
       const exportData = filtered.map((c) => ({
         "Nama Perusahaan": c.company_name,
-        "Alamat": c.address,
-        "Telepon": c.phone || "-",
-        "Email": c.email || "-",
+        Alamat: c.address,
+        Telepon: c.phone || "-",
+        Email: c.email || "-",
       }));
 
       const ws = XLSX.utils.json_to_sheet(exportData);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Perusahaan");
-      XLSX.writeFile(wb, `Perusahaan_${new Date().toISOString().split("T")[0]}.xlsx`);
+      XLSX.writeFile(
+        wb,
+        `Perusahaan_${new Date().toISOString().split("T")[0]}.xlsx`
+      );
 
       toast({
         title: "Berhasil",
@@ -299,9 +330,16 @@ const Companies = () => {
             <Download className="mr-2 h-4 w-4" />
             Export Excel
           </Button>
-          <Dialog open={openAdd} onOpenChange={setOpenAdd}>
+          <Dialog
+            open={openAdd}
+            onOpenChange={(open) => !open && handleCloseAdd()}
+          >
             <DialogTrigger asChild>
-              <Button size="sm" className="bg-orange-500 hover:bg-orange-600">
+              <Button
+                size="sm"
+                className="bg-orange-500 hover:bg-orange-600"
+                onClick={handleOpenAdd}
+              >
                 <Plus className="h-4 w-4 mr-2" />
                 Tambah Perusahaan
               </Button>
@@ -314,6 +352,7 @@ const Companies = () => {
                 <div className="space-y-2">
                   <Label>Nama Perusahaan</Label>
                   <Input
+                    placeholder="Masukkan nama perusahaan"
                     value={form.company_name}
                     onChange={(e) =>
                       setForm((f) => ({ ...f, company_name: e.target.value }))
@@ -323,6 +362,7 @@ const Companies = () => {
                 <div className="space-y-2">
                   <Label>Alamat</Label>
                   <Input
+                    placeholder="Masukkan alamat lengkap perusahaan"
                     value={form.address}
                     onChange={(e) =>
                       setForm((f) => ({ ...f, address: e.target.value }))
@@ -332,6 +372,7 @@ const Companies = () => {
                 <div className="space-y-2">
                   <Label>Telepon</Label>
                   <Input
+                    placeholder="Masukkan nomor telepon"
                     value={form.phone}
                     onChange={(e) =>
                       setForm((f) => ({ ...f, phone: e.target.value }))
@@ -342,6 +383,7 @@ const Companies = () => {
                   <Label>Email</Label>
                   <Input
                     type="email"
+                    placeholder="Masukkan alamat email"
                     value={form.email}
                     onChange={(e) =>
                       setForm((f) => ({ ...f, email: e.target.value }))
@@ -504,7 +546,10 @@ const Companies = () => {
       </Card>
 
       {/* Dialog Edit Perusahaan */}
-      <Dialog open={openEdit} onOpenChange={setOpenEdit}>
+      <Dialog
+        open={openEdit}
+        onOpenChange={(open) => !open && handleCloseEdit()}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Edit Perusahaan</DialogTitle>
@@ -513,6 +558,7 @@ const Companies = () => {
             <div className="space-y-2">
               <Label>Nama Perusahaan</Label>
               <Input
+                placeholder="Masukkan nama perusahaan"
                 value={form.company_name}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, company_name: e.target.value }))
@@ -522,6 +568,7 @@ const Companies = () => {
             <div className="space-y-2">
               <Label>Alamat</Label>
               <Input
+                placeholder="Masukkan alamat lengkap perusahaan"
                 value={form.address}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, address: e.target.value }))
@@ -531,6 +578,7 @@ const Companies = () => {
             <div className="space-y-2">
               <Label>Telepon</Label>
               <Input
+                placeholder="Masukkan nomor telepon"
                 value={form.phone}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, phone: e.target.value }))
@@ -541,6 +589,7 @@ const Companies = () => {
               <Label>Email</Label>
               <Input
                 type="email"
+                placeholder="Masukkan alamat email"
                 value={form.email}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, email: e.target.value }))
@@ -548,20 +597,7 @@ const Companies = () => {
               />
             </div>
             <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  setOpenEdit(false);
-                  setEditingCompany(null);
-                  setForm({
-                    company_name: "",
-                    address: "",
-                    phone: "",
-                    email: "",
-                  });
-                }}
-              >
+              <Button type="button" variant="outline" onClick={handleCloseEdit}>
                 Batal
               </Button>
               <Button type="button" onClick={handleUpdateCompany}>
@@ -583,7 +619,9 @@ const Companies = () => {
             <div className="grid grid-cols-2 gap-4">
               <Card>
                 <CardHeader className="pb-3">
-                  <p className="text-sm text-muted-foreground">Data Baru (Akan Ditambahkan)</p>
+                  <p className="text-sm text-muted-foreground">
+                    Data Baru (Akan Ditambahkan)
+                  </p>
                 </CardHeader>
                 <CardContent>
                   <p className="text-2xl font-bold text-green-600">
@@ -593,7 +631,9 @@ const Companies = () => {
               </Card>
               <Card>
                 <CardHeader className="pb-3">
-                  <p className="text-sm text-muted-foreground">Duplikat (Akan Diabaikan)</p>
+                  <p className="text-sm text-muted-foreground">
+                    Duplikat (Akan Diabaikan)
+                  </p>
                 </CardHeader>
                 <CardContent>
                   <p className="text-2xl font-bold text-gray-600">
@@ -631,44 +671,54 @@ const Companies = () => {
               </div>
             )}
 
-            {importPreviewData && importPreviewData.existingCompanies.length > 0 && (
-              <div>
-                <h3 className="font-semibold text-lg mb-2">Data Duplikat (Nama sudah ada)</h3>
-                <div className="border rounded-lg overflow-auto max-h-40 bg-muted/50">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Nama Perusahaan</TableHead>
-                        <TableHead>Alamat</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {importPreviewData.existingCompanies.map((c, idx) => (
-                        <TableRow key={idx} className="opacity-50">
-                          <TableCell>{c.company_name}</TableCell>
-                          <TableCell>{c.address}</TableCell>
+            {importPreviewData &&
+              importPreviewData.existingCompanies.length > 0 && (
+                <div>
+                  <h3 className="font-semibold text-lg mb-2">
+                    Data Duplikat (Nama sudah ada)
+                  </h3>
+                  <div className="border rounded-lg overflow-auto max-h-40 bg-muted/50">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Nama Perusahaan</TableHead>
+                          <TableHead>Alamat</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {importPreviewData.existingCompanies.map((c, idx) => (
+                          <TableRow key={idx} className="opacity-50">
+                            <TableCell>{c.company_name}</TableCell>
+                            <TableCell>{c.address}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {importPreviewData && importPreviewData.newCompanies.length === 0 && (
-              <div className="text-center py-8 text-muted-foreground">
-                Tidak ada data baru untuk ditambahkan.
-              </div>
-            )}
+            {importPreviewData &&
+              importPreviewData.newCompanies.length === 0 && (
+                <div className="text-center py-8 text-muted-foreground">
+                  Tidak ada data baru untuk ditambahkan.
+                </div>
+              )}
           </div>
 
           <div className="flex justify-end gap-2 mt-4">
-            <Button variant="outline" onClick={() => setIsImportPreviewOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setIsImportPreviewOpen(false)}
+            >
               Batal
             </Button>
             <Button
               onClick={handleConfirmImport}
-              disabled={!importPreviewData || importPreviewData.newCompanies.length === 0}
+              disabled={
+                !importPreviewData ||
+                importPreviewData.newCompanies.length === 0
+              }
               className="bg-green-600 hover:bg-green-700"
             >
               Import {importPreviewData?.newCompanies.length} Data

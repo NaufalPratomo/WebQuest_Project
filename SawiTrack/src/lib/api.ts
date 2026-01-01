@@ -664,4 +664,32 @@ export const api = {
     http<DailyReport>(`/daily-reports/${id}`, { method: "PUT", body: JSON.stringify(body) }),
   dailyReportDelete: (id: string) =>
     http<{ ok: boolean }>(`/daily-reports/${id}`, { method: "DELETE" }),
+
+  // Operational Cost (Recap)
+  recapCostsList: (params: { month: string | number; year: string | number }) => {
+    const search = toQS(params as any);
+    return http<RecapDataRow[]>(`/recap-costs${search}`);
+  },
+  recapCostCreate: (body: Partial<RecapDataRow>) =>
+    http<RecapDataRow>(`/recap-costs`, { method: "POST", body: JSON.stringify(body) }),
+  recapCostUpdate: (id: string, body: Partial<RecapDataRow>) =>
+    http<RecapDataRow>(`/recap-costs/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+  recapCostDelete: (id: string) =>
+    http<{ ok: boolean }>(`/recap-costs/${id}`, { method: "DELETE" }),
 };
+
+export interface RecapDataRow {
+  _id?: string;
+  date: string; // ISO date (usually 1st of month)
+  category: string;
+  jenisPekerjaan: string;
+  aktivitas: string;
+  satuan: string;
+  hk: number;
+  hasilKerja: number;
+  output: number;
+  satuanOutput: string;
+  rpKhl: number;
+  rpPremi: number;
+  rpBorongan: number;
+}

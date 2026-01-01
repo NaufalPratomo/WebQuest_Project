@@ -1956,7 +1956,102 @@ app.delete(`${API_BASE_PATH}/daily-reports/:id`, async (req, res) => {
   }
 });
 
-// Activity logs endpoint
+// Operational Costs (Recap)
+import OperationalCost from "./models/OperationalCost.js";
+
+app.get(`${API_BASE_PATH}/recap-costs`, async (req, res) => {
+  try {
+    const { month, year } = req.query;
+    if (!month || !year) {
+      return res.status(400).json({ error: "Month and Year are required" });
+    }
+    
+    // Create Date range for the entire month
+    const startDate = new Date(year, month, 1);
+    const endDate = new Date(year, Number(month) + 1, 0); // Last day of month
+    
+    const costs = await OperationalCost.find({
+      date: { $gte: startDate, $lte: endDate }
+    }).sort({ category: 1, date: 1 }).lean();
+    
+    res.json(costs);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post(`${API_BASE_PATH}/recap-costs`, async (req, res) => {
+  try {
+    const { date, category, jenisPekerjaan, aktivitas, satuan, hk, hasilKerja, output, satuanOutput, rpKhl, rpPremi, rpBorongan } = req.body;
+    
+    if (!date || !category || !jenisPekerjaan) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    if (await checkDateClosed(date)) {
+      return res.status(400).json({ error: `Periode untuk tanggal ${date} sudah ditutup.` });
+    }
+
+    const created = await OperationalCost.create({
+      date,
+      category,
+      jenisPekerjaan,
+      aktivitas,
+      satuan,
+      hk,
+      hasilKerja,
+      output,
+      satuanOutput,
+      rpKhl,
+      rpPremi,
+      rpBorongan
+    });
+    
+    logActivity(req, "CREATE_COST", { category, jenisPekerjaan });
+    res.status(201).json(created);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put(`${API_BASE_PATH}/recap-costs/:id`, async (req, res) => {
+  try {
+    const existing = await OperationalCost.findById(req.params.id);
+    if (!existing) return res.status(404).json({ error: "Not found" });
+
+    if (await checkDateClosed(existing.date)) {
+      return res.status(400).json({ error: "Periode transaksi ini sudah ditutup." });
+    }
+
+    const updated = await OperationalCost.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true }
+    );
+    
+    logActivity(req, "UPDATE_COST", { id: req.params.id });
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete(`${API_BASE_PATH}/recap-costs/:id`, async (req, res) => {
+  try {
+    const existing = await OperationalCost.findById(req.params.id);
+    if (!existing) return res.status(404).json({ error: "Not found" });
+
+    if (await checkDateClosed(existing.date)) {
+      return res.status(400).json({ error: "Periode transaksi ini sudah ditutup." });
+    }
+
+    await OperationalCost.findByIdAndDelete(req.params.id);
+    logActivity(req, "DELETE_COST", { id: req.params.id });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // Export app for Vercel
 export default app;

@@ -43,7 +43,7 @@ interface RecapCategory {
 
 const Recap = () => {
   const [selectedMonth, setSelectedMonth] = useState<string>(String(new Date().getMonth()));
-  const [selectedYear, setSelectedYear] = useState<string>(String(new Date().getFullYear()));
+  const [selectedYear, setSelectedYear] = useState<string>(String(new Date().getFullYear() - 1));
   const [data, setData] = useState<RecapCategory[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -206,8 +206,9 @@ const Recap = () => {
       }
       setIsDialogOpen(false);
       fetchData();
-    } catch (error: any) {
-      toast.error(error.message || 'Gagal menyimpan data');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : undefined;
+      toast.error(message || 'Gagal menyimpan data');
     }
   };
 
@@ -318,7 +319,7 @@ const Recap = () => {
               <TableHeader>
                 <TableRow className="border-none">
                   <TableHead rowSpan={2} className="w-[80px] bg-emerald-600 text-white border-r border-emerald-500 text-center font-bold text-xs uppercase">Aksi</TableHead>
-                  <TableHead rowSpan={2} className=" bg-emerald-600 text-white border-r border-emerald-500 text-center font-bold text-xs uppercase px-4">Jenis Pekerjaan</TableHead>
+                  <TableHead rowSpan={2} colSpan={2} className="bg-emerald-600 text-white border-r border-emerald-500 text-center font-bold text-xs uppercase px-4">Jenis Pekerjaan</TableHead>
                   <TableHead rowSpan={2} className="w-[180px] bg-emerald-600 text-white border-r border-emerald-500 text-center font-bold text-xs uppercase">Aktivitas</TableHead>
                   <TableHead rowSpan={2} className="w-[80px] bg-emerald-600 text-white border-r border-emerald-500 text-center font-bold text-xs uppercase">Satuan</TableHead>
                   <TableHead colSpan={10} className="bg-orange-100 text-orange-900 border-b border-orange-200 text-center font-bold text-base py-2">
@@ -341,7 +342,7 @@ const Recap = () => {
               <TableBody>
                 {data.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={14} className="text-center py-10 text-gray-500">Belum ada data untuk periode ini.</TableCell>
+                    <TableCell colSpan={15} className="text-center py-10 text-gray-500">Belum ada data untuk periode ini.</TableCell>
                   </TableRow>
                 )}
                 {data.map((category, catIdx) => {

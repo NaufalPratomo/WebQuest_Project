@@ -9,7 +9,12 @@
     "test:db": "node scripts/test-mongo-connection.js",
     "inspect:db": "node scripts/db-inspect.js",
     "seed:foreman-groups": "node scripts/seed-foreman-groups.js",
-    "seed:demo-data": "node scripts/seed-users-and-employees.js"
+    "seed:demo-data": "node scripts/seed-users-and-employees.js",
+    "seed:recap-costs": "node scripts/seed-recap-costs.js",
+    "seed:employees:csv": "node scripts/seed-employees-and-foreman-groups-from-csv.js",
+    "seed:attendance:csv": "node scripts/seed-attendance-from-csv.js",
+    "backfill:employee-pt": "node scripts/backfill-employee-pt.js",
+    "seed:companies:pt": "node scripts/seed-pt-companies.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",

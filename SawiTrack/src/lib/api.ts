@@ -37,6 +37,8 @@ export interface Employee {
   gender?: string;
   religion?: string;
   division?: string;
+  division_id?: number;
+  pt?: string;
   joinDate?: string;
   status: string;
 }
@@ -548,7 +550,12 @@ export const api = {
     }),
 
   // Attendance
-  attendanceList: (params?: { date?: string; employeeId?: string }) => {
+  attendanceList: (params?: {
+    date?: string;
+    startDate?: string;
+    endDate?: string;
+    employeeId?: string;
+  }) => {
     const search = toQS(params);
     return http<
       Array<{
@@ -558,6 +565,7 @@ export const api = {
         status: string;
         division_id?: number;
         notes?: string;
+        hk?: number;
       }>
     >(`/attendance${search}`);
   },
@@ -667,7 +675,7 @@ export const api = {
     mandorName?: string;
     division?: string;
   }) => {
-    const search = toQS(params as any);
+    const search = toQS(params);
     return http<DailyReport[]>(`/daily-reports${search}`);
   },
   dailyReportCreate: (
@@ -686,14 +694,23 @@ export const api = {
     http<{ ok: boolean }>(`/daily-reports/${id}`, { method: "DELETE" }),
 
   // Operational Cost (Recap)
-  recapCostsList: (params: { month: string | number; year: string | number }) => {
-    const search = toQS(params as any);
+  recapCostsList: (params: {
+    month: string | number;
+    year: string | number;
+  }) => {
+    const search = toQS(params);
     return http<RecapDataRow[]>(`/recap-costs${search}`);
   },
   recapCostCreate: (body: Partial<RecapDataRow>) =>
-    http<RecapDataRow>(`/recap-costs`, { method: "POST", body: JSON.stringify(body) }),
+    http<RecapDataRow>(`/recap-costs`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   recapCostUpdate: (id: string, body: Partial<RecapDataRow>) =>
-    http<RecapDataRow>(`/recap-costs/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+    http<RecapDataRow>(`/recap-costs/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
   recapCostDelete: (id: string) =>
     http<{ ok: boolean }>(`/recap-costs/${id}`, { method: "DELETE" }),
 };

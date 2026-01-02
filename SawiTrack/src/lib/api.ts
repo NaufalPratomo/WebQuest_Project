@@ -9,6 +9,13 @@ export const API_BASE =
     ? `${window.location.origin}${RAW_API_BASE}`
     : RAW_API_BASE;
 
+console.log("Debug API Config:", {
+  RAW_API_BASE,
+  API_BASE,
+  isProd: import.meta.env.PROD,
+  ver: "debug-v1",
+});
+
 export type Role = "manager" | "foreman" | "employee";
 export type EmpStatus = "active" | "inactive";
 export type TargetStatus = "active" | "done";
@@ -611,10 +618,8 @@ export const api = {
           }).catch((inner) => {
             // Provide a clearer combined error
             throw new Error(
-              `Activity logs endpoint tidak ditemukan. Coba cek backend routes /activity-logs & /activitylogs. Asli: ${
-                err.message
-              }; Alias: ${
-                inner instanceof Error ? inner.message : String(inner)
+              `Activity logs endpoint tidak ditemukan. Coba cek backend routes /activity-logs & /activitylogs. Asli: ${err.message
+              }; Alias: ${inner instanceof Error ? inner.message : String(inner)
               }`
             );
           });

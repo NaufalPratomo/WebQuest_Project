@@ -33,11 +33,7 @@ const Login = () => {
       const user = await login(email, password);
       if (user) {
         toast.success("Login berhasil!");
-        if (user.role === "employee") {
-          navigate("/activities/input");
-        } else {
-          navigate("/dashboard");
-        }
+        navigate("/dashboard");
       } else {
         toast.error("Email atau password salah");
       }
@@ -48,24 +44,17 @@ const Login = () => {
 
   const demoAccounts = [
     {
-      role: "Manager",
-      email: "manager@sawit.com",
-      password: "manager123",
+      role: "Staff",
+      email: "staff@sawit.com",
+      password: "password123",
       icon: Briefcase,
       gradient: "from-orange-500 to-red-500",
     },
     {
-      role: "Foreman",
-      email: "foreman@sawit.com",
-      password: "foreman123",
+      role: "Non-Staff",
+      email: "nonstaff@sawit.com",
+      password: "password123",
       icon: Users,
-      gradient: "from-green-500 to-emerald-600",
-    },
-    {
-      role: "Employee",
-      email: "employee@sawit.com",
-      password: "employee123",
-      icon: UserCheck,
       gradient: "from-blue-500 to-cyan-500",
     },
   ];
@@ -248,11 +237,10 @@ const Login = () => {
                           </p>
                         </div>
                         <ChevronRight
-                          className={`w-4 h-4 text-green-100/40 transition-all duration-300 ${
-                            hoveredDemo === account.role
+                          className={`w-4 h-4 text-green-100/40 transition-all duration-300 ${hoveredDemo === account.role
                               ? "translate-x-1 text-orange-400"
                               : ""
-                          }`}
+                            }`}
                         />
                       </div>
                       {hoveredDemo === account.role && (

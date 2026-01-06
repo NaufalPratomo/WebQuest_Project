@@ -52,7 +52,7 @@ const App = () => (
               <Route
                 path="/dashboard"
                 element={
-                  <ProtectedRoute allowedRoles={["manager", "foreman"]}>
+                  <ProtectedRoute allowedRoles={["staff", "non-staff"]}>
                     <Layout>
                       <Dashboard />
                     </Layout>
@@ -63,7 +63,7 @@ const App = () => (
               <Route
                 path="/master/users"
                 element={
-                  <ProtectedRoute allowedRoles={["manager"]}>
+                  <ProtectedRoute allowedRoles={["staff", "non-staff"]}>
                     <Layout>
                       <Users />
                     </Layout>
@@ -74,7 +74,7 @@ const App = () => (
               <Route
                 path="/master/workers"
                 element={
-                  <ProtectedRoute allowedRoles={["manager"]}>
+                  <ProtectedRoute allowedRoles={["staff", "non-staff"]}>
                     <Layout>
                       <Workers />
                     </Layout>
@@ -85,7 +85,7 @@ const App = () => (
               <Route
                 path="/master/companies"
                 element={
-                  <ProtectedRoute allowedRoles={["manager"]}>
+                  <ProtectedRoute allowedRoles={["staff", "non-staff"]}>
                     <Layout>
                       <Companies />
                     </Layout>
@@ -96,7 +96,7 @@ const App = () => (
               <Route
                 path="/master/locations"
                 element={
-                  <ProtectedRoute allowedRoles={["manager"]}>
+                  <ProtectedRoute allowedRoles={["staff", "non-staff"]}>
                     <Layout>
                       <Locations />
                     </Layout>
@@ -107,7 +107,7 @@ const App = () => (
               <Route
                 path="/master/pekerjaan"
                 element={
-                  <ProtectedRoute allowedRoles={["manager"]}>
+                  <ProtectedRoute allowedRoles={["staff", "non-staff"]}>
                     <Layout>
                       <Pekerjaan />
                     </Layout>
@@ -118,7 +118,7 @@ const App = () => (
               <Route
                 path="/master/targets"
                 element={
-                  <ProtectedRoute allowedRoles={["manager"]}>
+                  <ProtectedRoute allowedRoles={["staff", "non-staff"]}>
                     <Layout>
                       <Targets />
                     </Layout>
@@ -128,7 +128,7 @@ const App = () => (
               <Route
                 path="/transactions/panen"
                 element={
-                  <ProtectedRoute allowedRoles={["manager", "foreman"]}>
+                  <ProtectedRoute allowedRoles={["staff", "non-staff"]}>
                     <Layout>
                       <Harvest />
                     </Layout>
@@ -138,7 +138,7 @@ const App = () => (
               <Route
                 path="/transactions/angkut"
                 element={
-                  <ProtectedRoute allowedRoles={["manager", "foreman"]}>
+                  <ProtectedRoute allowedRoles={["staff", "non-staff"]}>
                     <Layout>
                       <Transport />
                     </Layout>
@@ -148,7 +148,7 @@ const App = () => (
               <Route
                 path="/transactions/attendance"
                 element={
-                  <ProtectedRoute allowedRoles={["manager", "foreman"]}>
+                  <ProtectedRoute allowedRoles={["staff", "non-staff"]}>
                     <Layout>
                       <Attendance />
                     </Layout>
@@ -158,7 +158,7 @@ const App = () => (
               <Route
                 path="/transactions/upah"
                 element={
-                  <ProtectedRoute allowedRoles={["manager", "foreman"]}>
+                  <ProtectedRoute allowedRoles={["staff", "non-staff"]}>
                     <Layout>
                       <Upah />
                     </Layout>
@@ -168,7 +168,7 @@ const App = () => (
               <Route
                 path="/transactions/closing"
                 element={
-                  <ProtectedRoute allowedRoles={["manager"]}>
+                  <ProtectedRoute allowedRoles={["staff", "non-staff"]}>
                     <Layout>
                       <Closing />
                     </Layout>
@@ -180,7 +180,7 @@ const App = () => (
               <Route
                 path="/reports/daily-input"
                 element={
-                  <ProtectedRoute allowedRoles={["manager", "foreman"]}>
+                  <ProtectedRoute allowedRoles={["staff", "non-staff"]}>
                     <Layout>
                       <InputDailyReport />
                     </Layout>
@@ -190,7 +190,7 @@ const App = () => (
               <Route
                 path="/reports/taksasi"
                 element={
-                  <ProtectedRoute allowedRoles={["manager", "foreman"]}>
+                  <ProtectedRoute allowedRoles={["staff", "non-staff"]}>
                     <Layout>
                       <TaksasiPerBlock />
                     </Layout>
@@ -200,7 +200,7 @@ const App = () => (
               <Route
                 path="/reports/trend"
                 element={
-                  <ProtectedRoute allowedRoles={["manager", "foreman"]}>
+                  <ProtectedRoute allowedRoles={["staff", "non-staff"]}>
                     <Layout>
                       <Trend />
                     </Layout>
@@ -210,7 +210,7 @@ const App = () => (
               <Route
                 path="/reports/statement"
                 element={
-                  <ProtectedRoute allowedRoles={["manager", "foreman"]}>
+                  <ProtectedRoute allowedRoles={["staff", "non-staff"]}>
                     <Layout>
                       <Statement />
                     </Layout>
@@ -222,7 +222,7 @@ const App = () => (
                 path="/activities/input"
                 element={
                   <ProtectedRoute
-                    allowedRoles={["manager", "foreman", "employee"]}
+                    allowedRoles={["staff", "non-staff"]}
                   >
                     <Layout>
                       <InputReport />
@@ -235,7 +235,7 @@ const App = () => (
                 path="/activities/history"
                 element={
                   <ProtectedRoute
-                    allowedRoles={["manager", "foreman", "employee"]}
+                    allowedRoles={["staff", "non-staff"]}
                   >
                     <Layout>
                       <History />
@@ -247,7 +247,7 @@ const App = () => (
               <Route
                 path="/verification"
                 element={
-                  <ProtectedRoute allowedRoles={["foreman"]}>
+                  <ProtectedRoute allowedRoles={["staff", "non-staff"]}>
                     <Layout>
                       <Verification />
                     </Layout>
@@ -258,7 +258,7 @@ const App = () => (
               <Route
                 path="/recap"
                 element={
-                  <ProtectedRoute allowedRoles={["manager"]}>
+                  <ProtectedRoute allowedRoles={["staff", "non-staff"]}>
                     <Layout>
                       <Recap />
                     </Layout>
@@ -269,7 +269,7 @@ const App = () => (
               <Route
                 path="/activity-logs"
                 element={
-                  <ProtectedRoute allowedRoles={["manager"]}>
+                  <ProtectedRoute allowedRoles={["staff", "non-staff"]}>
                     <Layout>
                       <ActivityLog />
                     </Layout>
@@ -280,7 +280,7 @@ const App = () => (
               <Route
                 path="/reports"
                 element={
-                  <ProtectedRoute allowedRoles={["manager", "foreman"]}>
+                  <ProtectedRoute allowedRoles={["staff", "non-staff"]}>
                     <Layout>
                       <Reports />
                     </Layout>
@@ -291,7 +291,7 @@ const App = () => (
               <Route
                 path="/taksasi"
                 element={
-                  <ProtectedRoute allowedRoles={["manager"]}>
+                  <ProtectedRoute allowedRoles={["staff", "non-staff"]}>
                     <Layout>
                       <TaksasiPanen />
                     </Layout>

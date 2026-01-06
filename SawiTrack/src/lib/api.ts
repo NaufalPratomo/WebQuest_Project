@@ -16,7 +16,7 @@ console.log("Debug API Config:", {
   ver: "debug-v1",
 });
 
-export type Role = "manager" | "foreman" | "employee";
+export type Role = "staff" | "non-staff";
 export type EmpStatus = "active" | "inactive";
 export type TargetStatus = "active" | "done";
 export type ReportStatus = "pending" | "approved" | "rejected";

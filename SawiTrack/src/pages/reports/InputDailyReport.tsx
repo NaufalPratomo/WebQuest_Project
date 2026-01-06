@@ -25,7 +25,7 @@ const InputDailyReport = () => {
     const [users, setUsers] = useState<User[]>([]);
 
     useEffect(() => {
-        if (user && (user.role === 'manager' || user.role === 'foreman')) {
+        if (user && (user.role === 'staff' || user.role === 'non-staff')) {
             fetchMasterData();
         }
     }, [user]);
@@ -69,7 +69,7 @@ const InputDailyReport = () => {
             division: 'Liyodu',
             nik: '',
             employeeName: '',
-            mandorName: user?.role === 'foreman' ? user.name : '',
+            mandorName: user?.role === 'non-staff' ? user.name : '',
             coa: '',
             activity: 'Panen Tahun Tanam 2016',
             jobType: '',

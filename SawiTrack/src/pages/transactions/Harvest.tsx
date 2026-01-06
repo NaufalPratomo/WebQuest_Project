@@ -53,7 +53,7 @@ export default function Harvest() {
   const mandorMap = useMemo(() => {
     const m = new Map<number, string>();
     for (const u of users) {
-      if (u.role === 'foreman' && u.division != null) {
+      if (u.division != null) {
         const divNum = Number(u.division);
         if (!Number.isNaN(divNum)) m.set(divNum, u.name);
       }

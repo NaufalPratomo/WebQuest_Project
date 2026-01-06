@@ -182,13 +182,13 @@ const Users = () => {
         prev.map((u) =>
           u.id === editingUser.id
             ? {
-                ...u,
-                name: form.name,
-                email: form.email,
-                role: form.role,
-                division: form.division,
-                status: form.status,
-              }
+              ...u,
+              name: form.name,
+              email: form.email,
+              role: form.role,
+              division: form.division,
+              status: form.status,
+            }
             : u
         )
       );
@@ -454,9 +454,8 @@ const Users = () => {
                       <SelectValue placeholder="Pilih role" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="manager">Manager</SelectItem>
-                      <SelectItem value="foreman">Mandor</SelectItem>
-                      <SelectItem value="employee">Employee</SelectItem>
+                      <SelectItem value="staff">Staff</SelectItem>
+                      <SelectItem value="non-staff">Non-Staff</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -578,7 +577,7 @@ const Users = () => {
                     <TableCell>{user.email}</TableCell>
                     <TableCell>
                       <Badge variant="outline" className="capitalize">
-                        {user.role === "foreman" ? "Mandor" : user.role}
+                        {user.role}
                       </Badge>
                     </TableCell>
                     <TableCell>
@@ -648,9 +647,8 @@ const Users = () => {
                   <SelectValue placeholder="Pilih role" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="manager">Manager</SelectItem>
-                  <SelectItem value="foreman">Mandor</SelectItem>
-                  <SelectItem value="employee">Employee</SelectItem>
+                  <SelectItem value="staff">Staff</SelectItem>
+                  <SelectItem value="non-staff">Non-Staff</SelectItem>
                 </SelectContent>
               </Select>
             </div>

@@ -4,8 +4,8 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "node src/index.js",
+    "start": "node --watch src/index.js",
+    "dev": "node --watch src/index.js",
     "test:db": "node scripts/test-mongo-connection.js",
     "inspect:db": "node scripts/db-inspect.js",
     "seed:foreman-groups": "node scripts/seed-foreman-groups.js",

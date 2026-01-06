@@ -39,7 +39,7 @@ const Layout = ({ children }: LayoutProps) => {
     path: string;
     icon: IconType;
     label: string;
-    roles: Array<"manager" | "foreman" | "employee">;
+    roles: Array<"staff" | "non-staff">;
   };
   type MenuGroup = { label: string; items: MenuItem[] };
 
@@ -48,7 +48,7 @@ const Layout = ({ children }: LayoutProps) => {
       path: "/dashboard",
       icon: LayoutDashboard,
       label: "Dashboard",
-      roles: ["manager", "foreman"],
+      roles: ["staff", "non-staff"],
     },
   ];
 
@@ -60,37 +60,37 @@ const Layout = ({ children }: LayoutProps) => {
           path: "/master/users",
           icon: UserCog,
           label: "Pengguna (Login)",
-          roles: ["manager"],
+          roles: ["staff", "non-staff"],
         },
         {
           path: "/master/workers",
           icon: Users,
           label: "Karyawan",
-          roles: ["manager"],
+          roles: ["staff", "non-staff"],
         },
         {
           path: "/master/companies",
           icon: Building2,
           label: "Perusahaan",
-          roles: ["manager"],
+          roles: ["staff", "non-staff"],
         },
         {
           path: "/master/pekerjaan",
           icon: FileText,
           label: "Pekerjaan",
-          roles: ["manager"],
+          roles: ["staff", "non-staff"],
         },
         {
           path: "/master/locations",
           icon: MapPin,
           label: "Data Aresta",
-          roles: ["manager"],
+          roles: ["staff", "non-staff"],
         },
         {
           path: "/transactions/closing",
           icon: FileText,
           label: "Periode Closing Transaksi",
-          roles: ["manager"],
+          roles: ["staff", "non-staff"],
         },
       ],
     },
@@ -101,25 +101,25 @@ const Layout = ({ children }: LayoutProps) => {
           path: "/taksasi",
           icon: FileText,
           label: "Taksasi",
-          roles: ["manager"],
+          roles: ["staff", "non-staff"],
         },
         {
           path: "/transactions/attendance",
           icon: CheckSquare,
           label: "Absensi Harian",
-          roles: ["manager", "foreman"],
+          roles: ["staff", "non-staff"],
         },
         {
           path: "/master/targets",
           icon: FileText,
           label: "Realisasi",
-          roles: ["manager"],
+          roles: ["staff", "non-staff"],
         },
         {
           path: "/transactions/angkut",
           icon: Truck,
           label: "Angkutan",
-          roles: ["manager", "foreman"],
+          roles: ["staff", "non-staff"],
         },
       ],
     },
@@ -130,25 +130,25 @@ const Layout = ({ children }: LayoutProps) => {
           path: "/reports/daily-input",
           icon: FileText,
           label: "Input Laporan Harian",
-          roles: ["manager", "foreman"],
+          roles: ["staff", "non-staff"],
         },
         {
           path: "/reports/taksasi",
           icon: BarChart3,
           label: "Report Taksasi",
-          roles: ["manager", "foreman"],
+          roles: ["staff", "non-staff"],
         },
         {
           path: "/reports/statement",
           icon: Download,
           label: "Report Realisasi",
-          roles: ["manager", "foreman"],
+          roles: ["staff", "non-staff"],
         },
         {
           path: "/reports/trend",
           icon: BarChart3,
           label: "Laporan Tren",
-          roles: ["manager", "foreman"],
+          roles: ["staff", "non-staff"],
         },
       ],
     },
@@ -159,19 +159,19 @@ const Layout = ({ children }: LayoutProps) => {
       path: "/verification",
       icon: CheckSquare,
       label: "Verifikasi",
-      roles: ["foreman"],
+      roles: ["staff", "non-staff"],
     },
     {
       path: "/recap",
       icon: BarChart3,
       label: "Rekapitulasi",
-      roles: ["manager"],
+      roles: ["staff", "non-staff"],
     },
     {
       path: "/activity-logs",
       icon: Activity,
       label: "Log Aktivitas",
-      roles: ["manager"],
+      roles: ["staff", "non-staff"],
     },
   ];
 

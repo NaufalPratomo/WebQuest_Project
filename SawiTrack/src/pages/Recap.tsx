@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Fragment } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import {
   Table,
@@ -72,8 +72,33 @@ const Recap = () => {
   // Fetch Data
   const fetchData = useCallback(async () => {
     setIsLoading(true);
+    // Clear previous period data to avoid showing stale rows when filters change
+    setData([]);
     try {
-      const rows = await api.recapCostsList({ month: selectedMonth, year: selectedYear });
+      const rowsRaw = await api.recapCostsList({ month: selectedMonth, year: selectedYear });
+
+      // Defensive: collapse accidental duplicate rows (often caused by double submit/import)
+      const seen = new Set<string>();
+      const rows = rowsRaw.filter((r) => {
+        const dateKey = typeof r.date === 'string' ? r.date.slice(0, 10) : String(r.date);
+        const sig = [
+          dateKey,
+          r.category,
+          r.jenisPekerjaan,
+          r.aktivitas,
+          r.satuan,
+          r.hk,
+          r.hasilKerja,
+          r.output,
+          r.satuanOutput,
+          r.rpKhl,
+          r.rpPremi,
+          r.rpBorongan,
+        ].join('|');
+        if (seen.has(sig)) return false;
+        seen.add(sig);
+        return true;
+      });
 
       // Group by category
       const grouped: Record<string, RecapDataRow[]> = {};
@@ -97,6 +122,7 @@ const Recap = () => {
       setData(categories);
     } catch (error) {
       console.error(error);
+      setData([]);
       toast.error('Gagal memuat data rekap');
     } finally {
       setIsLoading(false);
@@ -348,7 +374,7 @@ const Recap = () => {
                 {data.map((category, catIdx) => {
                   const catTotal = calculateTotals(category);
                   return (
-                    <>
+                    <Fragment key={`${category.name}-${catIdx}`}>
                       {category.rows.map((row, rowIdx) => {
                         const totalRowRp = (row.rpKhl || 0) + (row.rpPremi || 0) + (row.rpBorongan || 0);
                         // Formula: Rp/Kg = Total Rp / Total Tonase (user constant)
@@ -357,8 +383,10 @@ const Recap = () => {
                         const revenue = totalProduction * tbsPrice;
                         const cashToRev = revenue > 0 ? (totalRowRp / revenue) * 100 : 0;
 
+                        const rowKey = row._id ?? `${category.name}-${catIdx}-${rowIdx}`;
+
                         return (
-                          <TableRow key={row._id} className="hover:bg-emerald-50/30 border-b border-dashed border-gray-200 group transition-colors">
+                          <TableRow key={rowKey} className="hover:bg-emerald-50/30 border-b border-dashed border-gray-200 group transition-colors">
                             <TableCell className="border-r border-gray-100 text-center py-2">
                               <div className="flex justify-center gap-1 opacity-60 group-hover:opacity-100">
                                 <Button variant="ghost" size="icon" className="h-6 w-6 text-blue-600" onClick={() => openEditDialog(category, row, catIdx, rowIdx)}><Edit className="h-3 w-3" /></Button>
@@ -400,7 +428,7 @@ const Recap = () => {
                         <TableCell className="text-right border-r border-orange-200 text-orange-900 font-bold">{formatNumber(catTotal.totalRp)}</TableCell>
                         <TableCell colSpan={2} className="bg-orange-100/20" />
                       </TableRow>
-                    </>
+                    </Fragment>
                   );
                 })}
 

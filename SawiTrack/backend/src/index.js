@@ -42,6 +42,32 @@ const API_BASE_PATH = process.env.API_BASE_PATH || "/api";
 const CORS_ORIGIN = process.env.CORS_ORIGIN;
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
 
+// App timezone handling
+// Vercel runs in UTC, while most app data entry is in local time (e.g., WIB UTC+7).
+// If we store month markers as Date, we must compute month ranges in a timezone-stable way.
+// Configure via APP_TZ_OFFSET_MINUTES (default 420 = UTC+7).
+const APP_TZ_OFFSET_MINUTES = Number(process.env.APP_TZ_OFFSET_MINUTES ?? 420);
+const APP_TZ_OFFSET_MS =
+  Number.isFinite(APP_TZ_OFFSET_MINUTES) ? APP_TZ_OFFSET_MINUTES * 60 * 1000 : 0;
+
+function getAppTzYearMonth(dateInput) {
+  const d = new Date(dateInput);
+  if (Number.isNaN(d.getTime())) return null;
+  // Convert to "app local" time by shifting, then read UTC components.
+  const shifted = new Date(d.getTime() + APP_TZ_OFFSET_MS);
+  return { year: shifted.getUTCFullYear(), month: shifted.getUTCMonth() };
+}
+
+function getMonthRangeUtc(yearInput, monthInput) {
+  const year = Number(yearInput);
+  const month = Number(monthInput);
+  if (!Number.isFinite(year) || !Number.isFinite(month)) return null;
+  // Range corresponds to [local month start 00:00, next month start 00:00) in app timezone.
+  const startMs = Date.UTC(year, month, 1, 0, 0, 0) - APP_TZ_OFFSET_MS;
+  const endMs = Date.UTC(year, month + 1, 1, 0, 0, 0) - APP_TZ_OFFSET_MS - 1;
+  return { startDate: new Date(startMs), endDate: new Date(endMs) };
+}
+
 // Support multiple origins via comma-separated list, or '*' to allow all (dev only)
 const allowedOrigins = (CORS_ORIGIN || "")
   .split(",")
@@ -84,8 +110,7 @@ if (!MONGO_URI) {
 
 async function connectMongo() {
   if (!MONGO_URI) {
-    console.error("Missing Mongo URI");
-    process.exit(1);
+    throw new Error("Missing Mongo URI (set MONGO_ATLAS_URI or MONGO_URI)");
   }
   await mongoose.connect(MONGO_URI, { dbName: DB_NAME });
   console.log("Connected to MongoDB");
@@ -1872,8 +1897,20 @@ app.get(`${API_BASE_PATH}/daily-reports`, async (req, res) => {
   try {
     const { date, startDate, endDate, mandorName, division } = req.query;
     const q = {};
-    if (date) q.date = new Date(String(date));
-    else if (startDate || endDate) {
+    
+    // Handle date filter with app timezone (similar to recap-costs)
+    if (date) {
+      const d = new Date(String(date));
+      if (!isNaN(d.getTime())) {
+        const ym = getAppTzYearMonth(d);
+        if (ym) {
+          // Match the entire day in app TZ
+          const dayStart = new Date(Date.UTC(ym.year, ym.month, d.getDate(), 0, 0, 0) - APP_TZ_OFFSET_MS);
+          const dayEnd = new Date(Date.UTC(ym.year, ym.month, d.getDate(), 23, 59, 59, 999) - APP_TZ_OFFSET_MS);
+          q.date = { $gte: dayStart, $lte: dayEnd };
+        }
+      }
+    } else if (startDate || endDate) {
       q.date = {};
       if (startDate) q.date.$gte = new Date(String(startDate));
       if (endDate) q.date.$lte = new Date(String(endDate));
@@ -1991,17 +2028,40 @@ app.get(`${API_BASE_PATH}/recap-costs`, async (req, res) => {
       return res.status(400).json({ error: "Month and Year are required" });
     }
 
-    // Create Date range for the entire month
-    const startDate = new Date(year, month, 1);
-    const endDate = new Date(year, Number(month) + 1, 0); // Last day of month
+    const range = getMonthRangeUtc(year, month);
+    if (!range) {
+      return res.status(400).json({ error: "Invalid month/year" });
+    }
 
     const costs = await OperationalCost.find({
-      date: { $gte: startDate, $lte: endDate },
-    })
-      .sort({ category: 1, date: 1 })
-      .lean();
+      date: { $gte: range.startDate, $lte: range.endDate }
+    }).sort({ category: 1, date: 1 }).lean();
 
-    res.json(costs);
+    // Defensive: collapse identical rows if the DB contains accidental duplicates.
+    const seen = new Set();
+    const unique = [];
+    for (const c of costs) {
+      const dateKey = c.date instanceof Date ? c.date.toISOString().slice(0, 10) : String(c.date).slice(0, 10);
+      const sig = [
+        dateKey,
+        c.category,
+        c.jenisPekerjaan,
+        c.aktivitas,
+        c.satuan,
+        c.hk,
+        c.hasilKerja,
+        c.output,
+        c.satuanOutput,
+        c.rpKhl,
+        c.rpPremi,
+        c.rpBorongan,
+      ].join('|');
+      if (seen.has(sig)) continue;
+      seen.add(sig);
+      unique.push(c);
+    }
+
+    res.json(unique);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -2034,8 +2094,14 @@ app.post(`${API_BASE_PATH}/recap-costs`, async (req, res) => {
         .json({ error: `Periode untuk tanggal ${date} sudah ditutup.` });
     }
 
+    const ym = getAppTzYearMonth(date);
+    if (!ym) {
+      return res.status(400).json({ error: "Invalid date" });
+    }
+    const normalized = getMonthRangeUtc(ym.year, ym.month)?.startDate;
+
     const created = await OperationalCost.create({
-      date,
+      date: normalized || date,
       category,
       jenisPekerjaan,
       aktivitas,
@@ -2067,9 +2133,18 @@ app.put(`${API_BASE_PATH}/recap-costs/:id`, async (req, res) => {
         .json({ error: "Periode transaksi ini sudah ditutup." });
     }
 
+    const nextBody = { ...req.body };
+    if (nextBody.date) {
+      const ym = getAppTzYearMonth(nextBody.date);
+      if (ym) {
+        const normalized = getMonthRangeUtc(ym.year, ym.month)?.startDate;
+        if (normalized) nextBody.date = normalized;
+      }
+    }
+
     const updated = await OperationalCost.findByIdAndUpdate(
       req.params.id,
-      req.body,
+      nextBody,
       { new: true }
     );
 

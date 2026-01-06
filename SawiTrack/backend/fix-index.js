@@ -25,7 +25,7 @@ for (let i = lines.length - 1; i >= 0; i--) {
         if (cutOffLine !== -1) break;
     }
 }
-
+ 
 
 if (cutOffLine === -1) {
     console.error("Could not find cut off point!");

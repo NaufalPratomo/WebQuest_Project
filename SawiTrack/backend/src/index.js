@@ -822,11 +822,14 @@ app.get(`${API_BASE_PATH}/pekerjaan/:id`, async (req, res) => {
 
 app.post(`${API_BASE_PATH}/pekerjaan`, async (req, res) => {
   try {
-    const { no_akun, jenis_pekerjaan, aktivitas, satuan, tipe } = req.body;
+    const { sub_coa, coa, no_akun, jenis_pekerjaan, aktivitas, satuan, tipe } =
+      req.body;
     if (!no_akun || !jenis_pekerjaan) {
       return res.status(400).json({ error: "Missing required fields" });
     }
     const created = await Pekerjaan.create({
+      sub_coa,
+      coa,
       no_akun,
       jenis_pekerjaan,
       aktivitas,
@@ -1620,11 +1623,9 @@ app.delete(`${API_BASE_PATH}/attendance/:id`, async (req, res) => {
       return res.status(404).json({ error: "Attendance not found" });
 
     if (await checkDateClosed(existing.date)) {
-      return res
-        .status(400)
-        .json({
-          error: `Periode untuk tanggal ${existing.date} sudah ditutup.`,
-        });
+      return res.status(400).json({
+        error: `Periode untuk tanggal ${existing.date} sudah ditutup.`,
+      });
     }
 
     await Attendance.findByIdAndDelete(req.params.id);
@@ -1989,15 +1990,17 @@ app.get(`${API_BASE_PATH}/recap-costs`, async (req, res) => {
     if (!month || !year) {
       return res.status(400).json({ error: "Month and Year are required" });
     }
-    
+
     // Create Date range for the entire month
     const startDate = new Date(year, month, 1);
     const endDate = new Date(year, Number(month) + 1, 0); // Last day of month
-    
+
     const costs = await OperationalCost.find({
-      date: { $gte: startDate, $lte: endDate }
-    }).sort({ category: 1, date: 1 }).lean();
-    
+      date: { $gte: startDate, $lte: endDate },
+    })
+      .sort({ category: 1, date: 1 })
+      .lean();
+
     res.json(costs);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -2006,14 +2009,29 @@ app.get(`${API_BASE_PATH}/recap-costs`, async (req, res) => {
 
 app.post(`${API_BASE_PATH}/recap-costs`, async (req, res) => {
   try {
-    const { date, category, jenisPekerjaan, aktivitas, satuan, hk, hasilKerja, output, satuanOutput, rpKhl, rpPremi, rpBorongan } = req.body;
-    
+    const {
+      date,
+      category,
+      jenisPekerjaan,
+      aktivitas,
+      satuan,
+      hk,
+      hasilKerja,
+      output,
+      satuanOutput,
+      rpKhl,
+      rpPremi,
+      rpBorongan,
+    } = req.body;
+
     if (!date || !category || !jenisPekerjaan) {
       return res.status(400).json({ error: "Missing required fields" });
     }
 
     if (await checkDateClosed(date)) {
-      return res.status(400).json({ error: `Periode untuk tanggal ${date} sudah ditutup.` });
+      return res
+        .status(400)
+        .json({ error: `Periode untuk tanggal ${date} sudah ditutup.` });
     }
 
     const created = await OperationalCost.create({
@@ -2028,9 +2046,9 @@ app.post(`${API_BASE_PATH}/recap-costs`, async (req, res) => {
       satuanOutput,
       rpKhl,
       rpPremi,
-      rpBorongan
+      rpBorongan,
     });
-    
+
     logActivity(req, "CREATE_COST", { category, jenisPekerjaan });
     res.status(201).json(created);
   } catch (err) {
@@ -2044,7 +2062,9 @@ app.put(`${API_BASE_PATH}/recap-costs/:id`, async (req, res) => {
     if (!existing) return res.status(404).json({ error: "Not found" });
 
     if (await checkDateClosed(existing.date)) {
-      return res.status(400).json({ error: "Periode transaksi ini sudah ditutup." });
+      return res
+        .status(400)
+        .json({ error: "Periode transaksi ini sudah ditutup." });
     }
 
     const updated = await OperationalCost.findByIdAndUpdate(
@@ -2052,7 +2072,7 @@ app.put(`${API_BASE_PATH}/recap-costs/:id`, async (req, res) => {
       req.body,
       { new: true }
     );
-    
+
     logActivity(req, "UPDATE_COST", { id: req.params.id });
     res.json(updated);
   } catch (err) {
@@ -2066,7 +2086,9 @@ app.delete(`${API_BASE_PATH}/recap-costs/:id`, async (req, res) => {
     if (!existing) return res.status(404).json({ error: "Not found" });
 
     if (await checkDateClosed(existing.date)) {
-      return res.status(400).json({ error: "Periode transaksi ini sudah ditutup." });
+      return res
+        .status(400)
+        .json({ error: "Periode transaksi ini sudah ditutup." });
     }
 
     await OperationalCost.findByIdAndDelete(req.params.id);

@@ -2,6 +2,8 @@ import mongoose from "mongoose";
 
 const PekerjaanSchema = new mongoose.Schema(
   {
+    sub_coa: { type: String, required: false },
+    coa: { type: String, required: false },
     no_akun: { type: String, required: true },
     jenis_pekerjaan: { type: String, required: true },
     aktivitas: { type: String, required: false },

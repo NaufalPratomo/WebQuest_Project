@@ -45,6 +45,7 @@ const PekerjaanPage = () => {
   const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [filterNoAkun, setFilterNoAkun] = useState<string>("all");
+  const [filterCOA, setFilterCOA] = useState<string>("all");
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState<Pekerjaan[]>([]);
   const [openAdd, setOpenAdd] = useState(false);
@@ -228,20 +229,27 @@ const PekerjaanPage = () => {
     return Array.from(set).sort();
   }, [rows]);
 
-  const filtered = useMemo(
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
+  const filteredAll = useMemo(
     () =>
       rows.filter((item) => {
         const matchSearch =
           item.no_akun.toLowerCase().includes(search.toLowerCase()) ||
           item.jenis_pekerjaan.toLowerCase().includes(search.toLowerCase()) ||
           item.aktivitas.toLowerCase().includes(search.toLowerCase());
-
-        const matchFilter =
+        const matchNoAkun =
           filterNoAkun === "all" || item.no_akun === filterNoAkun;
-
-        return matchSearch && matchFilter;
+        const matchCOA = filterCOA === "all" || item.coa === filterCOA;
+        return matchSearch && matchNoAkun && matchCOA;
       }),
-    [rows, search, filterNoAkun]
+    [rows, search, filterNoAkun, filterCOA]
+  );
+  const totalPages = Math.max(1, Math.ceil(filteredAll.length / pageSize));
+  const filtered = useMemo(
+    () => filteredAll.slice((page - 1) * pageSize, page * pageSize),
+    [filteredAll, page]
   );
 
   const handleExportExcel = () => {
@@ -295,28 +303,29 @@ const PekerjaanPage = () => {
           const existingItems: Pekerjaan[] = [];
 
           jsonData.forEach((row) => {
-            const sub_coa =
-              row["Sub COA"] && String(row["Sub COA"]) !== "-"
-                ? String(row["Sub COA"]).trim()
-                : "";
-            const coa =
-              row["COA"] && String(row["COA"]) !== "-"
-                ? String(row["COA"]).trim()
-                : "";
+            // Ambil nilai sub_coa dan coa langsung dari Excel, normalisasi dengan trim
+            let sub_coa =
+              row["Sub COA"] !== undefined ? String(row["Sub COA"]).trim() : "";
+            let coa = row["COA"] !== undefined ? String(row["COA"]).trim() : "";
+            // Jika kosong atau tanda '-', jadikan string kosong
+            if (sub_coa === "-" || sub_coa === "") sub_coa = "";
+            if (coa === "-" || coa === "") coa = "";
+
             const no_akun = String(row["No Akun"] || "").trim();
             const jenis_pekerjaan = String(row["Jenis Pekerjaan"] || "").trim();
-            const aktivitas =
-              row["Aktivitas"] && String(row["Aktivitas"]) !== "-"
+            let aktivitas =
+              row["Aktivitas"] !== undefined
                 ? String(row["Aktivitas"]).trim()
                 : "";
-            const satuan =
-              row["Satuan"] && String(row["Satuan"]) !== "-"
-                ? String(row["Satuan"]).trim()
-                : "";
-            const tipe =
-              row["Tipe Upah"] && String(row["Tipe Upah"]) !== "-"
+            if (aktivitas === "-" || aktivitas === "") aktivitas = "";
+            let satuan =
+              row["Satuan"] !== undefined ? String(row["Satuan"]).trim() : "";
+            if (satuan === "-" || satuan === "") satuan = "";
+            let tipe =
+              row["Tipe Upah"] !== undefined
                 ? String(row["Tipe Upah"]).trim()
                 : "";
+            if (tipe === "-" || tipe === "") tipe = "";
 
             if (!no_akun || !jenis_pekerjaan) return;
 
@@ -373,14 +382,15 @@ const PekerjaanPage = () => {
 
       for (const item of newItems) {
         try {
+          // Pastikan sub_coa dan coa dikirim persis dari hasil import Excel
           const created = await api.createPekerjaan({
-            sub_coa: item.sub_coa,
-            coa: item.coa,
+            sub_coa: item.sub_coa ?? "",
+            coa: item.coa ?? "",
             no_akun: item.no_akun,
             jenis_pekerjaan: item.jenis_pekerjaan,
             aktivitas: item.aktivitas,
-            satuan: item.satuan,
-            tipe: item.tipe,
+            satuan: item.satuan ?? "",
+            tipe: item.tipe ?? "",
           });
           createdItems.push(created);
         } catch (e) {
@@ -624,20 +634,50 @@ const PekerjaanPage = () => {
               <Input
                 placeholder="Cari No Akun, Pekerjaan, atau Aktivitas..."
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(1);
+                }}
                 className="pl-10"
               />
             </div>
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium">Filter:</span>
               <div className="w-full md:w-[200px]">
-                <Select value={filterNoAkun} onValueChange={setFilterNoAkun}>
+                <Select
+                  value={filterNoAkun}
+                  onValueChange={(val) => {
+                    setFilterNoAkun(val);
+                    setPage(1);
+                  }}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Filter No Akun" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Semua No Akun</SelectItem>
                     {uniqueAccounts.map((opt) => (
+                      <SelectItem key={opt} value={opt}>
+                        {opt}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="w-full md:w-[200px]">
+                <Select
+                  value={filterCOA}
+                  onValueChange={(val) => {
+                    setFilterCOA(val);
+                    setPage(1);
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Filter COA" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Semua COA</SelectItem>
+                    {uniqueCOA.map((opt) => (
                       <SelectItem key={opt} value={opt}>
                         {opt}
                       </SelectItem>
@@ -715,6 +755,30 @@ const PekerjaanPage = () => {
               )}
             </TableBody>
           </Table>
+          {/* Pagination Controls */}
+          <div className="flex justify-between items-center mt-4">
+            <span className="text-sm">
+              Page {page} / {totalPages}
+            </span>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page === 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
+                Prev
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page === totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
 

@@ -15,8 +15,8 @@ export default function Transport() {
   const [dateAngkut, setDateAngkut] = useState<string>(new Date().toISOString().slice(0, 10));
   const [estates, setEstates] = useState<Array<{ _id: string; estate_name: string }>>([]);
   const [estateId, setEstateId] = useState<string>('');
-  const [divisions, setDivisions] = useState<Array<{ division_id: number }>>([]);
-  const [divisionId, setDivisionId] = useState<number | ''>('');
+  const [divisions, setDivisions] = useState<Array<{ division_id: number | string }>>([]);
+  const [divisionId, setDivisionId] = useState<number | string | ''>('');
   const [blocks, setBlocks] = useState<BlockOption[]>([]);
   const [blockNo, setBlockNo] = useState('');
   const [noTPH, setNoTPH] = useState('');
@@ -69,7 +69,7 @@ export default function Transport() {
   useEffect(() => {
     if (!estateId) { setDivisions([]); setDivisionId(''); return; }
     api.divisions(estateId).then(setDivisions).catch(() => toast.error('Gagal memuat divisi'));
-    api.blocks(estateId, Number(divisionId)).then((b) => setBlocks(Array.isArray(b) ? (b as BlockOption[]) : [])).catch(() => setBlocks([]));
+    api.blocks(estateId, divisionId).then((b) => setBlocks(Array.isArray(b) ? (b as BlockOption[]) : [])).catch(() => setBlocks([]));
   }, [estateId, divisionId]);
 
   useEffect(() => {
@@ -106,7 +106,7 @@ export default function Transport() {
         date_panen: datePanen, 
         date_angkut: dateAngkut, 
         estateId, 
-        division_id: Number(divisionId), 
+        division_id: divisionId, 
         block_no: blockNo,
         noTPH: noTPH || undefined,
         jjgAngkut: Number(jjgAngkut || 0), // Manual input
@@ -211,11 +211,15 @@ export default function Transport() {
       requireIdx('date_panen', 'date_angkut', 'estateid', 'division_id', 'block_no', 'weightkg');
       const parsed: AngkutRow[] = lines.slice(1).map((line) => {
         const cols = line.split(',');
+        const rawDiv = cols[idx('division_id')];
+        const divNum = Number(rawDiv);
+        const divId = !Number.isNaN(divNum) ? divNum : rawDiv;
+        
         return {
           date_panen: cols[idx('date_panen')],
           date_angkut: cols[idx('date_angkut')],
           estateId: cols[idx('estateid')],
-          division_id: Number(cols[idx('division_id')]),
+          division_id: divId,
           block_no: cols[idx('block_no')],
           weightKg: Number(cols[idx('weightkg')]),
         } as AngkutRow;
@@ -326,9 +330,17 @@ export default function Transport() {
                   </div>
                   <div>
                     <Label>Divisi</Label>
-                    <select className="w-full h-10 border rounded px-2" value={divisionId} onChange={(e) => setDivisionId(e.target.value ? Number(e.target.value) : '')}>
+                    <select className="w-full h-10 border rounded px-2" value={divisionId} onChange={(e) => {
+                      const val = e.target.value;
+                      const num = Number(val);
+                      setDivisionId(!Number.isNaN(num) && val.trim() !== '' ? num : val);
+                    }}>
                       <option value="">Pilih</option>
-                      {divisions.map(d => <option key={d.division_id} value={d.division_id}>Divisi {d.division_id}</option>)}
+                      {divisions.map(d => (
+                        <option key={d.division_id} value={d.division_id}>
+                          {typeof d.division_id === 'number' ? `Divisi ${d.division_id}` : d.division_id}
+                        </option>
+                      ))}
                     </select>
                   </div>
                   <div>
@@ -395,7 +407,7 @@ export default function Transport() {
                   <TableRow key={(r as AngkutRowWithId)._id || idx}>
                     <TableCell className="text-center">{String(r.date_angkut).slice(0, 10)}</TableCell>
                     <TableCell className="text-center">{r.estateId}</TableCell>
-                    <TableCell className="text-center">{r.division_id}</TableCell>
+                    <TableCell className="text-center">{typeof r.division_id === 'number' ? `Divisi ${r.division_id}` : r.division_id}</TableCell>
                     <TableCell className="text-center">{r.block_no}</TableCell>
                     <TableCell className="text-center">{r.noTPH || '-'}</TableCell>
                     <TableCell className="text-center font-medium">{jjgRealisasi}</TableCell>

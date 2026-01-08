@@ -315,7 +315,9 @@ export default function TaksasiPerBlock() {
                         {r.estateName || r.estateId}
                       </TableCell>
                       <TableCell className="text-center">
-                        {r.divisionId}
+                        {/^\d+$/.test(r.divisionId)
+                          ? `Divisi ${r.divisionId}`
+                          : r.divisionId}
                       </TableCell>
                       <TableCell className="text-center">
                         {r.blockLabel}

@@ -41,7 +41,7 @@ const BlockSchema = new mongoose.Schema(
 
 const DivisionSchema = new mongoose.Schema(
   {
-    division_id: Number,
+    division_id: mongoose.Schema.Types.Mixed,
     blocks: [BlockSchema],
   },
   { _id: false }

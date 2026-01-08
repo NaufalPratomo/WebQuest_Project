@@ -4,7 +4,7 @@ const TaksasiSchema = new mongoose.Schema(
   {
     date: { type: Date, required: true },
     estateId: { type: String, required: true },
-    division_id: { type: Number, required: true },
+    division_id: { type: mongoose.Schema.Types.Mixed, required: true },
     block_id: { type: String },
     block_no: { type: String, required: true },
     weightKg: { type: Number, required: true, min: 0 },

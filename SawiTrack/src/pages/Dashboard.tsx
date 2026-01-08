@@ -198,14 +198,22 @@ const Dashboard = () => {
                 }) : [];
 
                 // Division production
+                const formatDiv = (val: number | string) => {
+                    if (!val) return 'Unknown';
+                    const num = Number(val);
+                    if (!Number.isNaN(num) && typeof val !== 'string') return `Divisi ${val}`;
+                    if (typeof val === 'string' && /^\d+$/.test(val)) return `Divisi ${val}`;
+                    return String(val);
+                };
+
                 const divisionStats: Record<string, { taksasi: number; panen: number }> = {};
                 taksasi.forEach(t => {
-                    const div = `Divisi ${t.division_id}`;
+                    const div = formatDiv(t.division_id);
                     if (!divisionStats[div]) divisionStats[div] = { taksasi: 0, panen: 0 };
                     divisionStats[div].taksasi += t.weightKg || 0;
                 });
                 panen.forEach(p => {
-                    const div = `Divisi ${p.division_id}`;
+                    const div = formatDiv(p.division_id);
                     if (!divisionStats[div]) divisionStats[div] = { taksasi: 0, panen: 0 };
                     divisionStats[div].panen += p.weightKg || 0;
                 });
@@ -333,14 +341,14 @@ const Dashboard = () => {
                 // Division performance (tidak pakai target)
                 const divisionPerformanceMap: Record<string, { taksasi: number; panen: number; akpSum: number; akpCount: number }> = {};
                 taksasi.forEach(t => {
-                    const div = `Divisi ${t.division_id}`;
+                    const div = formatDiv(t.division_id);
                     if (!divisionPerformanceMap[div]) divisionPerformanceMap[div] = { taksasi: 0, panen: 0, akpSum: 0, akpCount: 0 };
                     divisionPerformanceMap[div].taksasi += t.weightKg || 0;
                     divisionPerformanceMap[div].akpSum += t.akpPercent || 0;
                     divisionPerformanceMap[div].akpCount++;
                 });
                 panen.forEach(p => {
-                    const div = `Divisi ${p.division_id}`;
+                    const div = formatDiv(p.division_id);
                     if (!divisionPerformanceMap[div]) divisionPerformanceMap[div] = { taksasi: 0, panen: 0, akpSum: 0, akpCount: 0 };
                     divisionPerformanceMap[div].panen += p.weightKg || 0;
                 });

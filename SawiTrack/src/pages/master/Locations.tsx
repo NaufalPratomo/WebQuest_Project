@@ -54,11 +54,23 @@ import autoTable from "jspdf-autotable";
 type ExcelRow = {
   Divisi?: string;
   divisi?: string;
+  DIVISI?: string;
+  PT?: string;
+  Wilayah?: string;
   [key: string]: unknown;
   "No Blok"?: string | number;
   "ID Blok"?: string | number;
-  "Jenis Tanah"?: string;
-  Topografi?: string | number;
+  Baru?: string | number;
+  Lama?: string | number;
+  TT?: number | string;
+  LUAS?: number | string;
+  TOTAL?: number | string;
+  PRODUKTIF?: number | string;
+  "BELUM PRODUKTIF"?: number | string;
+  Mati?: number | string;
+  "ASAL BIBIT"?: string;
+  TOPOGRAFI?: string | number;
+  "SOIL TYPE"?: string;
   "Luas Tanam"?: number | string;
   Tahun?: number | string;
   "Jumlah Pokok"?: number | string;
@@ -82,7 +94,7 @@ type ExcelRow = {
   SPH?: number | string;
 };
 
-type Division = { division_id: number };
+type Division = { division_id: number | string };
 type Block = {
   id_blok?: string;
   no_blok?: string;
@@ -98,6 +110,11 @@ type Block = {
   luas_tanam_?: number;
   luas_tanaman_?: number;
   jenis_bibit?: string;
+  pokok_total?: number;
+  pokok_produktif?: number;
+  pokok_belum_produktif?: number;
+  pokok_mati?: number;
+  id_pt?: string;
   luas_land_preparation?: number;
   luas_nursery?: number;
   luas_lain___lain?: number;
@@ -132,14 +149,14 @@ const Locations = () => {
   const [meta, setMeta] = useState<
     Record<
       string,
-      { divisions: Division[]; blocksByDivision: Record<number, Block[]> }
+      { divisions: Division[]; blocksByDivision: Record<string | number, Block[]> }
     >
   >({});
   const [currentPages, setCurrentPages] = useState<Record<string, number>>({});
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingBlock, setEditingBlock] = useState<{
     estateId: string;
-    divisionId: number;
+    divisionId: number | string;
     block: Block;
   } | null>(null);
   const [editFormData, setEditFormData] = useState<Partial<Block>>({});
@@ -180,7 +197,7 @@ const Locations = () => {
 
   const handleOpenEditDialog = (
     estateId: string,
-    divisionId: number,
+    divisionId: number | string,
     block: Block
   ) => {
     setEditingBlock({ estateId, divisionId, block });
@@ -195,6 +212,11 @@ const Locations = () => {
       topografi: block.topografi,
       tahun_: block.tahun_,
       jenis_bibit: block.jenis_bibit,
+      pokok_total: block.pokok_total,
+      pokok_produktif: block.pokok_produktif,
+      pokok_belum_produktif: block.pokok_belum_produktif,
+      pokok_mati: block.pokok_mati,
+      id_pt: block.id_pt,
       luas_nursery: block.luas_nursery,
       luas_lain___lain: block.luas_lain___lain ?? block.luas_lain__lain,
       luas_garapan: block.luas_garapan,
@@ -312,30 +334,51 @@ const Locations = () => {
     async function loadMeta() {
       const next: Record<
         string,
-        { divisions: Division[]; blocksByDivision: Record<number, Block[]> }
-      > = {};
+        {
+          divisions: Division[];
+          blocksByDivision: Record<string | number, Block[]>;
+        }
+      > = { ...meta }; // Start with existing meta
+      
       for (const es of estates) {
+        // Skip if already loaded and has divisions
+        if (next[es._id] && next[es._id].divisions.length > 0) continue;
+
         try {
           const divs: Division[] = await api.divisions(es._id);
-          const blocksByDivision: Record<number, Block[]> = {};
-          for (const d of divs || []) {
-            try {
-              const blocks = await api.blocks(es._id, d.division_id);
-              blocksByDivision[d.division_id] = Array.isArray(blocks)
-                ? (blocks as Block[])
-                : [];
-            } catch {
-              blocksByDivision[d.division_id] = [];
+          const blocksByDivision: Record<string | number, Block[]> = {};
+          
+          if (divs && divs.length > 0) {
+            for (const d of divs) {
+              try {
+                const blocks = await api.blocks(es._id, d.division_id);
+                blocksByDivision[d.division_id] = Array.isArray(blocks)
+                  ? (blocks as Block[])
+                  : [];
+              } catch (err) {
+                console.error(`Error loading blocks for ${es._id} ${d.division_id}:`, err);
+                blocksByDivision[d.division_id] = [];
+              }
             }
           }
+          
           next[es._id] = { divisions: divs || [], blocksByDivision };
-        } catch {
+          
+          // Yield to UI after each estate to show progress
+          if (!cancelled) {
+            setMeta({ ...next });
+          }
+        } catch (err) {
+          console.error(`Error loading meta for ${es._id}:`, err);
           next[es._id] = { divisions: [], blocksByDivision: {} };
         }
       }
-      if (!cancelled) setMeta(next);
     }
-    if (estates.length > 0) loadMeta();
+    
+    if (estates.length > 0) {
+      loadMeta();
+    }
+    
     return () => {
       cancelled = true;
     };
@@ -1175,16 +1218,72 @@ const Locations = () => {
           const workbook = XLSX.read(data, { type: "array" });
           const worksheet = workbook.Sheets[workbook.SheetNames[0]];
 
-          // Skip first row (parent header) and use second row (child header) as headers
-          const jsonData = XLSX.utils.sheet_to_json<ExcelRow>(worksheet, {
-            range: 1, // Start from row 2 (index 1), skip parent header row
-          }) as ExcelRow[];
+          const toStr = (v: unknown): string => {
+            if (v == null) return "";
+            return String(v).trim();
+          };
+          const toNum = (v: unknown): number => {
+            if (v == null || v === "") return 0;
+            if (typeof v === "string") {
+              // Handle Indonesian format: dots for thousands, comma for decimal
+              let clean = v.trim().replace(/\./g, "").replace(",", ".");
+              // Handle potential negative in parenthesis: (224) -> -224
+              if (clean.startsWith("(") && clean.endsWith(")")) {
+                clean = "-" + clean.substring(1, clean.length - 1);
+              }
+              const n = parseFloat(clean);
+              return Number.isFinite(n) && !Number.isNaN(n) ? n : 0;
+            }
+            if (typeof v === "number") return v;
+            return 0;
+          };
+
+          const rawRows = XLSX.utils.sheet_to_json<any[]>(worksheet, {
+            header: 1,
+          });
+          const headerRow2 = rawRows[1] || [];
+          const isNewFormat =
+            headerRow2.includes("PT") && headerRow2.includes("Wilayah");
+
+          let jsonData: ExcelRow[] = [];
+          if (isNewFormat) {
+            // New format data starts from row index 2
+            for (let i = 2; i < rawRows.length; i++) {
+              const r = rawRows[i];
+              if (!r || r.length < 5) continue;
+              jsonData.push({
+                PT: toStr(r[1]),
+                Wilayah: toStr(r[2]),
+                DIVISI: toStr(r[3]),
+                Baru: toStr(r[4]),
+                Lama: toStr(r[5]),
+                TT: toStr(r[6]),
+                LUAS: toStr(r[7]),
+                TOTAL: toStr(r[8]),
+                PRODUKTIF: toStr(r[9]),
+                "BELUM PRODUKTIF": toStr(r[10]),
+                Mati: toStr(r[11]),
+                "ASAL BIBIT": toStr(r[12]),
+                TOPOGRAFI: toStr(r[13]),
+                "SOIL TYPE": toStr(r[14]),
+                SPH: toStr(r[15]),
+              });
+            }
+          } else {
+            jsonData = XLSX.utils.sheet_to_json<ExcelRow>(worksheet, {
+              range: 1, // Start from row 2 (index 1), skip parent header row
+            }) as ExcelRow[];
+          }
 
           // Group data by Division only (Estate already selected)
           const groupedData: Record<string, Partial<Block>[]> = {};
 
           jsonData.forEach((row: ExcelRow) => {
-            const divisi = (row.Divisi || row.divisi || "").toString();
+            const divisi = (
+              (isNewFormat
+                ? row.DIVISI
+                : row.DIVISI || row.Divisi || row.divisi) || ""
+            ).toString();
 
             if (!divisi) {
               console.warn("Skipping row with missing Divisi:", row);
@@ -1196,27 +1295,42 @@ const Locations = () => {
             }
 
             // Transform row to Block format (sesuai dengan struktur database)
-            const toNum = (v: unknown): number => {
-              if (v == null || v === "") return 0;
-              const n = typeof v === "string" ? parseFloat(v) : (v as number);
-              return Number.isFinite(n) && !Number.isNaN(n) ? n : 0;
-            };
-            const toStr = (v: unknown): string => {
-              if (v == null) return "";
-              return String(v).trim();
-            };
             const blockData: Partial<Block> = {
-              no_blok: toStr(row["No Blok"]),
-              no_tph: toStr(row["Wilayah"] ?? row["No TPH"]),
-              jenis_tanah: toStr(row["Jenis Tanah"]),
-              topografi: toStr(row["Topografi"]),
-              luas_tanam_: toNum(row["Luas Tanam Awal"] ?? row["Luas Tanam"]),
-              tahun_: toNum(row["Tahun Tanam"] ?? row["Tahun"]),
-              jumlak_pokok: toNum(
-                row["Jumlah Pokok Awal"] ?? row["Jumlah Pokok"]
+              id_pt: isNewFormat ? toStr(row.PT) : undefined,
+              no_blok: isNewFormat
+                ? `${toStr(row.Baru)}${row.Lama ? " / " + toStr(row.Lama) : ""}`
+                : toStr(row["No Blok"]),
+              no_tph: isNewFormat
+                ? toStr(row.Lama)
+                : toStr(row["Wilayah"] ?? row["No TPH"]),
+              jenis_tanah: isNewFormat
+                ? toStr(row["SOIL TYPE"])
+                : toStr(row["Jenis Tanah"]),
+              topografi: toStr(row["TOPOGRAFI"] ?? row["Topografi"]),
+              luas_tanam_: toNum(
+                row[isNewFormat ? "LUAS" : "Luas Tanam Awal"] ??
+                  row["Luas Tanam"]
               ),
-              jenis_bibit: toStr(row["Jenis Bibit"]),
-              SPH: toNum(row["SPH Awal"] ?? row["SPH"]),
+              tahun_: toNum(
+                row[isNewFormat ? "TT" : "Tahun Tanam"] ?? row["Tahun"]
+              ),
+              jumlak_pokok: toNum(
+                row[isNewFormat ? "TOTAL" : "Jumlah Pokok Awal"] ??
+                  row["Jumlah Pokok"]
+              ),
+              jenis_bibit: toStr(
+                row[isNewFormat ? "ASAL BIBIT" : "Jenis Bibit"]
+              ),
+              SPH: toNum(row[isNewFormat ? "SPH" : "SPH Awal"] ?? row["SPH"]),
+
+              // New Aresta fields (optional for model)
+              pokok_total: isNewFormat ? toNum(row.TOTAL) : undefined,
+              pokok_produktif: isNewFormat ? toNum(row.PRODUKTIF) : undefined,
+              pokok_belum_produktif: isNewFormat
+                ? toNum(row["BELUM PRODUKTIF"])
+                : undefined,
+              pokok_mati: isNewFormat ? toNum(row.Mati) : undefined,
+
               luas_land_preparation: toNum(row["Luas Land Preparation"]),
               luas_nursery: toNum(row["Luas Nursery"]),
               luas_lain___lain: toNum(row["Luas Lain-Lain"]),
@@ -1252,7 +1366,7 @@ const Locations = () => {
           // Fetch existing divisions WITH blocks to compare
           // Note: api.estate() excludes divisions, so we use api.divisions() which returns the full division array including blocks
           const existingDivisions = (await api.divisions(estateId)) as Array<{
-            division_id: number;
+            division_id: number | string;
             blocks?: Block[];
           }>;
 
@@ -1288,6 +1402,11 @@ const Locations = () => {
               "luas_perumahan",
               "luas_sarana_prasanara",
               "jumlah_pokok_sensus",
+              "pokok_total",
+              "pokok_produktif",
+              "pokok_belum_produktif",
+              "pokok_mati",
+              "id_pt",
             ];
 
             for (const field of fields) {
@@ -1338,9 +1457,10 @@ const Locations = () => {
           }> = [];
 
           for (const [divisionName, blocks] of Object.entries(groupedData)) {
-            const divisionId = parseInt(
+            const parsedId = parseInt(
               divisionName.replace("Divisi ", "").trim()
             );
+            const divisionId = isNaN(parsedId) ? divisionName : parsedId;
 
             const existingDivision = existingDivisions.find(
               (d) => d.division_id === divisionId
@@ -1417,7 +1537,7 @@ const Locations = () => {
 
       // Get existing estate data
       const existingEstate = (await api.estate(estateId)) as {
-        divisions?: Array<{ division_id: number; blocks?: Block[] }>;
+        divisions?: Array<{ division_id: number | string; blocks?: Block[] }>;
       };
       const existingDivisions = existingEstate.divisions || [];
 
@@ -1425,7 +1545,8 @@ const Locations = () => {
       const updatedDivisions = [...existingDivisions];
 
       for (const [divisionName, blocks] of Object.entries(groupedData)) {
-        const divisionId = parseInt(divisionName.replace(/Divisi/i, "").trim());
+        const parsedId = parseInt(divisionName.replace(/Divisi/i, "").trim());
+        const divisionId = isNaN(parsedId) ? divisionName : parsedId;
 
         // Find existing division or create new
         const divisionIndex = updatedDivisions.findIndex(
@@ -1613,7 +1734,7 @@ const Locations = () => {
                             className="bg-green-600 hover:bg-green-700 text-white"
                           >
                             <Download className="mr-2 h-4 w-4" />
-                            Export Divisi
+                            Export Wilayah
                           </Button>
                           <Dialog
                             open={isAddEstateOpen}
@@ -1629,7 +1750,7 @@ const Locations = () => {
                                 }
                               >
                                 <Plus className="mr-2 h-4 w-4" />
-                                Tambah Divisi
+                                Tambah Wilayah
                               </Button>
                             </DialogTrigger>
                             <DialogContent
@@ -1640,9 +1761,9 @@ const Locations = () => {
                               }}
                             >
                               <DialogHeader>
-                                <DialogTitle>Tambah Divisi Baru</DialogTitle>
+                                <DialogTitle>Tambah Wilayah Baru</DialogTitle>
                                 <DialogDescription>
-                                  Masukkan nama divisi untuk perusahaan yang
+                                  Masukkan nama wilayah untuk perusahaan yang
                                   dipilih
                                 </DialogDescription>
                               </DialogHeader>
@@ -1658,11 +1779,11 @@ const Locations = () => {
                                 </div>
                                 <div className="space-y-2">
                                   <Label htmlFor="estate-name">
-                                    Nama Divisi
+                                    Nama Wilayah
                                   </Label>
                                   <Input
                                     id="estate-name"
-                                    placeholder="Contoh: Divisi ABC"
+                                    placeholder="Contoh: Sukamaju"
                                     value={newEstateName}
                                     onChange={(e) =>
                                       setNewEstateName(e.target.value)
@@ -1691,13 +1812,15 @@ const Locations = () => {
                         {companyEstates.map((es) => {
                           const metaEs = meta[es._id];
                           const blocksFlat: Array<{
-                            division_id: number;
+                            division_id: number | string;
                             block: Block;
                           }> = metaEs
                             ? Object.entries(metaEs.blocksByDivision).flatMap(
                                 ([divId, blks]) =>
                                   (blks || []).map((b) => ({
-                                    division_id: Number(divId),
+                                    division_id: isNaN(parseInt(divId))
+                                      ? divId
+                                      : Number(divId),
                                     block: b,
                                   }))
                               )
@@ -1781,133 +1904,103 @@ const Locations = () => {
                                 <div className="overflow-x-auto">
                                   <Table className="min-w-max">
                                     <TableHeader>
-                                      {/* Header Parent Row */}
+                                      {/* Row 1: Title & Status/Aksi */}
                                       <TableRow>
                                         <TableHead
-                                          colSpan={10}
+                                          colSpan={13}
                                           className="text-center bg-blue-100 border border-gray-300 font-bold"
                                         >
-                                          Data Base Aresta
+                                          Data Master Blok Aresta 2026
                                         </TableHead>
                                         <TableHead
-                                          colSpan={14}
-                                          className="text-center bg-green-100 border border-gray-300 font-bold"
-                                        >
-                                          Hasil Mapping Survey
-                                        </TableHead>
-                                        <TableHead
-                                          colSpan={1}
-                                          className="text-center bg-purple-100 border border-gray-300 font-bold"
-                                        >
-                                          Hasil Sensus
-                                        </TableHead>
-                                        <TableHead
-                                          colSpan={4}
-                                          className="text-center bg-orange-100 border border-gray-300 font-bold"
-                                        >
-                                          Hasil Perhitungan
-                                        </TableHead>
-                                        <TableHead
-                                          rowSpan={2}
+                                          rowSpan={3}
                                           className="text-center bg-gray-100 border border-gray-300"
                                         >
                                           Status
                                         </TableHead>
                                         <TableHead
-                                          rowSpan={2}
+                                          rowSpan={3}
                                           className="text-center bg-gray-100 border border-gray-300"
                                         >
                                           Aksi
                                         </TableHead>
                                       </TableRow>
-                                      {/* Header Child Row */}
+                                      {/* Row 2: Main Headers */}
                                       <TableRow>
-                                        <TableHead className="text-center bg-blue-50 border border-gray-300">
+                                        <TableHead
+                                          rowSpan={2}
+                                          className="text-center bg-blue-50 border border-gray-300"
+                                        >
+                                          PT
+                                        </TableHead>
+                                        <TableHead
+                                          rowSpan={2}
+                                          className="text-center bg-blue-50 border border-gray-300"
+                                        >
                                           Divisi
                                         </TableHead>
-                                        <TableHead className="text-center bg-blue-50 border border-gray-300">
+                                        <TableHead
+                                          rowSpan={2}
+                                          className="text-center bg-blue-50 border border-gray-300"
+                                        >
                                           No Blok
                                         </TableHead>
-                                        <TableHead className="text-center bg-blue-50 border border-gray-300">
-                                          Wilayah
+                                        <TableHead
+                                          rowSpan={2}
+                                          className="text-center bg-blue-50 border border-gray-300"
+                                        >
+                                          TT
                                         </TableHead>
-                                        <TableHead className="text-center bg-blue-50 border border-gray-300">
-                                          Jenis Tanah
+                                        <TableHead
+                                          rowSpan={2}
+                                          className="text-center bg-blue-50 border border-gray-300"
+                                        >
+                                          Luas
                                         </TableHead>
-                                        <TableHead className="text-center bg-blue-50 border border-gray-300">
+                                        <TableHead
+                                          colSpan={4}
+                                          className="text-center bg-blue-50 border border-gray-300 font-bold"
+                                        >
+                                          POKOK
+                                        </TableHead>
+                                        <TableHead
+                                          rowSpan={2}
+                                          className="text-center bg-blue-50 border border-gray-300"
+                                        >
+                                          Asal Bibit
+                                        </TableHead>
+                                        <TableHead
+                                          rowSpan={2}
+                                          className="text-center bg-blue-50 border border-gray-300"
+                                        >
                                           Topografi
                                         </TableHead>
-                                        <TableHead className="text-center bg-blue-50 border border-gray-300">
-                                          Luas Tanam Awal
+                                        <TableHead
+                                          rowSpan={2}
+                                          className="text-center bg-blue-50 border border-gray-300"
+                                        >
+                                          Soil Type
                                         </TableHead>
-                                        <TableHead className="text-center bg-blue-50 border border-gray-300">
-                                          Tahun Tanam
+                                        <TableHead
+                                          rowSpan={2}
+                                          className="text-center bg-blue-50 border border-gray-300"
+                                        >
+                                          SPH
                                         </TableHead>
-                                        <TableHead className="text-center bg-blue-50 border border-gray-300">
-                                          Jenis Bibit
+                                      </TableRow>
+                                      {/* Row 3: Pokok Subheaders */}
+                                      <TableRow>
+                                        <TableHead className="text-center bg-blue-50 border border-gray-300 text-xs font-bold">
+                                          TOTAL
                                         </TableHead>
-                                        <TableHead className="text-center bg-blue-50 border border-gray-300">
-                                          Jumlah Pokok Awal
+                                        <TableHead className="text-center bg-blue-50 border border-gray-300 text-xs font-bold">
+                                          PRODUKTIF
                                         </TableHead>
-                                        <TableHead className="text-center bg-blue-50 border border-gray-300">
-                                          SPH Awal
+                                        <TableHead className="text-center bg-blue-50 border border-gray-300 text-xs font-bold">
+                                          BELUM PRODUKTIF
                                         </TableHead>
-                                        <TableHead className="text-center bg-green-50 border border-gray-300">
-                                          Luas Land Preparation
-                                        </TableHead>
-                                        <TableHead className="text-center bg-green-50 border border-gray-300">
-                                          Luas Nursery
-                                        </TableHead>
-                                        <TableHead className="text-center bg-green-50 border border-gray-300">
-                                          Luas Lebungan
-                                        </TableHead>
-                                        <TableHead className="text-center bg-green-50 border border-gray-300">
-                                          Luas Garapan
-                                        </TableHead>
-                                        <TableHead className="text-center bg-green-50 border border-gray-300">
-                                          Luas Rawa
-                                        </TableHead>
-                                        <TableHead className="text-center bg-green-50 border border-gray-300">
-                                          Luas Tanggul
-                                        </TableHead>
-                                        <TableHead className="text-center bg-green-50 border border-gray-300">
-                                          Luas Area Non Efektif
-                                        </TableHead>
-                                        <TableHead className="text-center bg-green-50 border border-gray-300">
-                                          Luas Konservasi
-                                        </TableHead>
-                                        <TableHead className="text-center bg-green-50 border border-gray-300">
-                                          Luas PKS
-                                        </TableHead>
-                                        <TableHead className="text-center bg-green-50 border border-gray-300">
-                                          Luas Jalan
-                                        </TableHead>
-                                        <TableHead className="text-center bg-green-50 border border-gray-300">
-                                          Luas Drainase
-                                        </TableHead>
-                                        <TableHead className="text-center bg-green-50 border border-gray-300">
-                                          Luas Perumahan
-                                        </TableHead>
-                                        <TableHead className="text-center bg-green-50 border border-gray-300">
-                                          Luas Sarana Prasanara
-                                        </TableHead>
-                                        <TableHead className="text-center bg-green-50 border border-gray-300">
-                                          Luas Lain-Lain
-                                        </TableHead>
-                                        <TableHead className="text-center bg-purple-50 border border-gray-300">
-                                          Jumlah Pokok Sensus
-                                        </TableHead>
-                                        <TableHead className="text-center bg-orange-50 border border-gray-300">
-                                          Total Luas Non Tanaman
-                                        </TableHead>
-                                        <TableHead className="text-center bg-orange-50 border border-gray-300">
-                                          Total Luas Tanam Awal
-                                        </TableHead>
-                                        <TableHead className="text-center bg-orange-50 border border-gray-300">
-                                          Luas Blok
-                                        </TableHead>
-                                        <TableHead className="text-center bg-orange-50 border border-gray-300">
-                                          SPH Akhir
+                                        <TableHead className="text-center bg-blue-50 border border-gray-300 text-xs font-bold">
+                                          Mati
                                         </TableHead>
                                       </TableRow>
                                     </TableHeader>
@@ -1921,31 +2014,19 @@ const Locations = () => {
                                               idx
                                             }`}
                                           >
-                                            {/* Data Base Aresta */}
+                                            <TableCell className="text-center border border-gray-300">
+                                              {String(block.pt_ownership ?? block.id_pt ?? block.pt ?? "-")}
+                                            </TableCell>
                                             <TableCell className="text-center border border-gray-300">
                                               {division_id
-                                                ? `Divisi ${division_id}`
+                                                ? typeof division_id ===
+                                                  "number"
+                                                  ? `Divisi ${division_id}`
+                                                  : division_id
                                                 : "-"}
                                             </TableCell>
-                                            <TableCell className="text-center border border-gray-300">
-                                              {String(block.no_blok ?? "-")}
-                                            </TableCell>
-                                            <TableCell className="text-center border border-gray-300">
-                                              {String(block.no_tph ?? "-")}
-                                            </TableCell>
-                                            <TableCell className="text-center border border-gray-300">
-                                              {String(block.jenis_tanah ?? "-")}
-                                            </TableCell>
-                                            <TableCell className="text-center border border-gray-300">
-                                              {String(block.topografi ?? "-")}
-                                            </TableCell>
-                                            <TableCell className="text-right border border-gray-300">
-                                              {typeof block.luas_tanam_ ===
-                                              "number"
-                                                ? formatNumber(
-                                                    block.luas_tanam_
-                                                  )
-                                                : block.luas_tanam_ ?? "-"}
+                                            <TableCell className="text-center border border-gray-300 min-w-[120px]">
+                                              {block.no_blok_display || block.no_blok || "-"}
                                             </TableCell>
                                             <TableCell className="text-center border border-gray-300">
                                               {String(
@@ -1954,374 +2035,38 @@ const Locations = () => {
                                                   "-"
                                               )}
                                             </TableCell>
+                                            <TableCell className="text-right border border-gray-300">
+                                              {formatNumber(block.luas_blok ?? block.luas_tanam_)}
+                                            </TableCell>
+                                            <TableCell className="text-right border border-gray-300">
+                                              {formatNumber(
+                                                block.pokok_total ?? 
+                                                block.jumlah_pokok ?? 
+                                                block.jumlak_pokok
+                                              )}
+                                            </TableCell>
+                                            <TableCell className="text-right border border-gray-300">
+                                              {formatNumber(block.pokok_produktif)}
+                                            </TableCell>
+                                            <TableCell className="text-right border border-gray-300">
+                                              {formatNumber(block.pokok_belum_produktif)}
+                                            </TableCell>
+                                            <TableCell className="text-right border border-gray-300">
+                                              {formatNumber(block.pokok_mati)}
+                                            </TableCell>
                                             <TableCell className="text-center border border-gray-300">
                                               {String(block.jenis_bibit ?? "-")}
                                             </TableCell>
-                                            <TableCell className="text-right border border-gray-300">
-                                              {(() => {
-                                                const val =
-                                                  block.jumlah_pokok ??
-                                                  block.jumlak_pokok;
-                                                return typeof val === "number"
-                                                  ? formatNumber(val)
-                                                  : "-";
-                                              })()}
+                                            <TableCell className="text-center border border-gray-300">
+                                              {String(block.topografi ?? "-")}
+                                            </TableCell>
+                                            <TableCell className="text-center border border-gray-300">
+                                              {String(block.jenis_tanah ?? block.soil_type ?? "-")}
                                             </TableCell>
                                             <TableCell className="text-right border border-gray-300">
-                                              {typeof block.SPH === "number"
-                                                ? formatNumber(block.SPH)
-                                                : block.SPH ?? "-"}
+                                              {formatNumber(block.SPH)}
                                             </TableCell>
 
-                                            {/* Hasil Mapping Survey */}
-                                            <TableCell className="text-right border border-gray-300">
-                                              {typeof block.luas_land_preparation ===
-                                              "number"
-                                                ? formatNumber(
-                                                    block.luas_land_preparation
-                                                  )
-                                                : block.luas_land_preparation ??
-                                                  "-"}
-                                            </TableCell>
-                                            <TableCell className="text-right border border-gray-300">
-                                              {typeof block.luas_nursery ===
-                                              "number"
-                                                ? formatNumber(
-                                                    block.luas_nursery
-                                                  )
-                                                : block.luas_nursery ?? "-"}
-                                            </TableCell>
-                                            <TableCell className="text-right border border-gray-300">
-                                              {typeof block.luas_lebungan ===
-                                              "number"
-                                                ? formatNumber(
-                                                    block.luas_lebungan
-                                                  )
-                                                : block.luas_lebungan ?? "-"}
-                                            </TableCell>
-                                            <TableCell className="text-right border border-gray-300">
-                                              {typeof block.luas_garapan ===
-                                              "number"
-                                                ? formatNumber(
-                                                    block.luas_garapan
-                                                  )
-                                                : block.luas_garapan ?? "-"}
-                                            </TableCell>
-                                            <TableCell className="text-right border border-gray-300">
-                                              {typeof block.luas_rawa ===
-                                              "number"
-                                                ? formatNumber(block.luas_rawa)
-                                                : block.luas_rawa ?? "-"}
-                                            </TableCell>
-                                            <TableCell className="text-right border border-gray-300">
-                                              {typeof block.luas_tanggul ===
-                                              "number"
-                                                ? formatNumber(
-                                                    block.luas_tanggul
-                                                  )
-                                                : block.luas_tanggul ?? "-"}
-                                            </TableCell>
-                                            <TableCell className="text-right border border-gray-300">
-                                              {typeof block.luas_area_non_efektif ===
-                                              "number"
-                                                ? formatNumber(
-                                                    block.luas_area_non_efektif
-                                                  )
-                                                : block.luas_area_non_efektif ??
-                                                  "-"}
-                                            </TableCell>
-                                            <TableCell className="text-right border border-gray-300">
-                                              {typeof block.luas_konservasi ===
-                                              "number"
-                                                ? formatNumber(
-                                                    block.luas_konservasi
-                                                  )
-                                                : block.luas_konservasi ?? "-"}
-                                            </TableCell>
-                                            <TableCell className="text-right border border-gray-300">
-                                              {typeof block.luas_pks ===
-                                              "number"
-                                                ? formatNumber(block.luas_pks)
-                                                : block.luas_pks ?? "-"}
-                                            </TableCell>
-                                            <TableCell className="text-right border border-gray-300">
-                                              {typeof block.luas_jalan ===
-                                              "number"
-                                                ? formatNumber(block.luas_jalan)
-                                                : block.luas_jalan ?? "-"}
-                                            </TableCell>
-                                            <TableCell className="text-right border border-gray-300">
-                                              {typeof block.luas_drainase ===
-                                              "number"
-                                                ? formatNumber(
-                                                    block.luas_drainase
-                                                  )
-                                                : block.luas_drainase ?? "-"}
-                                            </TableCell>
-                                            <TableCell className="text-right border border-gray-300">
-                                              {typeof block.luas_perumahan ===
-                                              "number"
-                                                ? formatNumber(
-                                                    block.luas_perumahan
-                                                  )
-                                                : block.luas_perumahan ?? "-"}
-                                            </TableCell>
-                                            <TableCell className="text-right border border-gray-300">
-                                              {typeof block.luas_sarana_prasanara ===
-                                              "number"
-                                                ? formatNumber(
-                                                    block.luas_sarana_prasanara
-                                                  )
-                                                : block.luas_sarana_prasanara ??
-                                                  "-"}
-                                            </TableCell>
-                                            <TableCell className="text-right border border-gray-300">
-                                              {(() => {
-                                                const val =
-                                                  block.luas_lain___lain ??
-                                                  block.luas_lain__lain;
-                                                return typeof val === "number"
-                                                  ? formatNumber(val)
-                                                  : "-";
-                                              })()}
-                                            </TableCell>
-
-                                            {/* Hasil Sensus */}
-                                            <TableCell className="text-right border border-gray-300">
-                                              {typeof block.jumlah_pokok_sensus ===
-                                              "number"
-                                                ? formatNumber(
-                                                    block.jumlah_pokok_sensus
-                                                  )
-                                                : block.jumlah_pokok_sensus ??
-                                                  "-"}
-                                            </TableCell>
-
-                                            {/* Hasil Perhitungan */}
-                                            <TableCell className="text-right border border-gray-300">
-                                              {(() => {
-                                                const landPrep =
-                                                  typeof block.luas_land_preparation ===
-                                                  "number"
-                                                    ? block.luas_land_preparation
-                                                    : 0;
-                                                const nursery =
-                                                  typeof block.luas_nursery ===
-                                                  "number"
-                                                    ? block.luas_nursery
-                                                    : 0;
-                                                const lebungan =
-                                                  typeof block.luas_lebungan ===
-                                                  "number"
-                                                    ? block.luas_lebungan
-                                                    : 0;
-                                                const garapan =
-                                                  typeof block.luas_garapan ===
-                                                  "number"
-                                                    ? block.luas_garapan
-                                                    : 0;
-                                                const rawa =
-                                                  typeof block.luas_rawa ===
-                                                  "number"
-                                                    ? block.luas_rawa
-                                                    : 0;
-                                                const tanggul =
-                                                  typeof block.luas_tanggul ===
-                                                  "number"
-                                                    ? block.luas_tanggul
-                                                    : 0;
-                                                const nonEfektif =
-                                                  typeof block.luas_area_non_efektif ===
-                                                  "number"
-                                                    ? block.luas_area_non_efektif
-                                                    : 0;
-                                                const konservasi =
-                                                  typeof block.luas_konservasi ===
-                                                  "number"
-                                                    ? block.luas_konservasi
-                                                    : 0;
-                                                const pks =
-                                                  typeof block.luas_pks ===
-                                                  "number"
-                                                    ? block.luas_pks
-                                                    : 0;
-                                                const jalan =
-                                                  typeof block.luas_jalan ===
-                                                  "number"
-                                                    ? block.luas_jalan
-                                                    : 0;
-                                                const drainase =
-                                                  typeof block.luas_drainase ===
-                                                  "number"
-                                                    ? block.luas_drainase
-                                                    : 0;
-                                                const perumahan =
-                                                  typeof block.luas_perumahan ===
-                                                  "number"
-                                                    ? block.luas_perumahan
-                                                    : 0;
-                                                const sarana =
-                                                  typeof block.luas_sarana_prasanara ===
-                                                  "number"
-                                                    ? block.luas_sarana_prasanara
-                                                    : 0;
-                                                const lain =
-                                                  typeof (
-                                                    block.luas_lain___lain ??
-                                                    block.luas_lain__lain
-                                                  ) === "number"
-                                                    ? block.luas_lain___lain ??
-                                                      block.luas_lain__lain
-                                                    : 0;
-                                                const total =
-                                                  landPrep +
-                                                  nursery +
-                                                  lebungan +
-                                                  garapan +
-                                                  rawa +
-                                                  tanggul +
-                                                  nonEfektif +
-                                                  konservasi +
-                                                  pks +
-                                                  jalan +
-                                                  drainase +
-                                                  perumahan +
-                                                  sarana +
-                                                  lain;
-                                                return formatNumber(total);
-                                              })()}
-                                            </TableCell>
-                                            <TableCell className="text-right border border-gray-300">
-                                              {typeof block.luas_tanam_ ===
-                                              "number"
-                                                ? formatNumber(
-                                                    block.luas_tanam_
-                                                  )
-                                                : block.luas_tanam_ ?? "-"}
-                                            </TableCell>
-                                            <TableCell className="text-right border border-gray-300">
-                                              {(() => {
-                                                // Luas Blok = Total Luas Tanam Awal + Total Luas Non Tanaman
-                                                const luasTanamAwal =
-                                                  typeof block.luas_tanam_ ===
-                                                  "number"
-                                                    ? block.luas_tanam_
-                                                    : 0;
-                                                const landPrep =
-                                                  typeof block.luas_land_preparation ===
-                                                  "number"
-                                                    ? block.luas_land_preparation
-                                                    : 0;
-                                                const nursery =
-                                                  typeof block.luas_nursery ===
-                                                  "number"
-                                                    ? block.luas_nursery
-                                                    : 0;
-                                                const lebungan =
-                                                  typeof block.luas_lebungan ===
-                                                  "number"
-                                                    ? block.luas_lebungan
-                                                    : 0;
-                                                const garapan =
-                                                  typeof block.luas_garapan ===
-                                                  "number"
-                                                    ? block.luas_garapan
-                                                    : 0;
-                                                const rawa =
-                                                  typeof block.luas_rawa ===
-                                                  "number"
-                                                    ? block.luas_rawa
-                                                    : 0;
-                                                const tanggul =
-                                                  typeof block.luas_tanggul ===
-                                                  "number"
-                                                    ? block.luas_tanggul
-                                                    : 0;
-                                                const nonEfektif =
-                                                  typeof block.luas_area_non_efektif ===
-                                                  "number"
-                                                    ? block.luas_area_non_efektif
-                                                    : 0;
-                                                const konservasi =
-                                                  typeof block.luas_konservasi ===
-                                                  "number"
-                                                    ? block.luas_konservasi
-                                                    : 0;
-                                                const pks =
-                                                  typeof block.luas_pks ===
-                                                  "number"
-                                                    ? block.luas_pks
-                                                    : 0;
-                                                const jalan =
-                                                  typeof block.luas_jalan ===
-                                                  "number"
-                                                    ? block.luas_jalan
-                                                    : 0;
-                                                const drainase =
-                                                  typeof block.luas_drainase ===
-                                                  "number"
-                                                    ? block.luas_drainase
-                                                    : 0;
-                                                const perumahan =
-                                                  typeof block.luas_perumahan ===
-                                                  "number"
-                                                    ? block.luas_perumahan
-                                                    : 0;
-                                                const sarana =
-                                                  typeof block.luas_sarana_prasanara ===
-                                                  "number"
-                                                    ? block.luas_sarana_prasanara
-                                                    : 0;
-                                                const lain =
-                                                  typeof (
-                                                    block.luas_lain___lain ??
-                                                    block.luas_lain__lain
-                                                  ) === "number"
-                                                    ? block.luas_lain___lain ??
-                                                      block.luas_lain__lain
-                                                    : 0;
-                                                const totalNonTanaman =
-                                                  landPrep +
-                                                  nursery +
-                                                  lebungan +
-                                                  garapan +
-                                                  rawa +
-                                                  tanggul +
-                                                  nonEfektif +
-                                                  konservasi +
-                                                  pks +
-                                                  jalan +
-                                                  drainase +
-                                                  perumahan +
-                                                  sarana +
-                                                  lain;
-                                                const luasBlok =
-                                                  luasTanamAwal +
-                                                  totalNonTanaman;
-                                                return formatNumber(luasBlok);
-                                              })()}
-                                            </TableCell>
-                                            <TableCell className="text-right border border-gray-300">
-                                              {(() => {
-                                                // SPH Akhir = Jumlah Pokok Sensus / Luas Tanam Awal
-                                                const jumlahPokokSensus =
-                                                  typeof block.jumlah_pokok_sensus ===
-                                                  "number"
-                                                    ? block.jumlah_pokok_sensus
-                                                    : 0;
-                                                const luasTanamAwal =
-                                                  typeof block.luas_tanam_ ===
-                                                  "number"
-                                                    ? block.luas_tanam_
-                                                    : 0;
-                                                if (luasTanamAwal === 0)
-                                                  return "-";
-                                                const sphAkhir =
-                                                  jumlahPokokSensus /
-                                                  luasTanamAwal;
-                                                return formatNumber(sphAkhir);
-                                              })()}
-                                            </TableCell>
                                             <TableCell className="text-center border border-gray-300">
                                               <Select
                                                 value={block.status || "active"}
@@ -3045,6 +2790,71 @@ const Locations = () => {
                 </div>
               </div>
 
+              {/* Data Pokok (Aresta 2026) */}
+              <div className="space-y-4 border-t pt-4">
+                <h3 className="text-sm font-bold text-white bg-emerald-600 px-3 py-2 rounded">
+                  Data Pokok (Aresta 2026)
+                </h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-pokok-total">Total Pokok</Label>
+                    <Input
+                      id="edit-pokok-total"
+                      type="number"
+                      value={editFormData.pokok_total || ""}
+                      onChange={(e) =>
+                        setEditFormData({
+                          ...editFormData,
+                          pokok_total: parseInt(e.target.value) || 0,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-pokok-produktif">Pokok Produktif</Label>
+                    <Input
+                      id="edit-pokok-produktif"
+                      type="number"
+                      value={editFormData.pokok_produktif || ""}
+                      onChange={(e) =>
+                        setEditFormData({
+                          ...editFormData,
+                          pokok_produktif: parseInt(e.target.value) || 0,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-pokok-bprod">Belum Produktif</Label>
+                    <Input
+                      id="edit-pokok-bprod"
+                      type="number"
+                      value={editFormData.pokok_belum_produktif || ""}
+                      onChange={(e) =>
+                        setEditFormData({
+                          ...editFormData,
+                          pokok_belum_produktif: parseInt(e.target.value) || 0,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-pokok-mati">Pokok Mati</Label>
+                    <Input
+                      id="edit-pokok-mati"
+                      type="number"
+                      value={editFormData.pokok_mati || ""}
+                      onChange={(e) =>
+                        setEditFormData({
+                          ...editFormData,
+                          pokok_mati: parseInt(e.target.value) || 0,
+                        })
+                      }
+                    />
+                  </div>
+                </div>
+              </div>
+
               {/* Hasil Sensus */}
               <div className="space-y-4">
                 <h3 className="text-sm font-bold text-white bg-purple-600 px-3 py-2 rounded">
@@ -3445,16 +3255,16 @@ const Locations = () => {
           </DialogContent>
         </Dialog>
 
-        {/* Dialog Import Estate Preview */}
+        {/* Dialog Import Wilayah Preview */}
         <Dialog
           open={isImportEstatePreviewOpen}
           onOpenChange={setIsImportEstatePreviewOpen}
         >
           <DialogContent className="max-w-3xl">
             <DialogHeader>
-              <DialogTitle>Preview Import Estate</DialogTitle>
+              <DialogTitle>Preview Import Wilayah</DialogTitle>
               <DialogDescription>
-                Review data estate yang akan diimport
+                Review data wilayah yang akan diimport
               </DialogDescription>
             </DialogHeader>
 
@@ -3494,7 +3304,7 @@ const Locations = () => {
                       <TableHeader>
                         <TableRow>
                           <TableHead>No</TableHead>
-                          <TableHead>Nama Estate</TableHead>
+                          <TableHead>Nama Wilayah</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>

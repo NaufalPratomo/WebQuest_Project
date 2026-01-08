@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 const taksasiSelectionSchema = new mongoose.Schema({
   date: { type: Date, required: true },
   estateId: { type: String, required: true },
-  division_id: { type: Number, required: true },
+  division_id: { type: mongoose.Schema.Types.Mixed, required: true },
   block_no: { type: String, required: true },
   employeeIds: { type: [mongoose.Schema.Types.ObjectId], ref: 'Employee', default: [] },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' },

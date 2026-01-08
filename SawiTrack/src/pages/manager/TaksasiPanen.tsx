@@ -18,15 +18,18 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import * as XLSX from 'xlsx';
-import { Upload, Download } from 'lucide-react';
+import { Upload, Download, Activity, Target, Calculator } from 'lucide-react';
 
 type EstateOption = { _id: string; estate_name: string };
-type DivisionOption = { division_id: number };
+type DivisionOption = { division_id: number | string };
 type Block = {
   id_blok?: string;
   no_blok?: string;
   luas_blok?: number;
-  jumlak_pokok?: number; // note: schema uses jumlak_pokok
+  jumlak_pokok?: number; 
+  pokok_produktif?: number;
+  pokok_belum_produktif?: number;
+  pokok_mati?: number;
 };
 
 export default function TaksasiPanen() {
@@ -168,7 +171,7 @@ export default function TaksasiPanen() {
     const blk = (() => { const i = Number(blockIndex); if (Number.isNaN(i) || i < 0 || i >= blocks.length) return undefined; return blocks[i]; })();
     if (!date || !estateId || !divisionId || !blk) { setSelectedIds([]); return; }
     const blockLabel = blk.no_blok || blk.id_blok || '-';
-    api.taksasiSelections({ date, estateId, division_id: Number(divisionId), block_no: blockLabel })
+    api.taksasiSelections({ date, estateId, division_id: divisionId, block_no: blockLabel })
       .then((docs) => { if (docs && docs.length > 0) setSelectedIds(docs[0].employeeIds || []); else setSelectedIds([]); })
       .catch(() => setSelectedIds([]));
   }, [date, estateId, divisionId, blockIndex, blocks]);
@@ -180,7 +183,7 @@ export default function TaksasiPanen() {
       await api.upsertTaksasiSelection({
         date,
         estateId,
-        division_id: Number(divisionId),
+        division_id: divisionId,
         block_no: blockLabel,
         employeeIds: next
       });
@@ -196,15 +199,25 @@ export default function TaksasiPanen() {
   }, [blockIndex, blocks]);
 
   const totalPokok = selectedBlock?.jumlak_pokok ?? 0;
+  const pProduktif = selectedBlock?.pokok_produktif ?? 0;
+  const pBelumProduktif = selectedBlock?.pokok_belum_produktif ?? 0;
+  const pMati = selectedBlock?.pokok_mati ?? 0;
+
   const samplePokok = useMemo(() => {
-    if (!totalPokok || totalPokok <= 0) return 0;
-    return Math.max(1, Math.ceil(totalPokok * 0.10));
-  }, [totalPokok]);
+    // Priority: use produktif trees as base for census sample
+    const base = pProduktif > 0 ? pProduktif : totalPokok;
+    if (base <= 0) return 0;
+    return Math.max(1, Math.ceil(base * 0.10));
+  }, [totalPokok, pProduktif]);
 
   // Derived calculations for current editable context
-  const effectiveSample = Math.max(0, samplePokok - ptb);
-  const akpPercent = effectiveSample > 0 ? (bmm / effectiveSample) * 100 : 0;
-  const taksasiJanjang = Math.round((akpPercent / 100) * totalPokok);
+  // RELEVANCE UPDATE: Since 2026 data separates PROD and MATI, 
+  // we assume the census is done on the PROD population directly.
+  const akpPercent = samplePokok > 0 ? (bmm / samplePokok) * 100 : 0;
+  
+  // Janjang calculation: AKP * Produktif Trees
+  const calculationBase = pProduktif > 0 ? pProduktif : totalPokok;
+  const taksasiJanjang = Math.round((akpPercent / 100) * calculationBase);
   const taksasiTon = (taksasiJanjang * avgWeightKg) / 1000;
   const kebutuhanPemanen = basisJanjangPerPemanen > 0 ? Math.ceil(taksasiJanjang / basisJanjangPerPemanen) : 0;
 
@@ -279,7 +292,7 @@ export default function TaksasiPanen() {
       await api.taksasiCreate({
         date,
         estateId,
-        division_id: Number(divisionId),
+        division_id: divisionId,
         block_no: blockLabel,
         weightKg: Math.round(taksasiTon * 1000),
         totalPokok,
@@ -418,12 +431,12 @@ export default function TaksasiPanen() {
         const groupHeaders = [
           'Data Input','Data Input','Data Input','Data Input',
           'Master Data Base','Master Data Base','Master Data Base','Master Data Base',
-          'Input Data Hasil Sensus AKP Harian','Input Data Hasil Sensus AKP Harian','Input Data Hasil Sensus AKP Harian','Input Data Hasil Sensus AKP Harian',
+          'Input Data Hasil Sensus AKP Harian',
           'Hasil Perhitungan','Hasil Perhitungan','Hasil Perhitungan','Hasil Perhitungan'
         ];
         const headers = [
           'Tanggal','Estate','Divisi','Blok','Total Pokok','BJR (kg)','Basis (jjg/org)','Sample Pokok',
-          'Pokok Tidak Berbuah (PTB)','Buah Hitam (BH)','Buah Merah Belum Brondol (BMBB)','Buah Merah Membrodol (BMM)',
+          'Buah Merah Membrodol (BMM)',
           'AKP %','Taksasi (Janjang)','Taksasi (Ton)','Kebutuhan Pemanen'
         ];
 
@@ -433,8 +446,8 @@ export default function TaksasiPanen() {
         // Merge grup
         ws.mergeCells(1,1,1,4); // A1:D1
         ws.mergeCells(1,5,1,8); // E1:H1
-        ws.mergeCells(1,9,1,12); // I1:L1
-        ws.mergeCells(1,13,1,16); // M1:P1
+        ws.mergeCells(1,9,1,9); // I1:I1
+        ws.mergeCells(1,10,1,13); // J1:M1
 
         // Styling header
         const headerStyle = { alignment: { horizontal: 'center', vertical: 'middle' }, font: { bold: true }, border: { top:{style:'thin'}, left:{style:'thin'}, right:{style:'thin'}, bottom:{style:'thin'} } };
@@ -443,8 +456,8 @@ export default function TaksasiPanen() {
         ws.getRow(1).eachCell(cell => { cell.style = headerStyle; });
         ws.getRow(2).eachCell(cell => { cell.style = headerStyle; });
 
-        // Column widths (sedikit lebih besar untuk teks panjang)
-        const widths = [14,20,10,12,14,10,14,14,24,16,32,30,10,16,14,20];
+        // Column widths
+        const widths = [14,20,10,12,14,10,14,14,30,10,16,14,20];
         widths.forEach((w, i) => { ws.getColumn(i+1).width = w; });
 
         // Data rows
@@ -473,9 +486,6 @@ export default function TaksasiPanen() {
             r.avgWeightKg,
             r.basisJanjangPerPemanen,
             r.samplePokok,
-            r.ptb,
-            r.bm,
-            r.bmbb,
             r.bmm,
             Number(akpVal.toFixed(2)),
             taksasiJanjangVal,
@@ -503,12 +513,12 @@ export default function TaksasiPanen() {
       const groupHeaders = [
         'Data Input','Data Input','Data Input','Data Input',
         'Master Data Base','Master Data Base','Master Data Base','Master Data Base',
-        'Input Data Hasil Sensus AKP Harian','Input Data Hasil Sensus AKP Harian','Input Data Hasil Sensus AKP Harian','Input Data Hasil Sensus AKP Harian',
+        'Input Data Hasil Sensus AKP Harian',
         'Hasil Perhitungan','Hasil Perhitungan','Hasil Perhitungan','Hasil Perhitungan'
       ];
       const headers = [
         'Tanggal','Estate','Divisi','Blok','Total Pokok','BJR (kg)','Basis (jjg/org)','Sample Pokok',
-        'Pokok Tidak Berbuah (PTB)','Buah Hitam (BH)','Buah Merah Belum Brondol (BMBB)','Buah Merah Membrodol (BMM)',
+        'Buah Merah Membrodol (BMM)',
         'AKP %','Taksasi (Janjang)','Taksasi (Ton)','Kebutuhan Pemanen'
       ];
       const wbSimple = XLSX.utils.book_new();
@@ -532,17 +542,17 @@ export default function TaksasiPanen() {
         const kebutuhanVal = r.kebutuhanPemanen ?? (r.basisJanjangPerPemanen ? Math.ceil(taksasiJanjangVal / r.basisJanjangPerPemanen) : 0);
         XLSX.utils.sheet_add_aoa(wsSimple, [[
           formattedDate, estateName, r.division_id, r.block_no, r.totalPokok, r.avgWeightKg, r.basisJanjangPerPemanen,
-          r.samplePokok, r.ptb, r.bm, r.bmbb, r.bmm, Number(akpVal.toFixed(2)), taksasiJanjangVal, Number(taksasiTonVal.toFixed(2)), kebutuhanVal
+          r.samplePokok, r.bmm, Number(akpVal.toFixed(2)), taksasiJanjangVal, Number(taksasiTonVal.toFixed(2)), kebutuhanVal
         ]], { origin: { r: rowIndex - 1, c: 0 } });
         rowIndex++;
       }
       wsSimple['!merges'] = [
         { s:{r:0,c:0}, e:{r:0,c:3} },
         { s:{r:0,c:4}, e:{r:0,c:7} },
-        { s:{r:0,c:8}, e:{r:0,c:11} },
-        { s:{r:0,c:12}, e:{r:0,c:15} }
+        { s:{r:0,c:8}, e:{r:0,c:8} },
+        { s:{r:0,c:9}, e:{r:0,c:12} }
       ];
-      wsSimple['!cols'] = [14,20,10,12,14,10,14,14,18,16,22,22,10,16,14,18].map(w=>({wch:w}));
+      wsSimple['!cols'] = [14,20,10,12,14,10,14,14,22,10,16,14,18].map(w=>({wch:w}));
       XLSX.utils.book_append_sheet(wbSimple, wsSimple, 'Taksasi');
       XLSX.writeFile(wbSimple, 'Taksasi_All.xlsx');
       toast.success('Export berhasil (tanpa styling penuh)');
@@ -900,7 +910,11 @@ export default function TaksasiPanen() {
                   </SelectTrigger>
                   <SelectContent>
                     {divisions.map((d) => (
-                      <SelectItem key={String(d.division_id)} value={String(d.division_id)}>Divisi {d.division_id}</SelectItem>
+                      <SelectItem key={String(d.division_id)} value={String(d.division_id)}>
+                        {typeof d.division_id === 'number' || !String(d.division_id).toLowerCase().startsWith('divisi') 
+                          ? `Divisi ${d.division_id}` 
+                          : d.division_id}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -922,15 +936,28 @@ export default function TaksasiPanen() {
               </div>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4 md:grid-cols-4">
               <div className="space-y-1">
-                <Label>Jumlah Pokok (dari data blok)</Label>
-                <Input readOnly value={totalPokok || ''} />
+                <Label>Total Pokok</Label>
+                <Input readOnly value={totalPokok || '0'} />
               </div>
               <div className="space-y-1">
-                <Label>Pokok Sample (10% dari jumlah pokok)</Label>
-                <Input readOnly value={samplePokok || ''} />
+                <Label>Produktif</Label>
+                <Input readOnly className="text-emerald-600 font-bold" value={pProduktif || '0'} />
               </div>
+              <div className="space-y-1">
+                <Label>Belum Produktif</Label>
+                <Input readOnly className="text-orange-600" value={pBelumProduktif || '0'} />
+              </div>
+              <div className="space-y-1">
+                <Label>Mati</Label>
+                <Input readOnly className="text-red-600" value={pMati || '0'} />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <Label>Pokok Sample (10% dari {pProduktif > 0 ? 'Pokok Produktif' : 'Total Pokok'})</Label>
+              <Input readOnly value={samplePokok || ''} />
             </div>
 
             <div className="flex justify-end gap-2">
@@ -944,26 +971,32 @@ export default function TaksasiPanen() {
       {
         step === 2 && (
           <Card>
-            <CardContent className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-3">
-                <div className="space-y-2">
-                  <Label>Buah Hitam (BH)</Label>
-                  <Input type="number" min={0} value={bm} onChange={(e) => setBm(Number(e.target.value || 0))} />
+            <CardHeader className="pb-2">
+              <div className="flex flex-wrap gap-4 text-sm font-medium border-b pb-4">
+                <div className="flex gap-2">
+                  <span className="text-muted-foreground">Master:</span>
+                  <span title="Total Pokok">TP: {totalPokok}</span>
+                  <span title="Pokok Produktif" className="text-emerald-700">PROD: {pProduktif}</span>
+                  <span title="Pokok Belum Produktif" className="text-orange-700">B.PROD: {pBelumProduktif}</span>
+                  <span title="Pokok Mati" className="text-red-700">MATI: {pMati}</span>
                 </div>
-                <div className="space-y-2">
-                  <Label>Pokok Tidak Berbuah (PTB)</Label>
-                  <Input type="number" min={0} value={ptb} onChange={(e) => setPtb(Number(e.target.value || 0))} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Buah Merah Belum Brondol (BMBB)</Label>
-                  <Input type="number" min={0} value={bmbb} onChange={(e) => setBmbb(Number(e.target.value || 0))} />
+                <div className="flex gap-2 border-l pl-4">
+                  <span className="text-muted-foreground">Target Sample:</span>
+                  <span className="font-bold">{samplePokok} Pohon</span>
                 </div>
               </div>
-
-              <div className="grid gap-4 md:grid-cols-3">
+            </CardHeader>
+            <CardContent className="space-y-4 pt-4">
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 <div className="space-y-2">
-                  <Label>Buah Merah Membrodol (BMM)</Label>
+                  <Label>Pokok Sampel Sensus</Label>
+                  <Input readOnly value={samplePokok} className="bg-muted" />
+                  <p className="text-[10px] text-muted-foreground italic">10% dari Pokok Produktif</p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Pokok Matang (BMM)</Label>
                   <Input type="number" min={0} value={bmm} onChange={(e) => setBmm(Number(e.target.value || 0))} />
+                  <p className="text-[10px] text-muted-foreground italic">Jumlah janjang masak ditemukan</p>
                 </div>
                 <div className="space-y-2">
                   <Label>Berat Janjang Rata-rata (kg)</Label>
@@ -976,27 +1009,34 @@ export default function TaksasiPanen() {
               </div>
 
               <div className="space-y-2">
-                <Label>Hasil Perhitungan</Label>
-                <div className="grid gap-4 md:grid-cols-2">
+                <Label className="text-emerald-700 font-bold flex items-center gap-2">
+                  <Activity className="h-4 w-4" />
+                  Hasil Perhitungan Taksasi
+                </Label>
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 bg-emerald-50/50 p-4 rounded-lg border border-emerald-100">
                   <div className="space-y-1">
-                    <div className="text-sm text-muted-foreground">AKP % (berdasarkan BMM)</div>
-                    <Input readOnly value={akpPercent.toFixed(2)} />
+                    <div className="text-xs font-medium text-muted-foreground uppercase">AKP %</div>
+                    <div className="text-2xl font-bold text-emerald-700">{akpPercent.toFixed(2)}%</div>
+                    <div className="text-[10px] text-muted-foreground">BMM / Sample</div>
                   </div>
                   <div className="space-y-1">
-                    <div className="text-sm text-muted-foreground">Taksasi Janjang (janjang)</div>
-                    <Input readOnly value={taksasiJanjang} />
+                    <div className="text-xs font-medium text-muted-foreground uppercase">Taksasi Janjang</div>
+                    <div className="text-2xl font-bold text-emerald-700">{taksasiJanjang} <span className="text-sm font-normal text-muted-foreground uppercase">jjg</span></div>
+                    <div className="text-[10px] text-muted-foreground">AKP% * P.Produktif</div>
                   </div>
                   <div className="space-y-1">
-                    <div className="text-sm text-muted-foreground">Taksasi Tonase (ton)</div>
-                    <Input readOnly value={taksasiTon.toFixed(2)} />
+                    <div className="text-xs font-medium text-muted-foreground uppercase">Estimasi Tonase</div>
+                    <div className="text-2xl font-bold text-emerald-700">{taksasiTon.toFixed(2)} <span className="text-sm font-normal text-muted-foreground uppercase">ton</span></div>
+                    <div className="text-[10px] text-muted-foreground">{avgWeightKg} kg/jjg</div>
                   </div>
                   <div className="space-y-1">
-                    <div className="text-sm text-muted-foreground">Kebutuhan Pemanen (orang)</div>
-                    <Input readOnly value={kebutuhanPemanen} />
+                    <div className="text-xs font-medium text-muted-foreground uppercase">Karya Pemanen</div>
+                    <div className="text-2xl font-bold text-emerald-700">{kebutuhanPemanen} <span className="text-sm font-normal text-muted-foreground uppercase">org</span></div>
+                    <div className="text-[10px] text-muted-foreground">Basis {basisJanjangPerPemanen} jjg</div>
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Catatan: Perhitungan ini mengasumsikan AKP% dihitung dari BMM/efektif sample (sample - PTB), dan 1 janjang per pokok berbuah. Anda dapat menyesuaikan parameter rata-rata berat janjang dan basis janjang/pemanen.
+                  Catatan: Perhitungan ini disesuaikan dengan <strong>Master Data Aresta 2026</strong>. AKP dihitung langsung dari perbandingan BMM terhadap Sampel pada populasi Pokok Produktif.
                 </p>
               </div>
 
@@ -1027,7 +1067,13 @@ export default function TaksasiPanen() {
                             className={`rounded-lg border p-3 transition ${active ? 'bg-emerald-50 border-emerald-300' : 'hover:bg-muted'} ${atCapacity ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                           >
                             <div className="font-medium truncate">{emp.name}</div>
-                            <div className="text-xs text-muted-foreground">Divisi {emp.division ?? '-'}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {emp.division 
+                                ? (!emp.division.toLowerCase().startsWith('divisi') 
+                                  ? `Divisi ${emp.division}` 
+                                  : emp.division)
+                                : '-'}
+                            </div>
                             {active && <div className="mt-2 inline-block text-xs px-2 py-0.5 rounded bg-emerald-100 text-emerald-700">Dipilih</div>}
                           </div>
                         );
@@ -1100,7 +1146,11 @@ export default function TaksasiPanen() {
                 {rows.map((r, i) => (
                   <TableRow key={r.timestamp + i}>
                     <TableCell>{r.estateName}</TableCell>
-                    <TableCell>Divisi {r.divisionId}</TableCell>
+                    <TableCell>
+                      {!r.divisionId.toLowerCase().startsWith('divisi') 
+                        ? `Divisi ${r.divisionId}` 
+                        : r.divisionId}
+                    </TableCell>
                     <TableCell>{r.blockLabel}</TableCell>
                     <TableCell className="text-right">{r.totalPokok}</TableCell>
                     <TableCell className="text-right">{r.samplePokok}</TableCell>

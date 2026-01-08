@@ -112,7 +112,7 @@ export type TaksasiRow = {
   _id?: string;
   date: string; // ISO
   estateId: string;
-  division_id: number;
+  division_id: number | string;
   block_no: string;
   block_id?: string;
   weightKg: number;
@@ -136,7 +136,7 @@ export type PanenRow = {
   _id?: string;
   date_panen: string; // ISO
   estateId: string;
-  division_id: number;
+  division_id: number | string;
   block_no: string;
   block_id?: string;
   weightKg: number;
@@ -159,7 +159,7 @@ export type AngkutRow = {
   date_panen: string; // ISO (lock key)
   date_angkut: string; // ISO (transport date)
   estateId: string;
-  division_id: number;
+  division_id: number | string;
   block_no: string;
   block_id?: string;
   noTPH?: string; // Nomor TPH for aggregation
@@ -353,9 +353,15 @@ export const api = {
   ) => http(`/estates/${id}`, { method: "PUT", body: JSON.stringify(body) }),
   deleteEstate: (id: string) => http(`/estates/${id}`, { method: "DELETE" }),
   divisions: (estateId: string) =>
-    http<Array<{ division_id: number }>>(`/estates/${estateId}/divisions`),
+    http<Array<{ division_id: number | string }>>(
+      `/estates/${encodeURIComponent(estateId)}/divisions`
+    ),
   blocks: (estateId: string, divisionId: number | string) =>
-    http(`/estates/${estateId}/divisions/${divisionId}/blocks`),
+    http(
+      `/estates/${encodeURIComponent(estateId)}/divisions/${encodeURIComponent(
+        divisionId
+      )}/blocks`
+    ),
   targets: () => http<Target[]>(`/targets`),
   target: (id: string) => http<Target>(`/targets/${id}`),
   createTarget: (body: {
@@ -436,7 +442,7 @@ export const api = {
   taksasiSelections: (params?: {
     date?: string;
     estateId?: string;
-    division_id?: number;
+    division_id?: number | string;
     block_no?: string;
   }) => {
     const search = toQS(params as Record<string, string | number | undefined>);
@@ -445,7 +451,7 @@ export const api = {
         _id: string;
         date: string;
         estateId: string;
-        division_id: number;
+        division_id: number | string;
         block_no: string;
         employeeIds: string[];
         notes?: string;
@@ -455,7 +461,7 @@ export const api = {
   upsertTaksasiSelection: (body: {
     date: string;
     estateId: string;
-    division_id: number;
+    division_id: number | string;
     block_no: string;
     employeeIds: string[];
     notes?: string;

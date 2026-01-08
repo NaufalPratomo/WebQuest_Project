@@ -14,8 +14,8 @@ export default function Harvest() {
   const [date, setDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [estates, setEstates] = useState<Array<{ _id: string; estate_name: string }>>([]);
   const [estateId, setEstateId] = useState<string>('');
-  const [divisions, setDivisions] = useState<Array<{ division_id: number }>>([]);
-  const [divisionId, setDivisionId] = useState<number | ''>('');
+  const [divisions, setDivisions] = useState<Array<{ division_id: number | string }>>([]);
+  const [divisionId, setDivisionId] = useState<number | string | ''>('');
   const [blocks, setBlocks] = useState<BlockOption[]>([]);
   const [blockNo, setBlockNo] = useState('');
   const [weightKg, setWeightKg] = useState<number | ''>('');
@@ -35,7 +35,7 @@ export default function Harvest() {
 
   useEffect(() => {
     if (!estateId || !divisionId) { setBlocks([]); return; }
-    api.blocks(estateId, Number(divisionId)).then((b) => setBlocks(Array.isArray(b) ? (b as BlockOption[]) : [])).catch(() => setBlocks([]));
+    api.blocks(estateId, divisionId).then((b) => setBlocks(Array.isArray(b) ? (b as BlockOption[]) : [])).catch(() => setBlocks([]));
   }, [estateId, divisionId]);
 
   const filtered = useMemo(() => rows.filter(r => r.date_panen.startsWith(date)), [rows, date]);
@@ -51,11 +51,13 @@ export default function Harvest() {
   }, []);
 
   const mandorMap = useMemo(() => {
-    const m = new Map<number, string>();
+    const m = new Map<number | string, string>();
     for (const u of users) {
       if (u.division != null) {
-        const divNum = Number(u.division);
-        if (!Number.isNaN(divNum)) m.set(divNum, u.name);
+        const divVal = u.division;
+        const divNum = Number(divVal);
+        const key = !Number.isNaN(divNum) ? divNum : divVal;
+        m.set(key, u.name);
       }
     }
     return m;
@@ -67,7 +69,7 @@ export default function Harvest() {
         toast.error('Lengkapi input');
         return;
       }
-      const body: PanenRow = { date_panen: date, estateId, division_id: Number(divisionId), block_no: blockNo, weightKg: Number(weightKg), jobCode: 'panen' };
+      const body: PanenRow = { date_panen: date, estateId, division_id: divisionId, block_no: blockNo, weightKg: Number(weightKg), jobCode: 'panen' };
       const created = await api.panenCreate(body);
       toast.success('Tersimpan');
       setRows(prev => Array.isArray(created) ? [...prev, ...created] : [...prev, created as PanenRow]);
@@ -99,10 +101,14 @@ export default function Harvest() {
       requireIdx('date_panen', 'estateid', 'division_id', 'block_no', 'weightkg');
       const parsed: PanenRow[] = lines.slice(1).map((line) => {
         const cols = line.split(',');
+        const rawDiv = cols[idx('division_id')];
+        const divNum = Number(rawDiv);
+        const divId = !Number.isNaN(divNum) ? divNum : rawDiv;
+        
         return {
           date_panen: cols[idx('date_panen')],
           estateId: cols[idx('estateid')],
-          division_id: Number(cols[idx('division_id')]),
+          division_id: divId,
           block_no: cols[idx('block_no')],
           weightKg: Number(cols[idx('weightkg')]),
           jobCode: 'panen',
@@ -187,9 +193,17 @@ export default function Harvest() {
                   </div>
                   <div>
                     <Label>Divisi</Label>
-                    <select className="w-full h-10 border rounded px-2" value={divisionId} onChange={(e) => setDivisionId(e.target.value ? Number(e.target.value) : '')}>
+                    <select className="w-full h-10 border rounded px-2" value={divisionId} onChange={(e) => {
+                      const val = e.target.value;
+                      const num = Number(val);
+                      setDivisionId(!Number.isNaN(num) && val.trim() !== '' ? num : val);
+                    }}>
                       <option value="">Pilih</option>
-                      {divisions.map(d => <option key={d.division_id} value={d.division_id}>Divisi {d.division_id}</option>)}
+                      {divisions.map(d => (
+                        <option key={d.division_id} value={d.division_id}>
+                          {typeof d.division_id === 'number' ? `Divisi ${d.division_id}` : d.division_id}
+                        </option>
+                      ))}
                     </select>
                   </div>
                   <div>
@@ -252,7 +266,7 @@ export default function Harvest() {
                 {filtered.map((r, idx) => (
                   <TableRow key={r._id || idx}>
                     <TableCell>{r.estateId}</TableCell>
-                    <TableCell>{r.division_id}</TableCell>
+                    <TableCell>{typeof r.division_id === 'number' ? `Divisi ${r.division_id}` : r.division_id}</TableCell>
                     <TableCell>{r.mandorName || mandorMap.get(r.division_id) || '-'}</TableCell>
                     <TableCell>{r.block_no}</TableCell>
                     <TableCell>{r.jobCode || 'panen'}</TableCell>

@@ -26,7 +26,7 @@ interface AttendanceRecord {
     date: string;
     employeeId: string;
     status: string;
-    division_id?: number;
+    division_id?: number | string;
     notes?: string;
     hk?: number;
 }
@@ -168,25 +168,22 @@ const Attendance = () => {
             } else {
                 // Create
                 // We use simple "present" status for now as implied by "1"
+                const emp = employees.find(e => e._id === employeeId);
                 const res = await api.attendanceCreate({
                     date: dateStr,
                     employeeId,
                     status: 'present',
-                    division_id: undefined, // Optional, can fetch from employee if needed
+                    division_id: emp?.division, // Pass employee's division string/number
                     notes: ''
                 });
 
                 // Add to local state
-                // Backend should return _id, we construct the object
-                // Use dateStr or an ISO string? Backend usually expects ISO or YYYY-MM-DD.
-                // If we send YYYY-MM-DD to `create`, assume it stores correctly.
-                // We need to push an object that satisfies `AttendanceRecord`.
-                // Let's try to match existing format.
                 setAttendanceData(prev => [...prev, {
                     _id: res._id,
-                    date: dateStr, // logic below parses this correctly as long as new Date(dateStr) works
+                    date: dateStr,
                     employeeId,
-                    status: 'present'
+                    status: 'present',
+                    division_id: emp?.division
                 }]);
                 toast({ description: "Status: Hadir", duration: 1500 });
             }
@@ -497,7 +494,9 @@ const Attendance = () => {
                                                         rowSpan={item.divisionRowSpan}
                                                         className="border text-center sticky left-[60px] bg-background z-20 align-middle"
                                                     >
-                                                        {row.division || "-"}
+                                                        {/^\d+$/.test(row.division || "")
+                                                            ? `Divisi ${row.division}`
+                                                            : row.division || "-"}
                                                     </TableCell>
                                                 ) : null}
 

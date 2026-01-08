@@ -42,6 +42,9 @@ const API_BASE_PATH = process.env.API_BASE_PATH || "/api";
 const CORS_ORIGIN = process.env.CORS_ORIGIN;
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
 
+const toDivId = (v) => (v === undefined || v === null || isNaN(Number(v)) ? v : Number(v));
+const divQuery = (v) => (v === undefined || v === null || isNaN(Number(v)) ? v : { $in: [Number(v), String(v)] });
+
 // App timezone handling
 // Vercel runs in UTC, while most app data entry is in local time (e.g., WIB UTC+7).
 // If we store month markers as Date, we must compute month ranges in a timezone-stable way.
@@ -438,9 +441,17 @@ app.get(
   async (req, res) => {
     try {
       const { id, divisionId } = req.params;
+      
+      // Handle both string and number division IDs
+      let queryVal = [divisionId];
+      if (!isNaN(Number(divisionId))) {
+        queryVal.push(Number(divisionId));
+      }
+
       const estate = await Estate.findById(id, {
-        divisions: { $elemMatch: { division_id: Number(divisionId) } },
+        divisions: { $elemMatch: { division_id: { $in: queryVal } } },
       }).lean();
+
       if (!estate || !estate.divisions || estate.divisions.length === 0) {
         return res.json([]);
       }
@@ -1225,7 +1236,7 @@ function restrictByDivision(req, baseFilter = {}) {
   try {
     const payload = jwt.verify(token, JWT_SECRET);
     if (payload && payload.role === "foreman" && payload.division != null) {
-      return { ...baseFilter, division_id: Number(payload.division) };
+      return { ...baseFilter, division_id: toDivId(payload.division) };
     }
     return baseFilter;
   } catch {
@@ -1296,7 +1307,7 @@ app.get(`${API_BASE_PATH}/taksasi`, async (req, res) => {
       if (endDate) q.date.$lte = new Date(String(endDate));
     }
     if (estateId) q.estateId = String(estateId);
-    if (division_id !== undefined) q.division_id = Number(division_id);
+    if (division_id !== undefined) q.division_id = divQuery(division_id);
     const rows = await Taksasi.find(q).lean();
     res.json(rows);
   } catch (err) {
@@ -1311,7 +1322,7 @@ app.get(`${API_BASE_PATH}/taksasi-selections`, async (req, res) => {
     const q = {};
     if (date) q.date = new Date(String(date));
     if (estateId) q.estateId = String(estateId);
-    if (division_id !== undefined) q.division_id = Number(division_id);
+    if (division_id !== undefined) q.division_id = divQuery(division_id);
     if (block_no) q.block_no = String(block_no);
     const docs = await TaksasiSelection.find(q).lean();
     res.json(docs);
@@ -1330,7 +1341,7 @@ app.post(`${API_BASE_PATH}/taksasi-selections`, async (req, res) => {
     const key = {
       date: new Date(String(date)),
       estateId: String(estateId),
-      division_id: Number(division_id),
+      division_id: toDivId(division_id),
       block_no: String(block_no),
     };
     const incoming = Array.isArray(employeeIds) ? employeeIds.map(String) : [];
@@ -1438,7 +1449,7 @@ app.get(`${API_BASE_PATH}/panen`, async (req, res) => {
       if (endDate) q.date_panen.$lte = new Date(String(endDate));
     }
     if (estateId) q.estateId = String(estateId);
-    if (division_id !== undefined) q.division_id = Number(division_id);
+    if (division_id !== undefined) q.division_id = divQuery(division_id);
     const rows = await Panen.find(q).lean();
     res.json(rows);
   } catch (err) {
@@ -1530,7 +1541,7 @@ app.get(`${API_BASE_PATH}/angkut`, async (req, res) => {
     if (date_panen) q.date_panen = new Date(String(date_panen));
     if (date_angkut) q.date_angkut = new Date(String(date_angkut));
     if (estateId) q.estateId = String(estateId);
-    if (division_id !== undefined) q.division_id = Number(division_id);
+    if (division_id !== undefined) q.division_id = divQuery(division_id);
     const rows = await Angkut.find(q).lean();
     res.json(rows);
   } catch (err) {

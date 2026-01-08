@@ -98,6 +98,7 @@ type Division = { division_id: number | string };
 type Block = {
   id_blok?: string;
   no_blok?: string;
+  no_blok_display?: string;
   no_tph?: string;
   status?: string;
   luas_blok?: number;
@@ -382,6 +383,7 @@ const Locations = () => {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [estates]);
 
   const filteredEstates = useMemo(
@@ -478,50 +480,116 @@ const Locations = () => {
           const data = new Uint8Array(event.target?.result as ArrayBuffer);
           const wb = XLSX.read(data, { type: "array" });
           const ws = wb.Sheets[wb.SheetNames[0]];
-          const jsonData =
-            XLSX.utils.sheet_to_json<Record<string, unknown>>(ws);
+
+          // Use header: 1 to get raw rows as arrays
+          const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1 });
+          if (rows.length === 0) return;
+
+          // Find the header row and estate column index
+          let headerRowIndex = -1;
+          let estateColIndex = -1;
+
+          // Check first 10 rows for header
+          for (let i = 0; i < Math.min(rows.length, 10); i++) {
+            const row = rows[i];
+            if (!Array.isArray(row)) continue;
+            
+            const idx = row.findIndex((cell: unknown) => {
+              const s = String(cell || "").toLowerCase().trim();
+              return (
+                s === "estate" ||
+                s === "nama estate" ||
+                s === "estate name" ||
+                s === "wilayah" ||
+                s === "nama wilayah"
+              );
+            });
+
+            if (idx !== -1) {
+              headerRowIndex = i;
+              estateColIndex = idx;
+              break;
+            }
+          }
 
           const newEstates: string[] = [];
           const existingEstates: string[] = [];
-
-          // Get current estates for this company
-          const company = companies.find((c) => c._id === companyId);
-          // Get ALL estates to prevent duplicates across the system if needed,
-          // or just for this company. Usually estate names should be unique globally or per company.
-          // Let's check against ALL estates to be safe, or at least all estates linked to this company.
-
-          // Strategy: Check against ALL existing estates in the system to avoid ID conflicts or naming confusion
           const allEstateNames = estates.map((e) =>
             e.estate_name.toLowerCase().trim()
           );
+          const allCompanyNames = companies.map((c) =>
+            c.company_name.toLowerCase().trim()
+          );
 
-          jsonData.forEach((row) => {
-            // Try to find the estate name column
-            const estateNameVal =
-              row["Nama Estate"] ||
-              row["nama estate"] ||
-              row["Estate Name"] ||
-              row["estate name"] ||
-              row["Name"] ||
-              row["name"] ||
-              row["Estate"] ||
-              row["estate"] ||
-              Object.values(row)[0]; // Fallback to first column
+          if (headerRowIndex !== -1 && estateColIndex !== -1) {
+            // Found a clear header, process rows after it
+            for (let i = headerRowIndex + 1; i < rows.length; i++) {
+              const row = rows[i];
+              const estateName = String(row[estateColIndex] || "").trim();
+              const lowerName = estateName.toLowerCase();
 
-            const estateName = String(estateNameVal || "").trim();
+              if (
+                !estateName ||
+                lowerName === "estate" ||
+                lowerName === "nama estate" ||
+                allCompanyNames.includes(lowerName)
+              )
+                continue;
 
-            if (!estateName) return;
-
-            if (allEstateNames.includes(estateName.toLowerCase())) {
-              if (!existingEstates.includes(estateName)) {
-                existingEstates.push(estateName);
-              }
-            } else {
-              if (!newEstates.includes(estateName)) {
-                newEstates.push(estateName);
+              if (allEstateNames.includes(lowerName)) {
+                if (!existingEstates.includes(estateName)) {
+                  existingEstates.push(estateName);
+                }
+              } else {
+                if (!newEstates.includes(estateName)) {
+                  newEstates.push(estateName);
+                }
               }
             }
-          });
+          } else {
+            // Fallback to original logic if no clear header found, but better filtering
+            const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws);
+            jsonData.forEach((row) => {
+              const estateNameVal =
+                row["Nama Estate"] ||
+                row["nama estate"] ||
+                row["Estate Name"] ||
+                row["estate name"] ||
+                row["Name"] ||
+                row["name"] ||
+                row["Estate"] ||
+                row["estate"] ||
+                row["Wilayah"] ||
+                row["wilayah"] ||
+                Object.values(row)[0];
+
+              const estateName = String(estateNameVal || "").trim();
+              const lowerName = estateName.toLowerCase();
+
+              // Filter out known header keywords that might be picked up by fallback
+              if (
+                !estateName ||
+                lowerName === "estate" ||
+                lowerName === "nama estate" ||
+                lowerName === "pt" ||
+                lowerName.includes("data master") ||
+                lowerName === "pt name" ||
+                lowerName === "company" ||
+                allCompanyNames.includes(lowerName)
+              )
+                return;
+
+              if (allEstateNames.includes(lowerName)) {
+                if (!existingEstates.includes(estateName)) {
+                  existingEstates.push(estateName);
+                }
+              } else {
+                if (!newEstates.includes(estateName)) {
+                  newEstates.push(estateName);
+                }
+              }
+            });
+          }
 
           setImportEstatePreviewData({
             companyId,
@@ -610,35 +678,28 @@ const Locations = () => {
       currentEstateIds.includes(e._id)
     );
 
-    const exportData = companyEstates.map((e) => ({
-      "Nama Estate": e.estate_name,
-      "ID Estate": e._id,
-    }));
+    // Collect all blocks from all estates in this company
+    const allBlocks: Array<{ estateName: string; division_id: number | string; block: Block }> = [];
 
-    const ws = XLSX.utils.json_to_sheet(exportData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Estates");
-    XLSX.writeFile(
-      wb,
-      `Estates_${company.company_name}_${
-        new Date().toISOString().split("T")[0]
-      }.xlsx`
-    );
-  };
+    companyEstates.forEach((estate) => {
+      const metaEs = meta[estate._id];
+      const blocksFlat: Array<{ division_id: number | string; block: Block }> = metaEs
+        ? Object.entries(metaEs.blocksByDivision).flatMap(([divId, blks]) =>
+            (blks || []).map((b) => ({
+              division_id: isNaN(parseInt(divId)) ? divId : Number(divId),
+              block: b,
+            }))
+          )
+        : [];
 
-  const handleExportExcel = (estateId: string) => {
-    const estate = estates.find((e) => e._id === estateId);
-    if (!estate) return;
-
-    const metaEs = meta[estateId];
-    const blocksFlat: Array<{ division_id: number; block: Block }> = metaEs
-      ? Object.entries(metaEs.blocksByDivision).flatMap(([divId, blks]) =>
-          (blks || []).map((b) => ({
-            division_id: Number(divId),
-            block: b,
-          }))
-        )
-      : [];
+      blocksFlat.forEach(({ division_id, block }) => {
+        allBlocks.push({
+          estateName: estate.estate_name,
+          division_id,
+          block,
+        });
+      });
+    });
 
     const numOr0 = (v: unknown): number => (typeof v === "number" ? v : 0);
     const strOrEmpty = (v: unknown): string => (v != null ? String(v) : "");
@@ -647,133 +708,62 @@ const Locations = () => {
     const workbook = XLSX.utils.book_new();
 
     // Create worksheet data with parent and child headers
-    const wsData: any[][] = [
+    const wsData: (string | number | null)[][] = [
       // Parent Header Row
       [
-        "Data Base Aresta",
+        "Data Master Blok Aresta 2026",
         "",
         "",
         "",
         "",
         "",
+        "POKOK",
         "",
         "",
         "",
         "",
-        "Hasil Mapping Survey",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "Hasil Sensus",
-        "Hasil Perhitungan",
         "",
         "",
         "",
       ],
       // Child Header Row
       [
+        "PT",
+        "Estate",
         "Divisi",
         "No Blok",
-        "Wilayah",
-        "Jenis Tanah",
+        "TT",
+        "Luas",
+        "TOTAL",
+        "PRODUKTIF",
+        "BELUM PRODUKTIF",
+        "Mati",
+        "Asal Bibit",
         "Topografi",
-        "Luas Tanam Awal",
-        "Tahun Tanam",
-        "Jenis Bibit",
-        "Jumlah Pokok Awal",
-        "SPH Awal",
-        "Luas Land Preparation",
-        "Luas Nursery",
-        "Luas Lebungan",
-        "Luas Garapan",
-        "Luas Rawa",
-        "Luas Tanggul",
-        "Luas Area Non Efektif",
-        "Luas Konservasi",
-        "Luas PKS",
-        "Luas Jalan",
-        "Luas Drainase",
-        "Luas Perumahan",
-        "Luas Sarana Prasanara",
-        "Luas Lain-Lain",
-        "Jumlah Pokok Sensus",
-        "Total Luas Non Tanaman",
-        "Total Luas Tanam Awal",
-        "Luas Blok",
-        "SPH Akhir",
+        "Soil Type",
+        "SPH",
+        "ID Blok",
       ],
     ];
 
     // Add data rows
-    blocksFlat.forEach(({ division_id, block }) => {
-      // Calculate Total Luas Non Tanaman
-      const totalLuasNonTanaman =
-        numOr0(block.luas_land_preparation) +
-        numOr0(block.luas_nursery) +
-        numOr0(block.luas_lebungan) +
-        numOr0(block.luas_garapan) +
-        numOr0(block.luas_rawa) +
-        numOr0(block.luas_tanggul) +
-        numOr0(block.luas_area_non_efektif) +
-        numOr0(block.luas_konservasi) +
-        numOr0(block.luas_pks) +
-        numOr0(block.luas_jalan) +
-        numOr0(block.luas_drainase) +
-        numOr0(block.luas_perumahan) +
-        numOr0(block.luas_sarana_prasanara) +
-        numOr0(block.luas_lain___lain ?? block.luas_lain__lain);
-
-      // Calculate Luas Blok and SPH Akhir
-      const luasTanamAwal = numOr0(block.luas_tanam_);
-      const luasBlokCalculated = luasTanamAwal + totalLuasNonTanaman;
-      const jumlahPokokSensus = numOr0(block.jumlah_pokok_sensus);
-      const sphAkhirCalculated =
-        luasTanamAwal > 0 ? jumlahPokokSensus / luasTanamAwal : 0;
-
+    allBlocks.forEach(({ estateName, division_id, block }) => {
       wsData.push([
-        // Data Base Aresta
-        `Divisi ${division_id}`,
-        strOrEmpty(block.no_blok),
-        strOrEmpty(block.no_tph),
-        strOrEmpty(block.jenis_tanah),
-        strOrEmpty(block.topografi),
-        luasTanamAwal,
-        numOr0(block.tahun_),
-        strOrEmpty(block.jenis_bibit),
-        numOr0(block.jumlak_pokok ?? block.jumlah_pokok),
+        company.company_name, // PT name
+        estateName, // Estate name
+        typeof division_id === "number" ? `Divisi ${division_id}` : String(division_id),
+        strOrEmpty(block.no_blok_display ?? block.no_blok ?? "-"),
+        strOrEmpty(block.tahun_ ?? block.tahun ?? "-"),
+        numOr0(block.luas_blok ?? block.luas_tanam_),
+        numOr0(block.pokok_total ?? block.jumlah_pokok ?? block.jumlak_pokok),
+        numOr0(block.pokok_produktif),
+        numOr0(block.pokok_belum_produktif),
+        numOr0(block.pokok_mati),
+        strOrEmpty(block.jenis_bibit ?? "-"),
+        strOrEmpty(block.topografi ?? "-"),
+        strOrEmpty(block.jenis_tanah ?? block.soil_type ?? "-"),
         numOr0(block.SPH),
-        // Hasil Mapping Survey
-        numOr0(block.luas_land_preparation),
-        numOr0(block.luas_nursery),
-        numOr0(block.luas_lebungan),
-        numOr0(block.luas_garapan),
-        numOr0(block.luas_rawa),
-        numOr0(block.luas_tanggul),
-        numOr0(block.luas_area_non_efektif),
-        numOr0(block.luas_konservasi),
-        numOr0(block.luas_pks),
-        numOr0(block.luas_jalan),
-        numOr0(block.luas_drainase),
-        numOr0(block.luas_perumahan),
-        numOr0(block.luas_sarana_prasanara),
-        numOr0(block.luas_lain___lain ?? block.luas_lain__lain),
-        // Hasil Sensus
-        jumlahPokokSensus,
-        // Hasil Perhitungan
-        totalLuasNonTanaman,
-        luasTanamAwal,
-        luasBlokCalculated,
-        sphAkhirCalculated,
+        strOrEmpty(block.id_blok ?? ""),
       ]);
     });
 
@@ -781,17 +771,30 @@ const Locations = () => {
 
     // Merge cells for parent headers
     worksheet["!merges"] = [
-      // Data Base Aresta: A1:J1
-      { s: { r: 0, c: 0 }, e: { r: 0, c: 9 } },
-      // Hasil Mapping Survey: K1:X1
-      { s: { r: 0, c: 10 }, e: { r: 0, c: 23 } },
-      // Hasil Sensus: Y1 (no merge needed, single cell)
-      // Hasil Perhitungan: Z1:AC1
-      { s: { r: 0, c: 25 }, e: { r: 0, c: 28 } },
+      // Data Master Blok Aresta 2026: A1:F1
+      { s: { r: 0, c: 0 }, e: { r: 0, c: 5 } },
+      // POKOK: G1:J1
+      { s: { r: 0, c: 6 }, e: { r: 0, c: 9 } },
     ];
 
     // Set column widths
-    worksheet["!cols"] = Array(29).fill({ wch: 14 });
+    worksheet["!cols"] = [
+      { wch: 15 }, // PT
+      { wch: 20 }, // Estate
+      { wch: 15 }, // Divisi
+      { wch: 20 }, // No Blok
+      { wch: 8 },  // TT
+      { wch: 10 }, // Luas
+      { wch: 12 }, // TOTAL
+      { wch: 12 }, // PRODUKTIF
+      { wch: 16 }, // BELUM PRODUKTIF
+      { wch: 8 },  // Mati
+      { wch: 12 }, // Asal Bibit
+      { wch: 12 }, // Topografi
+      { wch: 12 }, // Soil Type
+      { wch: 8 },  // SPH
+      { wch: 15 }, // ID Blok
+    ];
 
     // Function to get cell address
     const getCellAddr = (row: number, col: number) => {
@@ -800,10 +803,8 @@ const Locations = () => {
 
     // Apply styles to parent headers (row 0)
     const parentHeaderStyles = [
-      { start: 0, end: 9, bg: "3B82F6" }, // Blue - Data Base Aresta
-      { start: 10, end: 23, bg: "10B981" }, // Green - Hasil Mapping Survey
-      { start: 24, end: 24, bg: "8B5CF6" }, // Purple - Hasil Sensus
-      { start: 25, end: 28, bg: "F97316" }, // Orange - Hasil Perhitungan
+      { start: 0, end: 5, bg: "3B82F6" }, // Blue - Data Master Blok Aresta 2026
+      { start: 6, end: 9, bg: "10B981" }, // Green - POKOK
     ];
 
     parentHeaderStyles.forEach(({ start, end, bg }) => {
@@ -829,19 +830,178 @@ const Locations = () => {
     });
 
     // Apply styles to child headers (row 1)
-    const childHeaderStyles = [
-      { start: 0, end: 9, bg: "DBEAFE" }, // Light Blue
-      { start: 10, end: 23, bg: "D1FAE5" }, // Light Green
-      { start: 24, end: 24, bg: "EDE9FE" }, // Light Purple
-      { start: 25, end: 28, bg: "FFEDD5" }, // Light Orange
-    ];
+    for (let col = 0; col <= 14; col++) {
+      const addr = getCellAddr(1, col);
+      if (!worksheet[addr]) continue;
+      worksheet[addr].s = {
+        font: { bold: true, sz: 11 },
+        alignment: {
+          horizontal: "center",
+          vertical: "center",
+          wrapText: true,
+        },
+        fill: { fgColor: { rgb: "F3F4F6" } },
+        border: {
+          top: { style: "thin", color: { rgb: "000000" } },
+          bottom: { style: "thin", color: { rgb: "000000" } },
+          left: { style: "thin", color: { rgb: "000000" } },
+          right: { style: "thin", color: { rgb: "000000" } },
+        },
+      };
+    }
 
-    childHeaderStyles.forEach(({ start, end, bg }) => {
-      for (let col = start; col <= end; col++) {
-        const addr = getCellAddr(1, col);
+    // Apply borders to data rows
+    const maxRow = wsData.length - 1;
+    for (let row = 2; row <= maxRow; row++) {
+      for (let col = 0; col <= 14; col++) {
+        const addr = getCellAddr(row, col);
         if (!worksheet[addr]) continue;
         worksheet[addr].s = {
-          font: { bold: true, sz: 11 },
+          border: {
+            top: { style: "thin", color: { rgb: "D1D5DB" } },
+            bottom: { style: "thin", color: { rgb: "D1D5DB" } },
+            left: { style: "thin", color: { rgb: "D1D5DB" } },
+            right: { style: "thin", color: { rgb: "D1D5DB" } },
+          },
+        };
+      }
+    }
+
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Aresta 2026");
+
+    // Write file with cellStyles enabled
+    XLSX.writeFile(
+      workbook,
+      `Aresta_2026_${company.company_name}_${new Date().toISOString().split("T")[0]}.xlsx`,
+      {
+        cellStyles: true,
+        bookType: "xlsx",
+      }
+    );
+  };
+
+  const handleExportExcel = (estateId: string) => {
+    const estate = estates.find((e) => e._id === estateId);
+    if (!estate) return;
+
+    const metaEs = meta[estateId];
+    const blocksFlat: Array<{ division_id: number | string; block: Block }> = metaEs
+      ? Object.entries(metaEs.blocksByDivision).flatMap(([divId, blks]) =>
+          (blks || []).map((b) => ({
+            division_id: isNaN(parseInt(divId)) ? divId : Number(divId),
+            block: b,
+          }))
+        )
+      : [];
+
+    const numOr0 = (v: unknown): number => (typeof v === "number" ? v : 0);
+    const strOrEmpty = (v: unknown): string => (v != null ? String(v) : "");
+
+    // Create workbook with headers
+    const workbook = XLSX.utils.book_new();
+
+    // Create worksheet data with parent and child headers
+    const wsData: (string | number | null)[][] = [
+      // Parent Header Row
+      [
+        "Data Master Blok Aresta 2026",
+        "",
+        "",
+        "",
+        "",
+        "POKOK",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+      ],
+      // Child Header Row
+      [
+        "PT",
+        "Divisi",
+        "No Blok",
+        "TT",
+        "Luas",
+        "TOTAL",
+        "PRODUKTIF",
+        "BELUM PRODUKTIF",
+        "Mati",
+        "Asal Bibit",
+        "Topografi",
+        "Soil Type",
+        "SPH",
+        "ID Blok",
+      ],
+    ];
+
+    // Add data rows
+    blocksFlat.forEach(({ division_id, block }) => {
+      wsData.push([
+        strOrEmpty(block.pt_ownership ?? block.id_pt ?? block.pt ?? "-"),
+        typeof division_id === "number" ? `Divisi ${division_id}` : String(division_id),
+        strOrEmpty(block.no_blok_display ?? block.no_blok ?? "-"),
+        strOrEmpty(block.tahun_ ?? block.tahun ?? "-"),
+        numOr0(block.luas_blok ?? block.luas_tanam_),
+        numOr0(block.pokok_total ?? block.jumlah_pokok ?? block.jumlak_pokok),
+        numOr0(block.pokok_produktif),
+        numOr0(block.pokok_belum_produktif),
+        numOr0(block.pokok_mati),
+        strOrEmpty(block.jenis_bibit ?? "-"),
+        strOrEmpty(block.topografi ?? "-"),
+        strOrEmpty(block.jenis_tanah ?? block.soil_type ?? "-"),
+        numOr0(block.SPH),
+        strOrEmpty(block.id_blok ?? ""),
+      ]);
+    });
+
+    const worksheet = XLSX.utils.aoa_to_sheet(wsData);
+
+    // Merge cells for parent headers
+    worksheet["!merges"] = [
+      // Data Master Blok Aresta 2026: A1:E1
+      { s: { r: 0, c: 0 }, e: { r: 0, c: 4 } },
+      // POKOK: F1:I1
+      { s: { r: 0, c: 5 }, e: { r: 0, c: 8 } },
+    ];
+
+    // Set column widths
+    worksheet["!cols"] = [
+      { wch: 12 }, // PT
+      { wch: 15 }, // Divisi
+      { wch: 20 }, // No Blok
+      { wch: 8 },  // TT
+      { wch: 10 }, // Luas
+      { wch: 12 }, // TOTAL
+      { wch: 12 }, // PRODUKTIF
+      { wch: 16 }, // BELUM PRODUKTIF
+      { wch: 8 },  // Mati
+      { wch: 12 }, // Asal Bibit
+      { wch: 12 }, // Topografi
+      { wch: 12 }, // Soil Type
+      { wch: 8 },  // SPH
+      { wch: 15 }, // ID Blok
+    ];
+
+    // Function to get cell address
+    const getCellAddr = (row: number, col: number) => {
+      return XLSX.utils.encode_cell({ r: row, c: col });
+    };
+
+    // Apply styles to parent headers (row 0)
+    const parentHeaderStyles = [
+      { start: 0, end: 4, bg: "3B82F6" }, // Blue - Data Master Blok Aresta 2026
+      { start: 5, end: 8, bg: "10B981" }, // Green - POKOK
+    ];
+
+    parentHeaderStyles.forEach(({ start, end, bg }) => {
+      for (let col = start; col <= end; col++) {
+        const addr = getCellAddr(0, col);
+        if (!worksheet[addr]) continue;
+        worksheet[addr].s = {
+          font: { bold: true, color: { rgb: "FFFFFF" }, sz: 12 },
           alignment: {
             horizontal: "center",
             vertical: "center",
@@ -858,10 +1018,31 @@ const Locations = () => {
       }
     });
 
+    // Apply styles to child headers (row 1)
+    for (let col = 0; col <= 13; col++) {
+      const addr = getCellAddr(1, col);
+      if (!worksheet[addr]) continue;
+      worksheet[addr].s = {
+        font: { bold: true, sz: 11 },
+        alignment: {
+          horizontal: "center",
+          vertical: "center",
+          wrapText: true,
+        },
+        fill: { fgColor: { rgb: "F3F4F6" } },
+        border: {
+          top: { style: "thin", color: { rgb: "000000" } },
+          bottom: { style: "thin", color: { rgb: "000000" } },
+          left: { style: "thin", color: { rgb: "000000" } },
+          right: { style: "thin", color: { rgb: "000000" } },
+        },
+      };
+    }
+
     // Apply borders to data rows
     const maxRow = wsData.length - 1;
     for (let row = 2; row <= maxRow; row++) {
-      for (let col = 0; col <= 28; col++) {
+      for (let col = 0; col <= 13; col++) {
         const addr = getCellAddr(row, col);
         if (!worksheet[addr]) continue;
         worksheet[addr].s = {
@@ -875,7 +1056,7 @@ const Locations = () => {
       }
     }
 
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Aresta");
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Aresta 2026");
 
     // Write file with cellStyles enabled
     XLSX.writeFile(
@@ -1220,10 +1401,11 @@ const Locations = () => {
 
           const toStr = (v: unknown): string => {
             if (v == null) return "";
-            return String(v).trim();
+            const s = String(v).trim();
+            return s === "-" ? "" : s;
           };
           const toNum = (v: unknown): number => {
-            if (v == null || v === "") return 0;
+            if (v == null || v === "" || v === "-") return 0;
             if (typeof v === "string") {
               // Handle Indonesian format: dots for thousands, comma for decimal
               let clean = v.trim().replace(/\./g, "").replace(",", ".");
@@ -1238,35 +1420,61 @@ const Locations = () => {
             return 0;
           };
 
-          const rawRows = XLSX.utils.sheet_to_json<any[]>(worksheet, {
+          const rawRows = XLSX.utils.sheet_to_json<(string | number | null)[]>(worksheet, {
             header: 1,
           });
-          const headerRow2 = rawRows[1] || [];
+          const headerRow2 = (rawRows[1] || []).map(v => toStr(v));
+          // Relaxed detection: if it has PT and (Wilayah OR Estate OR No Blok OR TOTAL), consider it new format
+          // This covers single estate export which might not have separate "Wilayah" column if it's implicitly the division or missing
           const isNewFormat =
-            headerRow2.includes("PT") && headerRow2.includes("Wilayah");
+            headerRow2.includes("PT") && 
+            (headerRow2.includes("Wilayah") || 
+             headerRow2.includes("Estate") || 
+             headerRow2.includes("No Blok") ||
+             headerRow2.includes("TOTAL"));
 
           let jsonData: ExcelRow[] = [];
           if (isNewFormat) {
+            const ptIdx = headerRow2.indexOf("PT");
+            const wilIdx = headerRow2.findIndex(v => v === "Wilayah" || v === "Estate");
+            const divIdx = headerRow2.indexOf("Divisi");
+            const noBlokIdx = headerRow2.indexOf("No Blok");
+            const ttIdx = headerRow2.indexOf("TT");
+            const luasIdx = headerRow2.indexOf("Luas");
+            const totalIdx = headerRow2.indexOf("TOTAL");
+            const prodIdx = headerRow2.indexOf("PRODUKTIF");
+            const bprodIdx = headerRow2.indexOf("BELUM PRODUKTIF");
+            const matiIdx = headerRow2.indexOf("Mati");
+            const bibitIdx = headerRow2.indexOf("Asal Bibit");
+            const topoIdx = headerRow2.indexOf("Topografi");
+            const soilIdx = headerRow2.indexOf("Soil Type");
+            const sphIdx = headerRow2.indexOf("SPH");
+            const idBlokIdx = headerRow2.indexOf("ID Blok");
+
             // New format data starts from row index 2
             for (let i = 2; i < rawRows.length; i++) {
               const r = rawRows[i];
               if (!r || r.length < 5) continue;
+              
+              // Helper to safely get value by index (returns "" if index is -1)
+              const getVal = (idx: number) => idx !== -1 ? toStr(r[idx]) : "";
+
               jsonData.push({
-                PT: toStr(r[1]),
-                Wilayah: toStr(r[2]),
-                DIVISI: toStr(r[3]),
-                Baru: toStr(r[4]),
-                Lama: toStr(r[5]),
-                TT: toStr(r[6]),
-                LUAS: toStr(r[7]),
-                TOTAL: toStr(r[8]),
-                PRODUKTIF: toStr(r[9]),
-                "BELUM PRODUKTIF": toStr(r[10]),
-                Mati: toStr(r[11]),
-                "ASAL BIBIT": toStr(r[12]),
-                TOPOGRAFI: toStr(r[13]),
-                "SOIL TYPE": toStr(r[14]),
-                SPH: toStr(r[15]),
+                PT: getVal(ptIdx),
+                Wilayah: getVal(wilIdx),
+                DIVISI: getVal(divIdx),
+                Baru: getVal(noBlokIdx),
+                TT: getVal(ttIdx),
+                LUAS: getVal(luasIdx),
+                TOTAL: getVal(totalIdx),
+                PRODUKTIF: getVal(prodIdx),
+                "BELUM PRODUKTIF": getVal(bprodIdx),
+                Mati: getVal(matiIdx),
+                "ASAL BIBIT": getVal(bibitIdx),
+                TOPOGRAFI: getVal(topoIdx),
+                "SOIL TYPE": getVal(soilIdx),
+                SPH: getVal(sphIdx),
+                "ID Blok": getVal(idBlokIdx),
               });
             }
           } else {
@@ -1295,13 +1503,18 @@ const Locations = () => {
             }
 
             // Transform row to Block format (sesuai dengan struktur database)
+            const ptName = toStr(row.PT);
+            // Search company ID by name if PT column exists
+            const matchedCompany = companies.find(c => c.company_name.toLowerCase().trim() === ptName.toLowerCase().trim());
+            
             const blockData: Partial<Block> = {
-              id_pt: isNewFormat ? toStr(row.PT) : undefined,
+              id_pt: isNewFormat ? (matchedCompany?._id || ptName) : undefined,
+              id_blok: toStr(row["ID Blok"] || row.id_blok),
               no_blok: isNewFormat
-                ? `${toStr(row.Baru)}${row.Lama ? " / " + toStr(row.Lama) : ""}`
+                ? toStr(row.Baru)
                 : toStr(row["No Blok"]),
               no_tph: isNewFormat
-                ? toStr(row.Lama)
+                ? toStr(row.Lama || row.Wilayah || "")
                 : toStr(row["Wilayah"] ?? row["No TPH"]),
               jenis_tanah: isNewFormat
                 ? toStr(row["SOIL TYPE"])
@@ -1364,11 +1577,30 @@ const Locations = () => {
           }
 
           // Fetch existing divisions WITH blocks to compare
-          // Note: api.estate() excludes divisions, so we use api.divisions() which returns the full division array including blocks
-          const existingDivisions = (await api.divisions(estateId)) as Array<{
+          const divisionsData = await api.divisions(estateId);
+          const existingDivisions: Array<{
             division_id: number | string;
-            blocks?: Block[];
-          }>;
+            blocks: Block[];
+          }> = [];
+
+          // For each division, fetch its blocks to build the accurate existing data map
+          if (Array.isArray(divisionsData)) {
+            for (const d of divisionsData) {
+              try {
+                const blocks = await api.blocks(estateId, d.division_id);
+                existingDivisions.push({
+                  division_id: d.division_id,
+                  blocks: Array.isArray(blocks) ? (blocks as Block[]) : [],
+                });
+              } catch (err) {
+                console.error(`Error loading blocks for comparison in div ${d.division_id}:`, err);
+                existingDivisions.push({
+                  division_id: d.division_id,
+                  blocks: [],
+                });
+              }
+            }
+          }
 
           // Helper function to compare blocks deeply
           const areBlocksEqual = (
@@ -1426,7 +1658,17 @@ const Locations = () => {
                   .trim()
                   .toLowerCase();
 
+                // If one is "-" and the other is empty, consider equal
+                if (norm1 === "-" && norm2 === "") return true;
+                if (norm1 === "" && norm2 === "-") return true;
+
                 if (norm1 !== norm2) {
+                  // Special check for no_blok vs no_blok_display
+                  if (field === "no_blok" && block2.no_blok_display) {
+                      const normDisplay = String(block2.no_blok_display).trim().toLowerCase();
+                      if (norm1 === normDisplay) return true;
+                  }
+                  
                   return false;
                 }
               } else {
@@ -1457,23 +1699,33 @@ const Locations = () => {
           }> = [];
 
           for (const [divisionName, blocks] of Object.entries(groupedData)) {
-            const parsedId = parseInt(
-              divisionName.replace("Divisi ", "").trim()
-            );
-            const divisionId = isNaN(parsedId) ? divisionName : parsedId;
+            const cleanName = divisionName.replace("Divisi ", "").trim().toLowerCase();
+            const parsedId = parseInt(cleanName);
+            const divisionId = isNaN(parsedId) ? cleanName : parsedId;
 
             const existingDivision = existingDivisions.find(
-              (d) => d.division_id === divisionId
+              (d) => {
+                const dIdStr = String(d.division_id).replace("Divisi ", "").trim().toLowerCase();
+                // Compare as strings to be safe
+                return dIdStr === String(divisionId);
+              }
             );
-            const existingDivBlocks: Block[] = (existingDivision?.blocks ||
-              []) as Block[];
+            const existingDivBlocks: Block[] = existingDivision?.blocks || [];
 
             blocks.forEach((newBlock) => {
-              // Find matching block by ID or No Blok
+              // Find matching block by ID or No Blok (trimmed comparison)
               const matchingBlock = existingDivBlocks.find(
-                (b) =>
-                  (b.id_blok && b.id_blok === newBlock.id_blok) ||
-                  (b.no_blok && b.no_blok === newBlock.no_blok)
+                (b) => {
+                  if (newBlock.id_blok && b.id_blok) {
+                    return b.id_blok === newBlock.id_blok;
+                  }
+                  
+                  const bNo = String(b.no_blok || "").trim().toLowerCase();
+                  const bNoDisp = String(b.no_blok_display || "").trim().toLowerCase();
+                  const nNo = String(newBlock.no_blok || "").trim().toLowerCase();
+                  
+                  return (bNo !== "" && bNo === nNo) || (bNoDisp !== "" && bNoDisp === nNo);
+                }
               );
 
               if (matchingBlock) {
@@ -1924,7 +2176,7 @@ const Locations = () => {
                   }>;
 
                   // Find or create division 0 for imported blocks
-                  let divisionIndex = existingDivisions.findIndex(
+                  const divisionIndex = existingDivisions.findIndex(
                     (d) => d.division_id === 0
                   );
                   

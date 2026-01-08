@@ -132,7 +132,7 @@ const Attendance = () => {
     }, [users]);
 
     const handleCellClick = async (employeeId: string, day: number) => {
-        if (!user || (user.role !== 'foreman' && user.role !== 'manager')) return;
+        if (!user || (user.role !== 'non-staff' && user.role !== 'staff')) return;
         if (loading || isUpdating) return;
 
         const dateObj = new Date(parseInt(selectedYear), parseInt(selectedMonth), day);
@@ -514,7 +514,7 @@ const Attendance = () => {
                                                     return (
                                                         <TableCell
                                                             key={day}
-                                                            className={`border text-center p-0 h-8 transition-colors ${(user?.role === 'foreman' || user?.role === 'manager')
+                                                            className={`border text-center p-0 h-8 transition-colors ${(user?.role === 'staff' || user?.role === 'non-staff')
                                                                 ? "cursor-pointer hover:bg-muted/30"
                                                                 : ""
                                                                 }`}

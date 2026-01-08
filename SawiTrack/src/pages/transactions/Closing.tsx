@@ -203,7 +203,7 @@ const Closing = () => {
                         <TableCell><Badge variant={period.status === 'active' ? 'default' : 'secondary'}>{period.status === 'active' ? 'Aktif' : 'Nonaktif'}</Badge></TableCell>
                         <TableCell>{period.notes || '-'}</TableCell>
                         <TableCell>
-                          {user?.role === 'manager' && (
+                          {user?.role === 'staff' && (
                             <Button
                               variant="ghost"
                               size="icon"

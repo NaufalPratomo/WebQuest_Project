@@ -66,7 +66,7 @@ const Workers = () => {
       .then(([emps, comps, users]) => {
         setRows(emps);
         setCompanies(comps);
-        setForemen(users.filter((u) => u.role === "foreman"));
+        setForemen(users.filter((u) => u.role === "non-staff"));
       })
       .catch(() =>
         toast({

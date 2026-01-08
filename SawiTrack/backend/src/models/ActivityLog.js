@@ -15,6 +15,8 @@ const activityLogSchema = new mongoose.Schema({
 
 // Add index for faster queries
 activityLogSchema.index({ timestamp: -1 });
+activityLogSchema.index({ timestamp: 1 }, { expireAfterSeconds: 7776000 }); // Auto-delete after 90 days
+activityLogSchema.index({ action: 1 });
 activityLogSchema.index({ action: 1 });
 
 export default mongoose.model("ActivityLog", activityLogSchema);

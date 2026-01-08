@@ -578,7 +578,7 @@ export const api = {
         date: string;
         employeeId: string;
         status: string;
-        division_id?: number;
+        division_id?: number | string;
         notes?: string;
         hk?: number;
       }>
@@ -588,7 +588,7 @@ export const api = {
     date: string;
     employeeId: string;
     status: string;
-    division_id?: number;
+    division_id?: number | string;
     notes?: string;
   }) =>
     http<{ _id: string }>(`/attendance`, {
@@ -601,7 +601,7 @@ export const api = {
       date?: string;
       employeeId?: string;
       status?: string;
-      division_id?: number;
+      division_id?: number | string;
       notes?: string;
     }
   ) =>

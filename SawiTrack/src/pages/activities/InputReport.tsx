@@ -23,7 +23,7 @@ const InputReport = () => {
   const [division, setDivision] = useState<string | undefined>(undefined);
   const [estates, setEstates] = useState<Array<{ _id: string; estate_name: string }>>([]);
   const [estateId, setEstateId] = useState<string | undefined>(undefined);
-  const [divisions, setDivisions] = useState<Array<{ division_id: number }>>([]);
+  const [divisions, setDivisions] = useState<Array<{ division_id: number | string }>>([]);
   const [employees, setEmployees] = useState<Array<{ _id: string; name: string; division?: string }>>([]);
   const [employeeId, setEmployeeId] = useState<string | undefined>(undefined);
   const [jobType, setJobType] = useState<string | undefined>(undefined);

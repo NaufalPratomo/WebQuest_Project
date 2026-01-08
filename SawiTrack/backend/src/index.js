@@ -25,6 +25,8 @@ import path from "path";
 import { fileURLToPath } from "url";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import compression from "compression";
+import helmet from "helmet";
 
 // Load .env from backend/ and fallback to repo root
 dotenv.config();
@@ -34,6 +36,8 @@ if (!process.env.MONGO_ATLAS_URI && !process.env.MONGO_URI) {
 }
 
 const app = express();
+app.use(helmet()); // Secure HTTP headers
+app.use(compression()); // Compress responses
 app.use(express.json({ limit: "50mb" })); // Increase limit for large imports
 app.use(cookieParser());
 
@@ -441,7 +445,7 @@ app.get(
   async (req, res) => {
     try {
       const { id, divisionId } = req.params;
-      
+
       // Handle both string and number division IDs
       let queryVal = [divisionId];
       if (!isNaN(Number(divisionId))) {
@@ -1210,10 +1214,10 @@ app.get(`${API_BASE_PATH}/stats`, async (req, res) => {
 
     const percent = targets.length
       ? Math.round(
-          (targets.reduce((sum, t) => sum + (t.achieved || 0), 0) /
-            targets.reduce((sum, t) => sum + (t.target || 0), 0)) *
-            100
-        )
+        (targets.reduce((sum, t) => sum + (t.achieved || 0), 0) /
+          targets.reduce((sum, t) => sum + (t.target || 0), 0)) *
+        100
+      )
       : 0;
 
     res.json({
@@ -1764,8 +1768,8 @@ app.get(`${API_BASE_PATH}/reports/trend`, async (req, res) => {
       String(type) === "taksasi"
         ? Taksasi
         : String(type) === "angkut"
-        ? Angkut
-        : Panen; 
+          ? Angkut
+          : Panen;
     const key = String(type) === "angkut" ? "weightKg" : "weightKg";
     const order = String(sort) === "asc" ? 1 : -1;
     const rows = await col
@@ -1908,7 +1912,7 @@ app.get(`${API_BASE_PATH}/daily-reports`, async (req, res) => {
   try {
     const { date, startDate, endDate, mandorName, division } = req.query;
     const q = {};
-    
+
     // Handle date filter with app timezone (similar to recap-costs)
     if (date) {
       const d = new Date(String(date));
@@ -2204,5 +2208,22 @@ if (!process.env.VERCEL) {
     });
 } else {
   // On Vercel, just ensure DB is connected for the handler
+  // On Vercel, just ensure DB is connected for the handler
   connectMongo().catch((e) => console.error("Vercel DB Connect Error:", e));
 }
+
+// Graceful Shutdown for VPS/Node.js process
+const gracefulShutdown = async () => {
+  console.log("Received kill signal, shutting down gracefully");
+  try {
+    await mongoose.connection.close(false);
+    console.log("Mongo connection closed");
+    process.exit(0);
+  } catch (err) {
+    console.error("Error during shutdown", err);
+    process.exit(1);
+  }
+};
+
+process.on("SIGTERM", gracefulShutdown);
+process.on("SIGINT", gracefulShutdown);

@@ -1765,7 +1765,7 @@ app.get(`${API_BASE_PATH}/reports/trend`, async (req, res) => {
         ? Taksasi
         : String(type) === "angkut"
         ? Angkut
-        : Panen;
+        : Panen; 
     const key = String(type) === "angkut" ? "weightKg" : "weightKg";
     const order = String(sort) === "asc" ? 1 : -1;
     const rows = await col

@@ -1651,6 +1651,374 @@ const Locations = () => {
     }
   };
 
+  // Global Template Download
+  const handleDownloadGlobalTemplate = () => {
+    const headers = [
+      "PT",
+      "Divisi",
+      "No Blok",
+      "Wilayah",
+      "Jenis Tanah",
+      "Topografi",
+      "Luas Tanam",
+      "Tahun",
+      "Jumlah Pokok",
+      "SPH",
+      "Jenis Bibit",
+      "Luas Land Preparation",
+      "Luas Nursery",
+      "Luas Lain-Lain",
+      "Luas Lebungan",
+      "Luas Garapan",
+      "Luas Rawa",
+      "Luas Tanggul",
+      "Luas Area Non Efektif",
+      "Konservasi",
+      "Luas Konservasi",
+      "Luas PKS",
+      "Luas Jalan",
+      "Luas Drainase",
+      "Luas Perumahan",
+      "Luas Sarana Prasanara",
+      "Luas Blok",
+    ];
+    const csv = headers.join(",");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "template_global.csv";
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 100);
+  };
+
+  // Global Export (PT + Divisi + Block Data)
+  const handleExportGlobal = () => {
+    const numOr0 = (v: unknown): number => (typeof v === "number" ? v : 0);
+    const strOrEmpty = (v: unknown): string => (v != null ? String(v) : "");
+    
+    const exportData: any[] = [];
+    let totalBlocks = 0;
+
+    companies.forEach((company) => {
+      const companyEstateIds =
+        company.estates?.map((e) => (typeof e === "string" ? e : e._id)) || [];
+      const companyEstates = estates.filter((e) =>
+        companyEstateIds.includes(e._id)
+      );
+
+      companyEstates.forEach((estate) => {
+        const metaEs = meta[estate._id];
+        if (!metaEs) return;
+
+        const blocksFlat: Array<{ division_id: number; block: Block }> =
+          Object.entries(metaEs.blocksByDivision).flatMap(([divId, blks]) =>
+            (blks || []).map((b) => ({
+              division_id: Number(divId),
+              block: b,
+            }))
+          );
+
+        blocksFlat.forEach(({ division_id, block }) => {
+          exportData.push({
+            PT: company.company_name,
+            Divisi: estate.estate_name,
+            "No Blok": strOrEmpty(block.no_blok),
+            Wilayah: strOrEmpty(block.no_tph),
+            "Jenis Tanah": strOrEmpty(block.jenis_tanah),
+            Topografi: strOrEmpty(block.topografi),
+            "Luas Tanam": numOr0(block.luas_tanam_ ?? block.luas_tanaman_),
+            Tahun: numOr0(block.tahun_),
+            "Jumlah Pokok": numOr0(block.jumlah_pokok ?? block.jumlak_pokok),
+            SPH: numOr0(block.SPH),
+            "Jenis Bibit": strOrEmpty(block.jenis_bibit),
+            "Luas Land Preparation": numOr0(block.luas_land_preparation),
+            "Luas Nursery": numOr0(block.luas_nursery),
+            "Luas Lain-Lain": numOr0(block.luas_lain___lain ?? block.luas_lain__lain),
+            "Luas Lebungan": numOr0(block.luas_lebungan),
+            "Luas Garapan": numOr0(block.luas_garapan),
+            "Luas Rawa": numOr0(block.luas_rawa),
+            "Luas Tanggul": numOr0(block.luas_tanggul),
+            "Luas Area Non Efektif": numOr0(block.luas_area_non_efektif),
+            Konservasi: numOr0(block.luas_konservasi),
+            "Luas Konservasi": numOr0(block.luas_konservasi),
+            "Luas PKS": numOr0(block.luas_pks),
+            "Luas Jalan": numOr0(block.luas_jalan),
+            "Luas Drainase": numOr0(block.luas_drainase),
+            "Luas Perumahan": numOr0(block.luas_perumahan),
+            "Luas Sarana Prasanara": numOr0(block.luas_sarana_prasanara),
+            "Luas Blok": numOr0(block.luas_blok),
+          });
+          totalBlocks++;
+        });
+      });
+    });
+
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Global");
+    XLSX.writeFile(
+      wb,
+      `Aresta_Global_${new Date().toISOString().split("T")[0]}.xlsx`
+    );
+
+    toast({
+      title: "Export Berhasil",
+      description: `${totalBlocks} blok dari ${companies.length} PT berhasil diekspor.`,
+    });
+  };
+
+  // Global Import (PT + Divisi + Block Data)
+  const handleImportGlobal = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".xlsx,.xls,.csv";
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        try {
+          setLoading(true);
+          const data = new Uint8Array(event.target?.result as ArrayBuffer);
+          const wb = XLSX.read(data, { type: "array" });
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws);
+
+          // Group data by PT and Divisi
+          const dataMap = new Map<string, Map<string, any[]>>();
+
+          jsonData.forEach((row) => {
+            const ptName = String(row["PT"] || row["pt"] || "").trim();
+            const divisiName = String(row["Divisi"] || row["divisi"] || "").trim();
+
+            if (ptName && divisiName) {
+              if (!dataMap.has(ptName)) {
+                dataMap.set(ptName, new Map());
+              }
+              if (!dataMap.get(ptName)!.has(divisiName)) {
+                dataMap.get(ptName)!.set(divisiName, []);
+              }
+              dataMap.get(ptName)!.get(divisiName)!.push(row);
+            }
+          });
+
+          let companiesCreated = 0;
+          let divisionsCreated = 0;
+          let blocksCreated = 0;
+          let blocksUpdated = 0;
+
+          // Process each company and its divisions
+          for (const [ptName, divisionMap] of dataMap.entries()) {
+            // Check if company exists
+            let company = companies.find(
+              (c) => c.company_name.toLowerCase() === ptName.toLowerCase()
+            );
+
+            if (!company) {
+              // Create new company
+              company = await api.createCompany({
+                company_name: ptName,
+                address: "",
+                phone: "",
+                email: "",
+                estates: [],
+              });
+              companies.push(company);
+              companiesCreated++;
+            }
+
+            // Process divisions for this company
+            for (const [divisionName, blockRows] of divisionMap.entries()) {
+              // Check if division/estate already exists
+              let estate = estates.find(
+                (e) => e.estate_name.toLowerCase() === divisionName.toLowerCase()
+              );
+
+              if (!estate) {
+                // Create new estate/division
+                const estateId =
+                  divisionName.toLowerCase().replace(/\s+/g, "") +
+                  "" +
+                  Date.now() +
+                  Math.random();
+                const newEstate = await api.createEstate({
+                  _id: estateId,
+                  estate_name: divisionName,
+                  divisions: [],
+                });
+                estate = { _id: estateId, estate_name: divisionName };
+                estates.push(estate);
+                divisionsCreated++;
+              }
+
+              // Link estate to company if not already linked
+              const companyEstateIds =
+                company.estates?.map((e) => (typeof e === "string" ? e : e._id)) || [];
+              if (!companyEstateIds.includes(estate._id)) {
+                await api.updateCompany(company._id, {
+                  estates: [...companyEstateIds, estate._id],
+                });
+              }
+
+              // Process blocks for this division
+              const blocksToAdd: Block[] = [];
+              
+              for (const row of blockRows) {
+                const numOr0 = (key: string): number => {
+                  const val = row[key];
+                  if (val == null || val === "") return 0;
+                  return typeof val === "number" ? val : Number(val) || 0;
+                };
+
+                const strOrEmpty = (key: string): string => {
+                  const val = row[key];
+                  return val != null ? String(val).trim() : "";
+                };
+
+                const noBlok = strOrEmpty("No Blok");
+                if (!noBlok) continue; // Skip if no block number
+
+                const blockData: any = {
+                  no_blok: noBlok,
+                  no_tph: strOrEmpty("Wilayah"),
+                  jenis_tanah: strOrEmpty("Jenis Tanah"),
+                  topografi: strOrEmpty("Topografi"),
+                  luas_tanam_: numOr0("Luas Tanam"),
+                  tahun_: numOr0("Tahun"),
+                  jumlah_pokok: numOr0("Jumlah Pokok"),
+                  SPH: numOr0("SPH"),
+                  jenis_bibit: strOrEmpty("Jenis Bibit"),
+                  luas_land_preparation: numOr0("Luas Land Preparation"),
+                  luas_nursery: numOr0("Luas Nursery"),
+                  luas_lain___lain: numOr0("Luas Lain-Lain"),
+                  luas_lebungan: numOr0("Luas Lebungan"),
+                  luas_garapan: numOr0("Luas Garapan"),
+                  luas_rawa: numOr0("Luas Rawa"),
+                  luas_tanggul: numOr0("Luas Tanggul"),
+                  luas_area_non_efektif: numOr0("Luas Area Non Efektif"),
+                  luas_konservasi: numOr0("Konservasi") || numOr0("Luas Konservasi"),
+                  luas_pks: numOr0("Luas PKS"),
+                  luas_jalan: numOr0("Luas Jalan"),
+                  luas_drainase: numOr0("Luas Drainase"),
+                  luas_perumahan: numOr0("Luas Perumahan"),
+                  luas_sarana_prasanara: numOr0("Luas Sarana Prasanara"),
+                  luas_blok: numOr0("Luas Blok"),
+                };
+
+                blocksToAdd.push(blockData);
+              }
+
+              // Update estate with new blocks
+              if (blocksToAdd.length > 0) {
+                try {
+                  // Get existing divisions
+                  const existingDivisions = (await api.divisions(estate._id)) as Array<{
+                    division_id: number;
+                    blocks?: Block[];
+                  }>;
+
+                  // Find or create division 0 for imported blocks
+                  let divisionIndex = existingDivisions.findIndex(
+                    (d) => d.division_id === 0
+                  );
+                  
+                  if (divisionIndex === -1) {
+                    // Create new division
+                    existingDivisions.push({
+                      division_id: 0,
+                      blocks: blocksToAdd,
+                    });
+                  } else {
+                    // Append to existing division
+                    const existingBlocks = existingDivisions[divisionIndex].blocks || [];
+                    existingDivisions[divisionIndex].blocks = [
+                      ...existingBlocks,
+                      ...blocksToAdd,
+                    ];
+                  }
+
+                  await api.updateEstate(estate._id, {
+                    divisions: existingDivisions,
+                  });
+
+                  blocksCreated += blocksToAdd.length;
+                } catch (error) {
+                  console.warn(
+                    `Failed to update estate ${estate.estate_name}:`,
+                    error
+                  );
+                  blocksUpdated += blocksToAdd.length;
+                }
+              }
+            }
+          }
+
+          // Refresh data
+          const [updatedCompanies, updatedEstates] = await Promise.all([
+            api.companies(),
+            api.estates(),
+          ]);
+          setCompanies(updatedCompanies || []);
+          setEstates(updatedEstates || []);
+
+          // Refresh meta data
+          for (const estate of updatedEstates || []) {
+            try {
+              const divisions = (await api.divisions(estate._id)) as Array<{
+                division_id: number;
+                blocks?: Block[];
+              }>;
+              const blocksByDivision: Record<number, Block[]> = {};
+              
+              for (const d of divisions || []) {
+                try {
+                  const blocks = await api.blocks(estate._id, d.division_id);
+                  blocksByDivision[d.division_id] = Array.isArray(blocks)
+                    ? (blocks as Block[])
+                    : [];
+                } catch {
+                  blocksByDivision[d.division_id] = [];
+                }
+              }
+              
+              setMeta((prev) => ({
+                ...prev,
+                [estate._id]: {
+                  divisions: divisions || [],
+                  blocksByDivision,
+                },
+              }));
+            } catch (err) {
+              console.error(`Error loading data for estate ${estate._id}:`, err);
+            }
+          }
+
+          toast({
+            title: "Import Global Berhasil",
+            description: `PT: ${companiesCreated} baru. Divisi: ${divisionsCreated} baru. Blok: ${blocksCreated} ditambahkan, ${blocksUpdated} gagal/dilewati.`,
+          });
+        } catch (error) {
+          console.error("Error importing global:", error);
+          toast({
+            title: "Gagal Import Global",
+            description: error instanceof Error ? error.message : String(error),
+            variant: "destructive",
+          });
+        } finally {
+          setLoading(false);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    };
+    input.click();
+  };
+
   return (
     <>
       <div className="space-y-6">
@@ -1662,6 +2030,34 @@ const Locations = () => {
             {loading && (
               <p className="text-sm text-muted-foreground">Memuat data...</p>
             )}
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleDownloadGlobalTemplate}
+              className="border-orange-500 text-orange-600 hover:bg-orange-50 hover:text-orange-700"
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Template
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleImportGlobal}
+              className="border-green-500 text-green-600 hover:bg-green-50 hover:text-green-700"
+            >
+              <Upload className="mr-2 h-4 w-4" />
+              Import Aresta
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleExportGlobal}
+              className="bg-green-600 hover:bg-green-700 text-white"
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Export aresta
+            </Button>
           </div>
         </div>
 
@@ -1719,6 +2115,30 @@ const Locations = () => {
                           </div>
                         </div>
                         <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              const csv = "Nama Estate,ID Estate";
+                              const blob = new Blob([csv], {
+                                type: "text/csv",
+                              });
+                              const url = URL.createObjectURL(blob);
+                              const a = document.createElement("a");
+                              a.href = url;
+                              a.download = "template_divisi.csv";
+                              document.body.appendChild(a);
+                              a.click();
+                              setTimeout(() => {
+                                document.body.removeChild(a);
+                                URL.revokeObjectURL(url);
+                              }, 100);
+                            }}
+                            className="border-orange-500 text-orange-600 hover:bg-orange-50 hover:text-orange-700"
+                          >
+                            <Download className="mr-2 h-4 w-4" />
+                            Template
+                          </Button>
                           <Button
                             variant="outline"
                             size="sm"

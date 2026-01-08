@@ -13,6 +13,8 @@ export default function Transport() {
   type BlockOption = { no_blok?: string; id_blok?: string };
   const [datePanen, setDatePanen] = useState<string>(new Date().toISOString().slice(0, 10));
   const [dateAngkut, setDateAngkut] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [companies, setCompanies] = useState<Array<{ _id: string; company_name: string }>>([]);
+  const [companyId, setCompanyId] = useState<string>('');
   const [estates, setEstates] = useState<Array<{ _id: string; estate_name: string }>>([]);
   const [estateId, setEstateId] = useState<string>('');
   const [divisions, setDivisions] = useState<Array<{ division_id: number | string }>>([]);
@@ -34,7 +36,7 @@ export default function Transport() {
   const [editSupir, setEditSupir] = useState('');
 
   const exportCsv = () => {
-    const header = ['date_panen', 'date_angkut', 'estateId', 'division_id', 'block_no', 'weightKg'];
+    const header = ['PT', 'TANGGAL', 'DIVISI', 'DRIVER', 'No. Kendaraan', 'No. SPB', 'BLOCK', 'TAHUN', 'JUMLAH', 'BRONDOLAN', 'BERAT DI', 'No. Tiket', 'Code', 'BRUTO', 'TARRA', 'NETTO', 'POTO', 'Berat', 'TONASE/', 'JJG/'];
     const escape = (v: unknown) => {
       const s = v === undefined || v === null ? '' : String(v);
       if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
@@ -42,12 +44,26 @@ export default function Transport() {
     };
     const lines = [header.join(',')].concat(
       filtered.map(r => [
-        r.date_panen,
-        r.date_angkut,
-        r.estateId,
+        r.companyName || '',
+        String(r.date_angkut).slice(0, 10),
         r.division_id,
+        noteVal(r.notes, 'supir') || noteVal(r.notes, 'driver') || '',
+        noteVal(r.notes, 'no_mobil') || noteVal(r.notes, 'no_kendaraan') || '',
+        noteVal(r.notes, 'no_spb') || '',
         r.block_no,
-        r.weightKg,
+        noteVal(r.notes, 'tahun') || new Date(r.date_panen).getFullYear(),
+        r.jjgAngkut || 0,
+        noteVal(r.notes, 'brondolan') || 0,
+        noteVal(r.notes, 'berat_di') || r.weightKg || 0,
+        noteVal(r.notes, 'no_tiket') || '',
+        noteVal(r.notes, 'code') || r.jobCode || '',
+        noteVal(r.notes, 'bruto') || 0,
+        noteVal(r.notes, 'tarra') || 0,
+        noteVal(r.notes, 'netto') || 0,
+        noteVal(r.notes, 'poto') || 0,
+        noteVal(r.notes, 'berat') || r.weightKg || 0,
+        noteVal(r.notes, 'tonase') || (r.weightKg / 1000) || 0,
+        r.jjgRealisasi || 0,
       ].map(escape).join(','))
     );
     const csv = '\ufeff' + lines.join('\n');
@@ -63,6 +79,7 @@ export default function Transport() {
   };
 
   useEffect(() => {
+    api.companies().then(setCompanies).catch(() => toast.error('Gagal memuat perusahaan'));
     api.estates().then(setEstates).catch(() => toast.error('Gagal memuat estate'));
   }, []);
 
@@ -102,9 +119,12 @@ export default function Transport() {
         toast.error('Lengkapi input estate/divisi/blok');
         return;
       }
+      const selectedCompany = companies.find(c => c._id === companyId);
       const body: AngkutRow = { 
         date_panen: datePanen, 
-        date_angkut: dateAngkut, 
+        date_angkut: dateAngkut,
+        companyId: companyId || undefined,
+        companyName: selectedCompany?.company_name || undefined,
         estateId, 
         division_id: divisionId, 
         block_no: blockNo,
@@ -206,26 +226,161 @@ export default function Transport() {
       const lines = text.split(/\r?\n/).filter(Boolean);
       if (lines.length < 2) throw new Error('CSV kosong');
       const header = lines[0].split(',').map((s) => s.trim().toLowerCase());
-      const idx = (k: string) => header.indexOf(k);
-      const requireIdx = (...keys: string[]) => { for (const k of keys) if (idx(k) === -1) throw new Error(`Kolom '${k}' tidak ditemukan`); };
-      requireIdx('date_panen', 'date_angkut', 'estateid', 'division_id', 'block_no', 'weightkg');
-      const parsed: AngkutRow[] = lines.slice(1).map((line) => {
-        const cols = line.split(',');
-        const rawDiv = cols[idx('division_id')];
-        const divNum = Number(rawDiv);
-        const divId = !Number.isNaN(divNum) ? divNum : rawDiv;
+      const idx = (k: string) => {
+        const normalized = k.toLowerCase().replace(/[.\s]/g, '');
+        return header.findIndex(h => h.replace(/[.\s]/g, '') === normalized);
+      };
+      const requireIdx = (...keys: string[]) => { 
+        for (const k of keys) {
+          if (idx(k) === -1) throw new Error(`Kolom '${k}' tidak ditemukan`);
+        }
+      };
+      // Support both old format and new format from image
+      const hasPT = idx('pt') >= 0;
+      const hasTanggal = idx('tanggal') >= 0;
+      const hasDivisi = idx('divisi') >= 0;
+      const hasBlock = idx('block') >= 0;
+      
+      if (hasPT && hasTanggal && hasDivisi && hasBlock) {
+        // New format from image
+        requireIdx('pt', 'tanggal', 'divisi', 'block');
+      } else {
+        // Old format
+        requireIdx('date_panen', 'date_angkut', 'estateid', 'division_id', 'block_no', 'weightkg');
+      }
+      
+      // Load existing companies and estates
+      const [existingCompanies, existingEstates] = await Promise.all([
+        api.companies(),
+        api.estates()
+      ]);
+      
+      const parsed: AngkutRow[] = [];
+      
+      for (let i = 1; i < lines.length; i++) {
+        const cols = lines[i].split(',').map(c => c.trim());
         
-        return {
-          date_panen: cols[idx('date_panen')],
-          date_angkut: cols[idx('date_angkut')],
-          estateId: cols[idx('estateid')],
-          division_id: divId,
-          block_no: cols[idx('block_no')],
-          weightKg: Number(cols[idx('weightkg')]),
-        } as AngkutRow;
-      }).filter(r => r.date_panen && r.date_angkut && r.estateId && r.division_id && r.block_no && !Number.isNaN(r.weightKg));
+        // Support both formats
+        let companyNameVal = '';
+        let datePanen = '';
+        let dateAngkut = '';
+        let divisionIdVal = 0;
+        let blockNo = '';
+        let driver = '';
+        let noKendaraan = '';
+        let weightKg = 0;
+        let jjgAngkut = 0;
+        let additionalNotes: string[] = [];
+        
+        if (hasPT && hasTanggal && hasDivisi && hasBlock) {
+          // New format from image
+          companyNameVal = idx('pt') >= 0 ? cols[idx('pt')] : '';
+          const tanggalVal = idx('tanggal') >= 0 ? cols[idx('tanggal')] : '';
+          datePanen = tanggalVal;
+          dateAngkut = tanggalVal;
+          divisionIdVal = idx('divisi') >= 0 ? Number(cols[idx('divisi')]) : 0;
+          blockNo = idx('block') >= 0 ? cols[idx('block')] : '';
+          driver = idx('driver') >= 0 ? cols[idx('driver')] : '';
+          noKendaraan = idx('nokendaraan') >= 0 ? cols[idx('nokendaraan')] : '';
+          
+          const jumlah = idx('jumlah') >= 0 ? Number(cols[idx('jumlah')] || 0) : 0;
+          const brondolan = idx('brondolan') >= 0 ? Number(cols[idx('brondolan')] || 0) : 0;
+          const beratDi = idx('beratdi') >= 0 ? Number(cols[idx('beratdi')] || 0) : 0;
+          const noTiket = idx('notiket') >= 0 ? cols[idx('notiket')] : '';
+          const code = idx('code') >= 0 ? cols[idx('code')] : '';
+          const bruto = idx('bruto') >= 0 ? Number(cols[idx('bruto')] || 0) : 0;
+          const tarra = idx('tarra') >= 0 ? Number(cols[idx('tarra')] || 0) : 0;
+          const netto = idx('netto') >= 0 ? Number(cols[idx('netto')] || 0) : 0;
+          const poto = idx('poto') >= 0 ? Number(cols[idx('poto')] || 0) : 0;
+          const berat = idx('berat') >= 0 ? Number(cols[idx('berat')] || 0) : 0;
+          const tonase = idx('tonase') >= 0 ? Number(cols[idx('tonase')] || 0) : 0;
+          const jjg = idx('jjg') >= 0 ? Number(cols[idx('jjg')] || 0) : 0;
+          const tahun = idx('tahun') >= 0 ? cols[idx('tahun')] : new Date().getFullYear();
+          const noSpb = idx('nospb') >= 0 ? cols[idx('nospb')] : '';
+          
+          jjgAngkut = jumlah || jjg;
+          weightKg = berat || netto || beratDi || (tonase * 1000);
+          
+          // Build notes with all additional fields
+          if (noSpb) additionalNotes.push(`no_spb=${noSpb}`);
+          if (tahun) additionalNotes.push(`tahun=${tahun}`);
+          if (brondolan) additionalNotes.push(`brondolan=${brondolan}`);
+          if (beratDi) additionalNotes.push(`berat_di=${beratDi}`);
+          if (noTiket) additionalNotes.push(`no_tiket=${noTiket}`);
+          if (code) additionalNotes.push(`code=${code}`);
+          if (bruto) additionalNotes.push(`bruto=${bruto}`);
+          if (tarra) additionalNotes.push(`tarra=${tarra}`);
+          if (netto) additionalNotes.push(`netto=${netto}`);
+          if (poto) additionalNotes.push(`poto=${poto}`);
+          if (tonase) additionalNotes.push(`tonase=${tonase}`);
+        } else {
+          // Old format
+          companyNameVal = idx('companyname') >= 0 ? cols[idx('companyname')] : '';
+          datePanen = cols[idx('date_panen')];
+          dateAngkut = cols[idx('date_angkut')];
+          divisionIdVal = Number(cols[idx('division_id')]);
+          blockNo = cols[idx('block_no')];
+          weightKg = Number(cols[idx('weightkg')] || 0);
+          jjgAngkut = idx('jjgangkut') >= 0 ? Number(cols[idx('jjgangkut')] || 0) : 0;
+          driver = idx('supir') >= 0 ? cols[idx('supir')] : '';
+          noKendaraan = idx('no_mobil') >= 0 ? cols[idx('no_mobil')] : '';
+        }
+        
+        // Validate and auto-create company if needed
+        let finalCompanyId = '';
+        let finalCompanyName = companyNameVal;
+        
+        if (companyNameVal && !existingCompanies.find(c => c.company_name === companyNameVal)) {
+          // Create new company
+          try {
+            const newCompany = await api.createCompany({ company_name: companyNameVal, address: '', phone: '', email: '' });
+            existingCompanies.push(newCompany);
+            finalCompanyId = newCompany._id;
+            toast.success(`PT "${companyNameVal}" berhasil ditambahkan`);
+          } catch (e) {
+            console.warn('Failed to create company:', e);
+          }
+        } else if (companyNameVal) {
+          const found = existingCompanies.find(c => c.company_name === companyNameVal);
+          if (found) finalCompanyId = found._id;
+        }
+        
+        // Create estate ID from division
+        const estateIdVal = `divisi${divisionIdVal}`;
+        
+        // Validate and auto-create estate/division if needed
+        if (!existingEstates.find(e => e._id === estateIdVal)) {
+          try {
+            await api.createEstate({ _id: estateIdVal, estate_name: `Divisi ${divisionIdVal}`, divisions: [] });
+            existingEstates.push({ _id: estateIdVal, estate_name: `Divisi ${divisionIdVal}` });
+            toast.success(`Divisi "${divisionIdVal}" berhasil ditambahkan`);
+          } catch (e) {
+            console.warn('Failed to create estate:', e);
+          }
+        }
+        
+        // Build notes string
+        if (driver) additionalNotes.push(`supir=${driver}`);
+        if (noKendaraan) additionalNotes.push(`no_mobil=${noKendaraan}`);
+        const notesStr = additionalNotes.join('; ');
+        
+        parsed.push({
+          date_panen: datePanen,
+          date_angkut: dateAngkut,
+          companyId: finalCompanyId || undefined,
+          companyName: finalCompanyName || undefined,
+          estateId: estateIdVal,
+          division_id: divisionIdVal,
+          block_no: blockNo,
+          weightKg: weightKg || 0,
+          jjgAngkut: jjgAngkut || 0,
+          notes: notesStr || undefined,
+        } as AngkutRow);
+      }
+      
+      const filtered = parsed.filter(r => r.date_panen && r.date_angkut && r.estateId && r.division_id && r.block_no && !Number.isNaN(r.weightKg));
       const key = (r: AngkutRow) => `${String(r.date_panen).slice(0, 10)}|${String(r.date_angkut).slice(0, 10)}|${r.estateId}|${r.division_id}|${r.block_no}`;
-      const dates = Array.from(new Set(parsed.map(r => String(r.date_panen).slice(0, 10))));
+      const dates = Array.from(new Set(filtered.map(r => String(r.date_panen).slice(0, 10))));
       let existing: AngkutRow[] = [];
       for (const d of dates) {
         try {
@@ -235,7 +390,7 @@ export default function Transport() {
       }
       const existingKeys = new Set(existing.map(key));
       const seen = new Set<string>();
-      const bulk = parsed.filter(r => {
+      const bulk = filtered.filter(r => {
         const k = key(r);
         if (seen.has(k)) return false;
         seen.add(k);
@@ -247,6 +402,11 @@ export default function Transport() {
         await api.angkutCreate(bulk);
         toast.success(`Import ${bulk.length} baris berhasil`);
       }
+      
+      // Refresh companies and estates
+      setCompanies(await api.companies());
+      setEstates(await api.estates());
+      
       const latest = await api.angkutList({ date_panen: datePanen });
       setRows(latest);
     } catch (e: unknown) {
@@ -271,6 +431,29 @@ export default function Transport() {
           <div className="flex items-center justify-between gap-2">
             <h3 className="text-lg font-semibold">Transaksi Angkutan</h3>
             <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="border-orange-500 text-orange-600 hover:bg-orange-50 hover:text-orange-700"
+                onClick={() => {
+                  const csv = 'PT,TANGGAL,DIVISI,DRIVER,No. Kendaraan,No. SPB,BLOCK,TAHUN,JUMLAH,BRONDOLAN,BERAT DI,No. Tiket,Code,BRUTO,TARRA,NETTO,POTO,Berat,TONASE/,JJG/';
+                  const blob = new Blob([csv], { type: 'text/csv' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = 'template_angkutan.csv';
+                  document.body.appendChild(a);
+                  a.click();
+                  setTimeout(() => {
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                  }, 100);
+                }}
+              >
+                <Download className="mr-2 h-4 w-4" />
+                Template
+              </Button>
               <Button
                 type="button"
                 size="sm"
@@ -317,6 +500,13 @@ export default function Transport() {
                   <DialogTitle>Tambah Data Angkutan</DialogTitle>
                 </DialogHeader>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label>PT (Perusahaan)</Label>
+                    <select className="w-full h-10 border rounded px-2" value={companyId} onChange={(e) => setCompanyId(e.target.value)}>
+                      <option value="">Pilih PT</option>
+                      {companies.map(c => <option key={c._id} value={c._id}>{c.company_name}</option>)}
+                    </select>
+                  </div>
                   <div>
                     <Label>Tanggal Angkut</Label>
                     <Input type="date" value={dateAngkut} onChange={(e) => setDateAngkut(e.target.value)} />
@@ -389,6 +579,7 @@ export default function Transport() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="text-center">PT</TableHead>
                   <TableHead className="text-center">Tgl_angkut</TableHead>
                   <TableHead className="text-center">Estate</TableHead>
                   <TableHead className="text-center">Div</TableHead>
@@ -405,6 +596,7 @@ export default function Transport() {
               <TableBody>
                 {derived.map(({ row: r, jjgRealisasi, jjgAngkut, restan }, idx) => (
                   <TableRow key={(r as AngkutRowWithId)._id || idx}>
+                    <TableCell className="text-center">{r.companyName || '-'}</TableCell>
                     <TableCell className="text-center">{String(r.date_angkut).slice(0, 10)}</TableCell>
                     <TableCell className="text-center">{r.estateId}</TableCell>
                     <TableCell className="text-center">{typeof r.division_id === 'number' ? `Divisi ${r.division_id}` : r.division_id}</TableCell>

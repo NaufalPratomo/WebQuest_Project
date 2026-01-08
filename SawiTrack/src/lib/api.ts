@@ -158,6 +158,8 @@ export type AngkutRow = {
   _id?: string;
   date_panen: string; // ISO (lock key)
   date_angkut: string; // ISO (transport date)
+  companyId?: string; // PT/Perusahaan ID
+  companyName?: string; // PT/Perusahaan Name
   estateId: string;
   division_id: number | string;
   block_no: string;

@@ -4,6 +4,8 @@ const AngkutSchema = new mongoose.Schema(
   {
     date_panen: { type: Date, required: true }, // locked to harvest date
     date_angkut: { type: Date, required: true },
+    companyId: { type: String }, // PT/Perusahaan ID
+    companyName: { type: String }, // PT/Perusahaan Name
     estateId: { type: String, required: true },
     division_id: { type: mongoose.Schema.Types.Mixed, required: true },
     block_id: { type: String },

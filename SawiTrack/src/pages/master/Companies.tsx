@@ -180,6 +180,7 @@ const Companies = () => {
 
           const newCompanies: Company[] = [];
           const existingCompanies: Company[] = [];
+          const processedNames = new Set<string>(); // Track names already processed in Excel
 
           jsonData.forEach((row) => {
             const company_name = String(row["Nama Perusahaan"] || "").trim();
@@ -189,23 +190,31 @@ const Companies = () => {
 
             if (!company_name || !address) return;
 
-            // Check if company already exists
-            const exists = rows.find(
-              (c) => c.company_name.toLowerCase() === company_name.toLowerCase()
+            const normalizedName = company_name.toLowerCase();
+
+            // Check if company already exists in database
+            const existsInDb = rows.find(
+              (c) => c.company_name.toLowerCase() === normalizedName
             );
 
+            // Check if already processed in this Excel file (duplicate within Excel)
+            const isDuplicateInExcel = processedNames.has(normalizedName);
+
             const companyObj: Company = {
-              _id: exists ? exists._id : `temp_${Date.now()}_${Math.random()}`,
+              _id: existsInDb
+                ? existsInDb._id
+                : `temp_${Date.now()}_${Math.random()}`,
               company_name,
               address,
               phone,
               email,
             };
 
-            if (exists) {
+            if (existsInDb || isDuplicateInExcel) {
               existingCompanies.push(companyObj);
             } else {
               newCompanies.push(companyObj);
+              processedNames.add(normalizedName); // Mark as processed
             }
           });
 

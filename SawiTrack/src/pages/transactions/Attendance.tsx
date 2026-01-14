@@ -523,7 +523,7 @@ const Attendance = () => {
                                                             {typeof hk === "number" ? (
                                                                 <div className="flex items-center justify-center w-full h-full text-green-600 font-bold bg-green-50">{formatHK(hk)}</div>
                                                             ) : null}
-                                                        </TableCell>
+                                                        </TableCell> 
                                                     );
                                                 })}
                                                 <TableCell className="border text-center font-bold sticky right-0 bg-background z-20">{formatHK(row.totalHK)}</TableCell>

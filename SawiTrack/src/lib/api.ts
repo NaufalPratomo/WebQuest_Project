@@ -87,7 +87,7 @@ export interface Company {
   address: string;
   phone?: string;
   email?: string;
-  estates?: Array<{ _id: string; estate_name: string }>;
+  estates?: Array<string | { _id: string; estate_name: string }>;
   status?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -626,8 +626,10 @@ export const api = {
           }).catch((inner) => {
             // Provide a clearer combined error
             throw new Error(
-              `Activity logs endpoint tidak ditemukan. Coba cek backend routes /activity-logs & /activitylogs. Asli: ${err.message
-              }; Alias: ${inner instanceof Error ? inner.message : String(inner)
+              `Activity logs endpoint tidak ditemukan. Coba cek backend routes /activity-logs & /activitylogs. Asli: ${
+                err.message
+              }; Alias: ${
+                inner instanceof Error ? inner.message : String(inner)
               }`
             );
           });

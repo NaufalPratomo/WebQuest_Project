@@ -12,6 +12,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -31,7 +38,11 @@ export default function Transport() {
     new Date().toISOString().slice(0, 10)
   );
   const [companies, setCompanies] = useState<
-    Array<{ _id: string; company_name: string }>
+    Array<{
+      _id: string;
+      company_name: string;
+      estates?: Array<string | { _id: string; estate_name: string }>;
+    }>
   >([]);
   const [companyId, setCompanyId] = useState<string>("");
   const [estates, setEstates] = useState<
@@ -60,6 +71,13 @@ export default function Transport() {
   const [completeTarget, setCompleteTarget] = useState<AngkutRow | null>(null);
   const [editNoMobil, setEditNoMobil] = useState("");
   const [editSupir, setEditSupir] = useState("");
+
+  // Import preview state
+  const [isImportPreviewOpen, setIsImportPreviewOpen] = useState(false);
+  const [importPreviewData, setImportPreviewData] = useState<{
+    newRows: AngkutRow[];
+    existingRows: AngkutRow[];
+  } | null>(null);
 
   const exportCsv = () => {
     const header = [
@@ -171,7 +189,12 @@ export default function Transport() {
   }, [datePanen]);
 
   const filtered = useMemo(
-    () => rows.filter((r) => String(r.date_panen).startsWith(datePanen)),
+    () =>
+      rows.filter(
+        (r) =>
+          String(r.date_panen).startsWith(datePanen) ||
+          String(r.date_angkut).startsWith(datePanen)
+      ),
     [rows, datePanen]
   );
 
@@ -192,6 +215,15 @@ export default function Transport() {
         return;
       }
       const selectedCompany = companies.find((c) => c._id === companyId);
+
+      // Build notes with no_mobil and supir
+      const notes = [
+        noMobil ? `no_mobil=${noMobil}` : "",
+        namaSupir ? `supir=${namaSupir}` : "",
+      ]
+        .filter(Boolean)
+        .join("; ");
+
       const body: AngkutRow = {
         date_panen: datePanen,
         date_angkut: dateAngkut,
@@ -203,6 +235,7 @@ export default function Transport() {
         noTPH: noTPH || undefined,
         jjgAngkut: Number(jjgAngkut || 0), // Manual input
         weightKg: 0,
+        notes: notes || undefined,
       };
       const created = await api.angkutCreate(body);
       toast.success("Tersimpan");
@@ -354,8 +387,21 @@ export default function Transport() {
         estate: string;
         div: string;
         blok: string;
+        no_spb: string;
         noTPH: string;
+        tahun: string;
         jjgAngkut: string;
+        jjg: string;
+        brondolan: string;
+        beratDi: string;
+        noTiket: string;
+        code: string;
+        bruto: string;
+        tarra: string;
+        netto: string;
+        poto: string;
+        berat: string;
+        tonase: string;
         noMobil: string;
         namaSupir: string;
       }> = [];
@@ -377,6 +423,14 @@ export default function Transport() {
         const jjgAngkutVal =
           idx("jumlah") >= 0
             ? getCell(idx("jumlah"))
+            : idx("jjgangkut") >= 0
+            ? getCell(idx("jjgangkut"))
+            : "";
+        const jjgVal =
+          idx("jjg/pengiriman") >= 0
+            ? getCell(idx("jjg/pengiriman"))
+            : idx("jjg/") >= 0
+            ? getCell(idx("jjg/"))
             : idx("jjg") >= 0
             ? getCell(idx("jjg"))
             : "";
@@ -392,6 +446,74 @@ export default function Transport() {
             : idx("namasupir") >= 0
             ? getCell(idx("namasupir"))
             : "";
+        const noSPBVal =
+          idx("nospb") >= 0
+            ? getCell(idx("nospb"))
+            : idx("no_spb") >= 0
+            ? getCell(idx("no_spb"))
+            : "";
+        const tahunVal = idx("tahun") >= 0 ? getCell(idx("tahun")) : "";
+        const brondolanVal =
+          idx("brondolan(kg)") >= 0
+            ? getCell(idx("brondolan(kg)"))
+            : idx("brondolan") >= 0
+            ? getCell(idx("brondolan"))
+            : "";
+        const beratDiVal =
+          idx("beratdikirim(kg)") >= 0
+            ? getCell(idx("beratdikirim(kg)"))
+            : idx("beratdi") >= 0
+            ? getCell(idx("beratdi"))
+            : idx("berat_di") >= 0
+            ? getCell(idx("berat_di"))
+            : "";
+        const noTiketVal =
+          idx("notiket") >= 0
+            ? getCell(idx("notiket"))
+            : idx("no_tiket") >= 0
+            ? getCell(idx("no_tiket"))
+            : idx("notiket") >= 0
+            ? getCell(idx("notiket"))
+            : "";
+        const codeVal = idx("code") >= 0 ? getCell(idx("code")) : "";
+        const brutoVal =
+          idx("bruto(kg)") >= 0
+            ? getCell(idx("bruto(kg)"))
+            : idx("bruto") >= 0
+            ? getCell(idx("bruto"))
+            : "";
+        const tarraVal =
+          idx("tarra(kg)") >= 0
+            ? getCell(idx("tarra(kg)"))
+            : idx("tarra") >= 0
+            ? getCell(idx("tarra"))
+            : "";
+        const nettoVal =
+          idx("netto(kg)") >= 0
+            ? getCell(idx("netto(kg)"))
+            : idx("netto") >= 0
+            ? getCell(idx("netto"))
+            : "";
+        const potoVal =
+          idx("potongan") >= 0
+            ? getCell(idx("potongan"))
+            : idx("poto") >= 0
+            ? getCell(idx("poto"))
+            : "";
+        const beratVal =
+          idx("berat/block") >= 0
+            ? getCell(idx("berat/block"))
+            : idx("berat") >= 0
+            ? getCell(idx("berat"))
+            : "";
+        const tonaseVal =
+          idx("tonase/pengiriman") >= 0
+            ? getCell(idx("tonase/pengiriman"))
+            : idx("tonase/") >= 0
+            ? getCell(idx("tonase/"))
+            : idx("tonase") >= 0
+            ? getCell(idx("tonase"))
+            : "";
 
         if (!ptVal || !tglAngkutVal || !divVal || !blokVal) return; // Skip invalid rows
 
@@ -401,8 +523,21 @@ export default function Transport() {
           estate: estateVal,
           div: divVal,
           blok: blokVal,
+          no_spb: noSPBVal,
           noTPH: noTPHVal,
+          tahun: tahunVal,
           jjgAngkut: jjgAngkutVal,
+          jjg: jjgVal,
+          brondolan: brondolanVal,
+          beratDi: beratDiVal,
+          noTiket: noTiketVal,
+          code: codeVal,
+          bruto: brutoVal,
+          tarra: tarraVal,
+          netto: nettoVal,
+          poto: potoVal,
+          berat: beratVal,
+          tonase: tonaseVal,
           noMobil: noMobilVal,
           namaSupir: namaSupirVal,
         });
@@ -521,6 +656,22 @@ export default function Transport() {
           additionalNotes.push(`supir=${rowData.namaSupir}`);
         if (rowData.noMobil)
           additionalNotes.push(`no_mobil=${rowData.noMobil}`);
+        if (rowData.no_spb) additionalNotes.push(`no_spb=${rowData.no_spb}`);
+        if (rowData.tahun) additionalNotes.push(`tahun=${rowData.tahun}`);
+        if (rowData.brondolan)
+          additionalNotes.push(`brondolan=${rowData.brondolan}`);
+        if (rowData.beratDi)
+          additionalNotes.push(`berat_di=${rowData.beratDi}`);
+        if (rowData.noTiket)
+          additionalNotes.push(`no_tiket=${rowData.noTiket}`);
+        if (rowData.code) additionalNotes.push(`code=${rowData.code}`);
+        if (rowData.bruto) additionalNotes.push(`bruto=${rowData.bruto}`);
+        if (rowData.tarra) additionalNotes.push(`tarra=${rowData.tarra}`);
+        if (rowData.netto) additionalNotes.push(`netto=${rowData.netto}`);
+        if (rowData.poto) additionalNotes.push(`poto=${rowData.poto}`);
+        if (rowData.berat) additionalNotes.push(`berat=${rowData.berat}`);
+        if (rowData.tonase) additionalNotes.push(`tonase=${rowData.tonase}`);
+        if (rowData.jjg) additionalNotes.push(`jjg=${rowData.jjg}`);
         const notesStr = additionalNotes.join("; ");
 
         parsed.push({
@@ -580,20 +731,20 @@ export default function Transport() {
 
       const existingKeys = new Set(existing.map(key));
       const seen = new Set<string>();
-      const bulk = filtered.filter((r) => {
+      const newRows = filtered.filter((r) => {
         const k = key(r);
         if (seen.has(k)) return false;
         seen.add(k);
         return !existingKeys.has(k);
       });
-      if (bulk.length === 0) {
-        toast.info("Semua baris sudah ada, tidak ada data baru");
-      } else {
-        await api.angkutCreate(bulk);
-        toast.success(`Import ${bulk.length} baris berhasil`);
-      }
 
-      // Refresh companies and estates
+      const duplicateRows = filtered.filter((r) => existingKeys.has(key(r)));
+
+      // Show preview instead of directly importing
+      setImportPreviewData({ newRows, existingRows: duplicateRows });
+      setIsImportPreviewOpen(true);
+
+      // Refresh companies and estates for display
       setCompanies(await api.companies());
       setEstates(await api.estates());
 
@@ -611,6 +762,63 @@ export default function Transport() {
         /* ignore */
       }
       toast.error(msg);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleConfirmImport = async () => {
+    if (!importPreviewData) return;
+
+    try {
+      setUploading(true);
+      const { newRows } = importPreviewData;
+
+      if (newRows.length === 0) {
+        toast.info("Tidak ada data baru untuk diimport");
+        setIsImportPreviewOpen(false);
+        setImportPreviewData(null);
+        return;
+      }
+
+      await api.angkutCreate(newRows);
+      toast.success(`Import ${newRows.length} baris berhasil`);
+
+      // Refresh data - load all dates from imported data
+      const allDates = Array.from(
+        new Set([
+          datePanen,
+          ...newRows.map((r) => String(r.date_panen).slice(0, 10)),
+          ...newRows.map((r) => String(r.date_angkut).slice(0, 10)),
+        ])
+      );
+
+      let allRows: AngkutRow[] = [];
+      for (const d of allDates) {
+        try {
+          const list = await api.angkutList({ date_panen: d });
+          allRows = allRows.concat(list);
+        } catch {
+          /* ignore */
+        }
+      }
+
+      // Remove duplicates
+      const uniqueRows = Array.from(
+        new Map(
+          allRows.map((r) => [
+            `${r._id || `${r.date_panen}|${r.estateId}|${r.block_no}`}`,
+            r,
+          ])
+        ).values()
+      );
+
+      setRows(uniqueRows);
+
+      setIsImportPreviewOpen(false);
+      setImportPreviewData(null);
+    } catch (error) {
+      toast.error("Gagal mengimport data");
     } finally {
       setUploading(false);
     }
@@ -644,17 +852,21 @@ export default function Transport() {
                     { header: "BLOCK", key: "block", width: 15 },
                     { header: "TAHUN", key: "tahun", width: 10 },
                     { header: "JUMLAH", key: "jumlah", width: 10 },
-                    { header: "BRONDOLAN", key: "brondolan", width: 12 },
-                    { header: "BERAT DI", key: "berat_di", width: 12 },
+                    { header: "BRONDOLAN ( kg)", key: "brondolan", width: 15 },
+                    {
+                      header: "BERAT DI KIRIM ( kg )",
+                      key: "berat_di",
+                      width: 20,
+                    },
                     { header: "No. Tiket", key: "no_tiket", width: 15 },
                     { header: "Code", key: "code", width: 10 },
-                    { header: "BRUTO", key: "bruto", width: 12 },
-                    { header: "TARRA", key: "tarra", width: 12 },
-                    { header: "NETTO", key: "netto", width: 12 },
-                    { header: "POTO", key: "poto", width: 12 },
-                    { header: "Berat", key: "berat", width: 12 },
-                    { header: "TONASE/", key: "tonase", width: 12 },
-                    { header: "JJG/", key: "jjg", width: 10 },
+                    { header: "BRUTO     ( kg )", key: "bruto", width: 15 },
+                    { header: "TARRA  (kg)", key: "tarra", width: 12 },
+                    { header: "NETTO  (kg)", key: "netto", width: 12 },
+                    { header: "POTONGAN", key: "poto", width: 12 },
+                    { header: "BERAT /BLOCK", key: "berat", width: 15 },
+                    { header: "TONASE/ PENGIRIMAN", key: "tonase", width: 18 },
+                    { header: "JJG/ PENGIRIMAN", key: "jjg", width: 15 },
                   ];
 
                   // Add sample row
@@ -759,18 +971,26 @@ export default function Transport() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <Label>PT (Perusahaan)</Label>
-                    <select
-                      className="w-full h-10 border rounded px-2"
+                    <Select
                       value={companyId}
-                      onChange={(e) => setCompanyId(e.target.value)}
+                      onValueChange={(value) => {
+                        setCompanyId(value);
+                        setEstateId("");
+                        setDivisionId("");
+                        setBlockNo("");
+                      }}
                     >
-                      <option value="">Pilih PT</option>
-                      {companies.map((c) => (
-                        <option key={c._id} value={c._id}>
-                          {c.company_name}
-                        </option>
-                      ))}
-                    </select>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Pilih PT" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {companies.map((c) => (
+                          <SelectItem key={c._id} value={c._id}>
+                            {c.company_name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div>
                     <Label>Tanggal Angkut</Label>
@@ -782,59 +1002,115 @@ export default function Transport() {
                   </div>
                   <div>
                     <Label>Estate</Label>
-                    <select
-                      className="w-full h-10 border rounded px-2"
+                    <Select
                       value={estateId}
-                      onChange={(e) => setEstateId(e.target.value)}
+                      onValueChange={(value) => {
+                        setEstateId(value);
+                        setDivisionId("");
+                        setBlockNo("");
+                      }}
+                      disabled={!companyId}
                     >
-                      <option value="">Pilih</option>
-                      {estates.map((es) => (
-                        <option key={es._id} value={es._id}>
-                          {es.estate_name}
-                        </option>
-                      ))}
-                    </select>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Pilih Estate" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(() => {
+                          const selectedCompany = companies.find(
+                            (c) => c._id === companyId
+                          );
+                          const companyEstates = selectedCompany?.estates || [];
+
+                          if (companyEstates.length === 0) {
+                            return (
+                              <SelectItem value="__none" disabled>
+                                Tidak ada estate untuk PT ini
+                              </SelectItem>
+                            );
+                          }
+
+                          // Handle both string[] and object[] formats
+                          return companyEstates.map((estateData, idx) => {
+                            // If it's a string (just ID)
+                            if (typeof estateData === "string") {
+                              const estate = estates.find(
+                                (e) => e._id === estateData
+                              );
+                              const displayName =
+                                estate?.estate_name || estateData;
+                              return (
+                                <SelectItem key={estateData} value={estateData}>
+                                  {displayName}
+                                </SelectItem>
+                              );
+                            }
+                            // If it's an object {_id, estate_name}
+                            return (
+                              <SelectItem
+                                key={estateData._id || idx}
+                                value={estateData._id}
+                              >
+                                {estateData.estate_name}
+                              </SelectItem>
+                            );
+                          });
+                        })()}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div>
                     <Label>Divisi</Label>
-                    <select
-                      className="w-full h-10 border rounded px-2"
-                      value={divisionId}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        const num = Number(val);
+                    <Select
+                      value={String(divisionId)}
+                      onValueChange={(value) => {
+                        const num = Number(value);
                         setDivisionId(
-                          !Number.isNaN(num) && val.trim() !== "" ? num : val
+                          !Number.isNaN(num) && value.trim() !== ""
+                            ? num
+                            : value
                         );
+                        setBlockNo("");
                       }}
+                      disabled={!estateId}
                     >
-                      <option value="">Pilih</option>
-                      {divisions.map((d) => (
-                        <option key={d.division_id} value={d.division_id}>
-                          {typeof d.division_id === "number"
-                            ? `Divisi ${d.division_id}`
-                            : d.division_id}
-                        </option>
-                      ))}
-                    </select>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Pilih Divisi" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {divisions.map((d) => (
+                          <SelectItem
+                            key={d.division_id}
+                            value={String(d.division_id)}
+                          >
+                            {typeof d.division_id === "number"
+                              ? `Divisi ${d.division_id}`
+                              : d.division_id}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div>
                     <Label>Blok</Label>
-                    <select
-                      className="w-full h-10 border rounded px-2"
+                    <Select
                       value={blockNo}
-                      onChange={(e) => setBlockNo(e.target.value)}
+                      onValueChange={setBlockNo}
+                      disabled={!divisionId}
                     >
-                      <option value="">Pilih</option>
-                      {blocks.map((b, i: number) => {
-                        const label = String(b.no_blok || b.id_blok || "");
-                        return (
-                          <option key={i} value={label}>
-                            {label || `Blok ${i + 1}`}
-                          </option>
-                        );
-                      })}
-                    </select>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Pilih Blok" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {blocks.map((b, i: number) => {
+                          const label = String(b.no_blok || b.id_blok || "");
+                          return (
+                            <SelectItem key={i} value={label}>
+                              {label || `Blok ${i + 1}`}
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div>
                     <Label>NoTPH</Label>
@@ -895,48 +1171,138 @@ export default function Transport() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="text-center">PT</TableHead>
-                  <TableHead className="text-center">Tgl_angkut</TableHead>
-                  <TableHead className="text-center">Estate</TableHead>
-                  <TableHead className="text-center">Div</TableHead>
-                  <TableHead className="text-center">Blok</TableHead>
-                  <TableHead className="text-center">NoTPH</TableHead>
-                  <TableHead className="text-center">JJG Realisasi</TableHead>
-                  <TableHead className="text-center">JJG Angkut</TableHead>
-                  <TableHead className="text-center">Restan</TableHead>
-                  <TableHead className="text-center">No. Mobil</TableHead>
-                  <TableHead className="text-center">Nama Supir</TableHead>
-                  <TableHead className="text-center">Aksi</TableHead>
+                  <TableHead className="text-center whitespace-nowrap">
+                    PT
+                  </TableHead>
+                  <TableHead className="text-center whitespace-nowrap">
+                    Tgl_angkut
+                  </TableHead>
+                  <TableHead className="text-center whitespace-nowrap">
+                    Estate
+                  </TableHead>
+                  <TableHead className="text-center whitespace-nowrap">
+                    Div
+                  </TableHead>
+                  <TableHead className="text-center whitespace-nowrap">
+                    Blok
+                  </TableHead>
+                  <TableHead className="text-center whitespace-nowrap">
+                    No SPB
+                  </TableHead>
+                  <TableHead className="text-center whitespace-nowrap">
+                    Tahun
+                  </TableHead>
+                  <TableHead className="text-center whitespace-nowrap">
+                    Brondolan (kg)
+                  </TableHead>
+                  <TableHead className="text-center whitespace-nowrap">
+                    Berat Di (kg)
+                  </TableHead>
+                  <TableHead className="text-center whitespace-nowrap">
+                    No. Tiket
+                  </TableHead>
+                  <TableHead className="text-center whitespace-nowrap">
+                    Code
+                  </TableHead>
+                  <TableHead className="text-center whitespace-nowrap">
+                    BRUTO (kg)
+                  </TableHead>
+                  <TableHead className="text-center whitespace-nowrap">
+                    TARRA (kg)
+                  </TableHead>
+                  <TableHead className="text-center whitespace-nowrap">
+                    NETTO (kg)
+                  </TableHead>
+                  <TableHead className="text-center whitespace-nowrap">
+                    POTONGAN
+                  </TableHead>
+                  <TableHead className="text-center whitespace-nowrap">
+                    Berat
+                  </TableHead>
+                  <TableHead className="text-center whitespace-nowrap">
+                    TONASE
+                  </TableHead>
+                  <TableHead className="text-center whitespace-nowrap">
+                    Jumlah
+                  </TableHead>
+                  <TableHead className="text-center whitespace-nowrap">
+                    JJG Angkut
+                  </TableHead>
+                  <TableHead className="text-center whitespace-nowrap">
+                    Restan
+                  </TableHead>
+                  <TableHead className="text-center whitespace-nowrap">
+                    No. Mobil
+                  </TableHead>
+                  <TableHead className="text-center whitespace-nowrap">
+                    Nama Supir
+                  </TableHead>
+                  <TableHead className="text-center whitespace-nowrap">
+                    Aksi
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {derived.map(
                   ({ row: r, jjgRealisasi, jjgAngkut, restan }, idx) => (
                     <TableRow key={(r as AngkutRowWithId)._id || idx}>
-                      <TableCell className="text-center">
+                      <TableCell className="text-center whitespace-nowrap">
                         {r.companyName || "-"}
                       </TableCell>
-                      <TableCell className="text-center">
+                      <TableCell className="text-center whitespace-nowrap">
                         {String(r.date_angkut).slice(0, 10)}
                       </TableCell>
-                      <TableCell className="text-center">
+                      <TableCell className="text-center whitespace-nowrap">
                         {r.estateId}
                       </TableCell>
-                      <TableCell className="text-center">
+                      <TableCell className="text-center whitespace-nowrap">
                         {typeof r.division_id === "number"
                           ? `Divisi ${r.division_id}`
                           : r.division_id}
                       </TableCell>
-                      <TableCell className="text-center">
+                      <TableCell className="text-center whitespace-nowrap">
                         {r.block_no}
                       </TableCell>
-                      <TableCell className="text-center">
-                        {r.noTPH || "-"}
+                      <TableCell className="text-center whitespace-nowrap">
+                        {noteVal(r.notes, "no_spb") || "-"}
                       </TableCell>
-                      <TableCell className="text-center font-medium">
-                        {jjgRealisasi}
+                      <TableCell className="text-center whitespace-nowrap">
+                        {noteVal(r.notes, "tahun") || "-"}
                       </TableCell>
-                      <TableCell className="text-center">
+                      <TableCell className="text-center whitespace-nowrap">
+                        {noteVal(r.notes, "brondolan") || "-"}
+                      </TableCell>
+                      <TableCell className="text-center whitespace-nowrap">
+                        {noteVal(r.notes, "berat_di") || "-"}
+                      </TableCell>
+                      <TableCell className="text-center whitespace-nowrap">
+                        {noteVal(r.notes, "no_tiket") || "-"}
+                      </TableCell>
+                      <TableCell className="text-center whitespace-nowrap">
+                        {noteVal(r.notes, "code") || "-"}
+                      </TableCell>
+                      <TableCell className="text-center whitespace-nowrap">
+                        {noteVal(r.notes, "bruto") || "-"}
+                      </TableCell>
+                      <TableCell className="text-center whitespace-nowrap">
+                        {noteVal(r.notes, "tarra") || "-"}
+                      </TableCell>
+                      <TableCell className="text-center whitespace-nowrap">
+                        {noteVal(r.notes, "netto") || "-"}
+                      </TableCell>
+                      <TableCell className="text-center whitespace-nowrap">
+                        {noteVal(r.notes, "poto") || "-"}
+                      </TableCell>
+                      <TableCell className="text-center whitespace-nowrap">
+                        {noteVal(r.notes, "berat") || "-"}
+                      </TableCell>
+                      <TableCell className="text-center whitespace-nowrap">
+                        {noteVal(r.notes, "tonase") || "-"}
+                      </TableCell>
+                      <TableCell className="text-center whitespace-nowrap">
+                        {noteVal(r.notes, "jjg") || "-"}
+                      </TableCell>
+                      <TableCell className="text-center whitespace-nowrap">
                         <Input
                           type="number"
                           value={jjgAngkut}
@@ -952,19 +1318,19 @@ export default function Transport() {
                       </TableCell>
                       <TableCell
                         className={
-                          "text-center font-semibold " +
+                          "text-center font-semibold whitespace-nowrap " +
                           (restan > 0 ? "text-red-600" : "text-green-600")
                         }
                       >
                         {restan}
                       </TableCell>
-                      <TableCell className="text-center">
+                      <TableCell className="text-center whitespace-nowrap">
                         {noteVal(r.notes, "no_mobil") || "-"}
                       </TableCell>
-                      <TableCell className="text-center">
+                      <TableCell className="text-center whitespace-nowrap">
                         {noteVal(r.notes, "supir") || "-"}
                       </TableCell>
-                      <TableCell className="text-center">
+                      <TableCell className="text-center whitespace-nowrap">
                         <Button
                           size="sm"
                           variant="outline"
@@ -982,7 +1348,7 @@ export default function Transport() {
                 {filtered.length === 0 && (
                   <TableRow>
                     <TableCell
-                      colSpan={11}
+                      colSpan={24}
                       className="text-center text-sm text-muted-foreground"
                     >
                       Tidak ada data
@@ -1053,6 +1419,197 @@ export default function Transport() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Dialog Import Preview */}
+      <Dialog open={isImportPreviewOpen} onOpenChange={setIsImportPreviewOpen}>
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Preview Import Data Angkutan</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <Card>
+                <CardHeader className="pb-3">
+                  <p className="text-sm text-muted-foreground">
+                    Data Baru (Akan Ditambahkan)
+                  </p>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-2xl font-bold text-green-600">
+                    {importPreviewData?.newRows.length || 0}
+                  </p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-3">
+                  <p className="text-sm text-muted-foreground">
+                    Duplikat (Akan Diabaikan)
+                  </p>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-2xl font-bold text-gray-600">
+                    {importPreviewData?.existingRows.length || 0}
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {importPreviewData && importPreviewData.newRows.length > 0 && (
+              <div>
+                <h3 className="font-semibold text-lg mb-2">Data Baru</h3>
+                <div className="border rounded-lg overflow-auto max-h-96">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>PT</TableHead>
+                        <TableHead>Tgl Angkut</TableHead>
+                        <TableHead>Estate</TableHead>
+                        <TableHead>Divisi</TableHead>
+                        <TableHead>Blok</TableHead>
+                        <TableHead>No SPB</TableHead>
+                        <TableHead>Tahun</TableHead>
+                        <TableHead>JJG</TableHead>
+                        <TableHead>Brondolan</TableHead>
+                        <TableHead>Berat Di</TableHead>
+                        <TableHead>No. Tiket</TableHead>
+                        <TableHead>Code</TableHead>
+                        <TableHead>Bruto</TableHead>
+                        <TableHead>Tarra</TableHead>
+                        <TableHead>Netto</TableHead>
+                        <TableHead>Poto</TableHead>
+                        <TableHead>Berat</TableHead>
+                        <TableHead>Tonase</TableHead>
+                        <TableHead>JJG/</TableHead>
+                        <TableHead>Supir</TableHead>
+                        <TableHead>No. Mobil</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {importPreviewData.newRows.map((r, idx) => (
+                        <TableRow key={idx}>
+                          <TableCell>{r.companyName || "-"}</TableCell>
+                          <TableCell>
+                            {String(r.date_angkut).slice(0, 10)}
+                          </TableCell>
+                          <TableCell>{r.estateId || "-"}</TableCell>
+                          <TableCell>{r.division_id}</TableCell>
+                          <TableCell>{r.block_no}</TableCell>
+                          <TableCell>
+                            {noteVal(r.notes, "no_spb") || "-"}
+                          </TableCell>
+                          <TableCell>
+                            {noteVal(r.notes, "tahun") || "-"}
+                          </TableCell>
+                          <TableCell>{r.jjgAngkut || 0}</TableCell>
+                          <TableCell>
+                            {noteVal(r.notes, "brondolan") || "-"}
+                          </TableCell>
+                          <TableCell>
+                            {noteVal(r.notes, "berat_di") || "-"}
+                          </TableCell>
+                          <TableCell>
+                            {noteVal(r.notes, "no_tiket") || "-"}
+                          </TableCell>
+                          <TableCell>
+                            {noteVal(r.notes, "code") || "-"}
+                          </TableCell>
+                          <TableCell>
+                            {noteVal(r.notes, "bruto") || "-"}
+                          </TableCell>
+                          <TableCell>
+                            {noteVal(r.notes, "tarra") || "-"}
+                          </TableCell>
+                          <TableCell>
+                            {noteVal(r.notes, "netto") || "-"}
+                          </TableCell>
+                          <TableCell>
+                            {noteVal(r.notes, "poto") || "-"}
+                          </TableCell>
+                          <TableCell>
+                            {noteVal(r.notes, "berat") || "-"}
+                          </TableCell>
+                          <TableCell>
+                            {noteVal(r.notes, "tonase") || "-"}
+                          </TableCell>
+                          <TableCell>
+                            {noteVal(r.notes, "jjg") || "-"}
+                          </TableCell>
+                          <TableCell>
+                            {noteVal(r.notes, "supir") || "-"}
+                          </TableCell>
+                          <TableCell>
+                            {noteVal(r.notes, "no_mobil") || "-"}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            )}
+
+            {importPreviewData && importPreviewData.existingRows.length > 0 && (
+              <div>
+                <h3 className="font-semibold text-lg mb-2">
+                  Data Duplikat (Sudah ada di sistem)
+                </h3>
+                <div className="border rounded-lg overflow-auto max-h-40 bg-muted/50">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Tgl Angkut</TableHead>
+                        <TableHead>Estate</TableHead>
+                        <TableHead>Divisi</TableHead>
+                        <TableHead>Blok</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {importPreviewData.existingRows.map((r, idx) => (
+                        <TableRow key={idx} className="opacity-50">
+                          <TableCell>
+                            {String(r.date_angkut).slice(0, 10)}
+                          </TableCell>
+                          <TableCell>{r.estateId || "-"}</TableCell>
+                          <TableCell>{r.division_id}</TableCell>
+                          <TableCell>{r.block_no}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            )}
+
+            {importPreviewData && importPreviewData.newRows.length === 0 && (
+              <div className="text-center py-8 text-muted-foreground">
+                Tidak ada data baru untuk ditambahkan.
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-2 mt-4">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsImportPreviewOpen(false);
+                setImportPreviewData(null);
+              }}
+            >
+              Batal
+            </Button>
+            <Button
+              onClick={handleConfirmImport}
+              disabled={
+                !importPreviewData || importPreviewData.newRows.length === 0
+              }
+              className="bg-green-600 hover:bg-green-700"
+            >
+              Import {importPreviewData?.newRows.length || 0} Data
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

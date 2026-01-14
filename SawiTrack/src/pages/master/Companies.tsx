@@ -184,11 +184,30 @@ const Companies = () => {
 
           jsonData.forEach((row) => {
             const company_name = String(row["Nama Perusahaan"] || "").trim();
-            const address = String(row["Alamat"] || "").trim();
-            const phone = row["Telepon"] ? String(row["Telepon"]) : undefined;
-            const email = row["Email"] ? String(row["Email"]) : undefined;
+            const addressRaw = String(row["Alamat"] || "").trim();
 
-            if (!company_name || !address) return;
+            // Handle empty/null values properly
+            const address = addressRaw || "-";
+            let phone = "-";
+            let email = "-";
+
+            if (
+              row["Telepon"] !== null &&
+              row["Telepon"] !== undefined &&
+              String(row["Telepon"]).trim() !== ""
+            ) {
+              phone = String(row["Telepon"]).trim();
+            }
+
+            if (
+              row["Email"] !== null &&
+              row["Email"] !== undefined &&
+              String(row["Email"]).trim() !== ""
+            ) {
+              email = String(row["Email"]).trim();
+            }
+
+            if (!company_name) return;
 
             const normalizedName = company_name.toLowerCase();
 
@@ -205,9 +224,9 @@ const Companies = () => {
                 ? existsInDb._id
                 : `temp_${Date.now()}_${Math.random()}`,
               company_name,
-              address,
-              phone,
-              email,
+              address: address === "-" ? "-" : address,
+              phone: phone === "-" ? undefined : phone,
+              email: email === "-" ? undefined : email,
             };
 
             if (existsInDb || isDuplicateInExcel) {

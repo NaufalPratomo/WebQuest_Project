@@ -121,3 +121,20 @@ Untuk update Backend (karena menggunakan cPanel Node.js Selector):
 1.  Push code ke GitHub.
 2.  Buka cPanel > **Git Version Control** > Klik **Pull**.
 3.  Buka cPanel > **Setup Node.js App** > Klik **Restart** (agar perubahan kode terbaca).
+
+## Troubleshooting: API Masih Mengarah ke Localhost?
+
+Jika setelah deploy frontend masih mencoba mengakses `localhost` (cek di Console browser):
+
+1.  **Penyebab:** Variable `.env` di Vite **di-compile saat build**. Mengganti file `.env` di server (File Manager) **TIDAK** akan mengubah kode yang sudah jadi (di folder `dist`).
+2.  **Solusi:**
+    *   Pastikan file `.env.production` di komputer lokal Anda sudah berisi URL backend yang benar:
+        ```env
+        VITE_API_BASE_URL=https://api.domainanda.com/api
+        ```
+    *   Jalankan build ulang di komputer lokal:
+        ```bash
+        npm run build
+        ```
+    *   Upload ulang isi folder `dist` yang baru ke `public_html` di cPanel.
+

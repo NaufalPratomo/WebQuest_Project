@@ -37,17 +37,17 @@ if (!process.env.MONGO_ATLAS_URI && !process.env.MONGO_URI) {
 
 const app = express();
 
-// MANUAL CORS MIDDLEWARE (The "Nuclear Option")
-// Bypassing the 'cors' library entirely to force headers manually.
+// MANUAL CORS MIDDLEWARE (Hardcoded Safe Mode)
 app.use((req, res, next) => {
   const origin = req.headers.origin;
+  const allowed = ["https://palmaroots.my.id", "https://www.palmaroots.my.id"];
 
-  // Allow any origin that comes in (Reflection)
-  if (origin) {
+  if (origin && allowed.includes(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
   } else {
-    // Fallback for non-browser tools like Postman
-    res.setHeader("Access-Control-Allow-Origin", "*");
+    // Default to main domain if origin is unknown or blocked
+    // This is safer than '*' because '*' + credentials = ERROR
+    res.setHeader("Access-Control-Allow-Origin", "https://palmaroots.my.id");
   }
 
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS");

@@ -99,7 +99,8 @@ app.use((req, res, next) => {
   next();
 });
 app.use(cors(corsOptions));
-app.options("*", cors(corsOptions));
+// Handle preflight for all routes (Express 5+ / path-to-regexp v8+ compatible)
+app.options("(.*)", cors(corsOptions));
 
 // Debug endpoint (open it directly on the API domain to inspect CORS env parsing)
 const corsDebugHandler = (req, res) => {

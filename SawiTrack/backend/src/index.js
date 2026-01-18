@@ -68,9 +68,18 @@ const corsOptions = {
   credentials: true,
 };
 
-app.use(cors(corsOptions)); // Apply CORS before anything else
+// Enable Preflight for all routes
+app.options("*", cors(corsOptions));
 
-app.use(helmet()); // Secure HTTP headers
+// Apply CORS middleware
+app.use(cors(corsOptions));
+
+// Security Headers (Helmet)
+// Disable Cross-Origin-Resource-Policy to allow cross-origin fetching
+app.use(helmet({
+  crossOriginResourcePolicy: false,
+}));
+
 app.use(compression()); // Compress responses
 app.use(express.json({ limit: "50mb" })); // Increase limit for large imports
 app.use(cookieParser());

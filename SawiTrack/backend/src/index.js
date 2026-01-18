@@ -41,7 +41,7 @@ const app = express();
 app.use((req, res, next) => {
   res.setHeader("X-CORS-Debug", "Active-v2");
   const origin = req.headers.origin;
-  const allowed = ["https://palmaroots.my.id", "https://www.palmaroots.my.id"];
+  const allowed = ["https://palmaroots.my.id", "https://www.palmaroots.my.id", "https://api.palmaroots.my.id"];
 
   if (origin && allowed.includes(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);

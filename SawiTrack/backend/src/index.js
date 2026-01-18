@@ -43,6 +43,30 @@ const PORT = process.env.PORT || 5000;
 const API_BASE_PATH = process.env.API_BASE_PATH || "/api";
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
 
+// Expose a simple release marker to confirm which code is running on hosting.
+// Set APP_RELEASE in hosting env for stable identification.
+const APP_RELEASE = process.env.APP_RELEASE || `local-${new Date().toISOString()}`;
+
+// Some hosting reverse proxies mount the Node app at a URL prefix and may strip it.
+// This makes the API base path optional: both `/api/foo` and `/foo` can work.
+// (Safe for an API-only subdomain; avoids hard-to-diagnose 404s.)
+if (API_BASE_PATH && API_BASE_PATH !== "/") {
+  const base = API_BASE_PATH.startsWith("/") ? API_BASE_PATH : `/${API_BASE_PATH}`;
+  app.use((req, _res, next) => {
+    // Don't double-prefix if already present.
+    if (req.url === base || req.url.startsWith(`${base}/`)) return next();
+    // Prefix everything else.
+    req.url = `${base}${req.url.startsWith("/") ? "" : "/"}${req.url}`;
+    next();
+  });
+}
+
+// Helpful header for debugging deploy/version mismatches
+app.use((_req, res, next) => {
+  res.setHeader("X-SawiTrack-Release", APP_RELEASE);
+  next();
+});
+
 // CORS
 // IMPORTANT (prod): when frontend and backend are on different origins, you must set CORS_ORIGIN
 // to the frontend origin(s), e.g. "https://palmaroots.my.id,https://www.palmaroots.my.id".
@@ -240,6 +264,19 @@ async function checkDateClosed(dateInput) {
 // Health
 app.get(`${API_BASE_PATH}/health`, (_req, res) => {
   res.json({ ok: true, uptime: process.uptime() });
+});
+
+// Deployment/debug meta
+app.get(`${API_BASE_PATH}/__meta`, (req, res) => {
+  res.json({
+    ok: true,
+    release: APP_RELEASE,
+    nodeEnv: process.env.NODE_ENV || null,
+    vercel: !!process.env.VERCEL,
+    apiBasePath: API_BASE_PATH,
+    now: new Date().toISOString(),
+    requestUrl: req.originalUrl,
+  });
 });
 
 // Auth
@@ -1013,6 +1050,28 @@ app.get(`${API_BASE_PATH}/reports/daily`, async (req, res) => {
     if (estate) q.estate = estate;
     if (division) q.division = divQuery(division);
     const docs = await Report.find(q).lean();
+    res.json(docs);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Frontend compatibility: `/api/reports`
+app.get(`${API_BASE_PATH}/reports`, async (req, res) => {
+  try {
+    const { date, startDate, endDate, estate, division, status } = req.query;
+    const q = {};
+    if (date) q.date = date;
+    if (startDate || endDate) {
+      q.date = {};
+      if (startDate) q.date.$gte = startDate;
+      if (endDate) q.date.$lte = endDate;
+    }
+    if (estate) q.estate = estate;
+    if (division) q.division = divQuery(division);
+    if (status) q.status = status;
+
+    const docs = await Report.find(q).sort({ date: -1 }).limit(500).lean();
     res.json(docs);
   } catch (err) {
     res.status(500).json({ error: err.message });

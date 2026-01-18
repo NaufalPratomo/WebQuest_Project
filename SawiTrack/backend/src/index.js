@@ -21,6 +21,8 @@ import JobCode from "./models/JobCode.js";
 import ClosingPeriod from "./models/ClosingPeriod.js";
 import ActivityLog from "./models/ActivityLog.js";
 import Pekerjaan from "./models/Pekerjaan.js";
+import DailyReport from "./models/DailyReport.js";
+import OperationalCost from "./models/OperationalCost.js";
 import path from "path";
 import { fileURLToPath } from "url";
 import bcrypt from "bcryptjs";
@@ -1082,10 +1084,358 @@ app.get(`${API_BASE_PATH}/dashboard/stats`, async (req, res) => {
   }
 });
 
-// Start Server
-connectMongo().then(() => {
-  app.listen(PORT, () => {
-    console.log(`Backend running on port ${PORT}`);
-    console.log(`API Base Path: ${API_BASE_PATH}`);
-  });
+// Stats API (for frontend compatibility)
+app.get(`${API_BASE_PATH}/stats`, async (req, res) => {
+  try {
+    const totalEmployees = await Employee.countDocuments({ status: "active" });
+    const todayReports = await Report.countDocuments({
+      date: { $gte: new Date(new Date().setHours(0, 0, 0, 0)) },
+    });
+    const pendingCount = await Report.countDocuments({ status: "pending" });
+    res.json({
+      totalEmployees,
+      todayReports,
+      pendingCount,
+      targetsPercent: 0,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
+
+// Custom Workers
+app.get(`${API_BASE_PATH}/custom-workers`, async (req, res) => {
+  try {
+    const workers = await CustomWorker.find({}).lean();
+    res.json(workers);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post(`${API_BASE_PATH}/custom-workers`, async (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name) return res.status(400).json({ error: "Name is required" });
+    const created = await CustomWorker.create({ name, active: true });
+    res.status(201).json(created);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete(`${API_BASE_PATH}/custom-workers/:id`, async (req, res) => {
+  try {
+    await CustomWorker.findByIdAndDelete(req.params.id);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Attendance
+app.get(`${API_BASE_PATH}/attendance`, async (req, res) => {
+  try {
+    const { date, startDate, endDate, employeeId } = req.query;
+    const filter = {};
+    if (date) filter.date = date;
+    if (startDate || endDate) {
+      filter.date = {};
+      if (startDate) filter.date.$gte = startDate;
+      if (endDate) filter.date.$lte = endDate;
+    }
+    if (employeeId) filter.employeeId = employeeId;
+    const records = await Attendance.find(filter).sort({ date: -1 }).lean();
+    res.json(records);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post(`${API_BASE_PATH}/attendance`, async (req, res) => {
+  try {
+    const { date, employeeId, status, division_id, notes } = req.body;
+    if (!date || !employeeId || !status)
+      return res.status(400).json({ error: "Missing required fields" });
+    if (await checkDateClosed(date))
+      return res.status(400).json({ error: "Period is closed" });
+    const created = await Attendance.create({
+      date,
+      employeeId,
+      status,
+      division_id,
+      notes,
+    });
+    logActivity(req, "CREATE_ATTENDANCE", { employeeId, date });
+    res.status(201).json(created);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put(`${API_BASE_PATH}/attendance/:id`, async (req, res) => {
+  try {
+    const existing = await Attendance.findById(req.params.id);
+    if (!existing) return res.status(404).json({ error: "Not found" });
+    if (await checkDateClosed(existing.date))
+      return res.status(400).json({ error: "Period is closed" });
+    const updated = await Attendance.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true }
+    );
+    logActivity(req, "UPDATE_ATTENDANCE", { id: req.params.id });
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete(`${API_BASE_PATH}/attendance/:id`, async (req, res) => {
+  try {
+    const existing = await Attendance.findById(req.params.id);
+    if (!existing) return res.status(404).json({ error: "Not found" });
+    if (await checkDateClosed(existing.date))
+      return res.status(400).json({ error: "Period is closed" });
+    await Attendance.findByIdAndDelete(req.params.id);
+    logActivity(req, "DELETE_ATTENDANCE", { id: req.params.id });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Angkut
+app.get(`${API_BASE_PATH}/angkut`, async (req, res) => {
+  try {
+    const { date_panen, estateId, division_id, block_no } = req.query;
+    const filter = {};
+    if (date_panen) filter.date_panen = date_panen;
+    if (estateId) filter.estateId = estateId;
+    if (division_id) filter.division_id = divQuery(division_id);
+    if (block_no) filter.block_no = block_no;
+    const records = await Angkut.find(filter).sort({ date_panen: -1 }).lean();
+    res.json(records);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post(`${API_BASE_PATH}/angkut`, async (req, res) => {
+  try {
+    const data = Array.isArray(req.body) ? req.body : [req.body];
+    const firstDate = data[0]?.date_panen;
+    if (firstDate && (await checkDateClosed(firstDate)))
+      return res.status(400).json({ error: "Period is closed" });
+    const created = await Angkut.insertMany(data);
+    logActivity(req, "CREATE_ANGKUT", { count: data.length });
+    res.status(201).json(created);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put(`${API_BASE_PATH}/angkut/:id`, async (req, res) => {
+  try {
+    const existing = await Angkut.findById(req.params.id);
+    if (!existing) return res.status(404).json({ error: "Not found" });
+    if (await checkDateClosed(existing.date_panen))
+      return res.status(400).json({ error: "Period is closed" });
+    const updated = await Angkut.findByIdAndUpdate(req.params.id, req.body, {
+      new: true,
+    });
+    logActivity(req, "UPDATE_ANGKUT", { id: req.params.id });
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Daily Reports
+app.get(`${API_BASE_PATH}/daily-reports`, async (req, res) => {
+  try {
+    const { date, startDate, endDate, mandorName, division } = req.query;
+    const filter = {};
+    if (date) filter.date = date;
+    if (startDate || endDate) {
+      filter.date = {};
+      if (startDate) filter.date.$gte = startDate;
+      if (endDate) filter.date.$lte = endDate;
+    }
+    if (mandorName) filter.mandorName = mandorName;
+    if (division) filter.division = division;
+    const records = await DailyReport.find(filter).sort({ date: -1 }).lean();
+    res.json(records);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post(`${API_BASE_PATH}/daily-reports`, async (req, res) => {
+  try {
+    const data = Array.isArray(req.body) ? req.body : [req.body];
+    const firstDate = data[0]?.date;
+    if (firstDate && (await checkDateClosed(firstDate)))
+      return res.status(400).json({ error: "Period is closed" });
+    const created = await DailyReport.insertMany(data);
+    logActivity(req, "CREATE_DAILY_REPORT", { count: data.length });
+    res.status(201).json(created);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put(`${API_BASE_PATH}/daily-reports/:id`, async (req, res) => {
+  try {
+    const existing = await DailyReport.findById(req.params.id);
+    if (!existing) return res.status(404).json({ error: "Not found" });
+    if (await checkDateClosed(existing.date))
+      return res.status(400).json({ error: "Period is closed" });
+    const updated = await DailyReport.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true }
+    );
+    logActivity(req, "UPDATE_DAILY_REPORT", { id: req.params.id });
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete(`${API_BASE_PATH}/daily-reports/:id`, async (req, res) => {
+  try {
+    const existing = await DailyReport.findById(req.params.id);
+    if (!existing) return res.status(404).json({ error: "Not found" });
+    if (await checkDateClosed(existing.date))
+      return res.status(400).json({ error: "Period is closed" });
+    await DailyReport.findByIdAndDelete(req.params.id);
+    logActivity(req, "DELETE_DAILY_REPORT", { id: req.params.id });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Operational Costs (Recap)
+app.get(`${API_BASE_PATH}/recap-costs`, async (req, res) => {
+  try {
+    const { month, year } = req.query;
+    if (!month || !year)
+      return res.status(400).json({ error: "Month and Year are required" });
+    const range = getMonthRangeUtc(year, month);
+    if (!range)
+      return res.status(400).json({ error: "Invalid month or year" });
+    const costs = await OperationalCost.find({
+      date: { $gte: range.startDate, $lte: range.endDate },
+    })
+      .sort({ category: 1, date: 1 })
+      .lean();
+    res.json(costs);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post(`${API_BASE_PATH}/recap-costs`, async (req, res) => {
+  try {
+    const body = req.body;
+    if (!body.date || !body.category || !body.jenisPekerjaan)
+      return res.status(400).json({ error: "Missing required fields" });
+    if (await checkDateClosed(body.date))
+      return res.status(400).json({ error: "Period is closed" });
+    const nextBody = { ...body };
+    if (nextBody.date) {
+      const ym = getAppTzYearMonth(nextBody.date);
+      if (ym) {
+        const normalized = getMonthRangeUtc(ym.year, ym.month)?.startDate;
+        if (normalized) nextBody.date = normalized;
+      }
+    }
+    const created = await OperationalCost.create(nextBody);
+    logActivity(req, "CREATE_COST", {
+      category: body.category,
+      jenisPekerjaan: body.jenisPekerjaan,
+    });
+    res.status(201).json(created);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put(`${API_BASE_PATH}/recap-costs/:id`, async (req, res) => {
+  try {
+    const existing = await OperationalCost.findById(req.params.id);
+    if (!existing) return res.status(404).json({ error: "Not found" });
+    if (await checkDateClosed(existing.date))
+      return res.status(400).json({ error: "Period is closed" });
+    const nextBody = { ...req.body };
+    if (nextBody.date) {
+      const ym = getAppTzYearMonth(nextBody.date);
+      if (ym) {
+        const normalized = getMonthRangeUtc(ym.year, ym.month)?.startDate;
+        if (normalized) nextBody.date = normalized;
+      }
+    }
+    const updated = await OperationalCost.findByIdAndUpdate(
+      req.params.id,
+      nextBody,
+      { new: true }
+    );
+    logActivity(req, "UPDATE_COST", { id: req.params.id });
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete(`${API_BASE_PATH}/recap-costs/:id`, async (req, res) => {
+  try {
+    const existing = await OperationalCost.findById(req.params.id);
+    if (!existing) return res.status(404).json({ error: "Not found" });
+    if (await checkDateClosed(existing.date))
+      return res.status(400).json({ error: "Period is closed" });
+    await OperationalCost.findByIdAndDelete(req.params.id);
+    logActivity(req, "DELETE_COST", { id: req.params.id });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Export app for Vercel
+export default app;
+
+// Start Server (only if not on Vercel)
+if (!process.env.VERCEL) {
+  connectMongo()
+    .then(() => {
+      app.listen(PORT, () => {
+        console.log(`Backend running on port ${PORT}`);
+        console.log(`API Base Path: ${API_BASE_PATH}`);
+      });
+    })
+    .catch((err) => {
+      console.error("Failed to start server:", err);
+      process.exit(1);
+    });
+} else {
+  // On Vercel, just ensure DB is connected for the handler
+  connectMongo().catch((e) => console.error("Vercel DB Connect Error:", e));
+}
+
+// Graceful Shutdown for VPS/Node.js process
+const gracefulShutdown = async () => {
+  console.log("Received kill signal, shutting down gracefully");
+  try {
+    await mongoose.connection.close(false);
+    console.log("Mongo connection closed");
+    process.exit(0);
+  } catch (err) {
+    console.error("Error during shutdown", err);
+    process.exit(1);
+  }
+};
+
+process.on("SIGTERM", gracefulShutdown);
+process.on("SIGINT", gracefulShutdown);

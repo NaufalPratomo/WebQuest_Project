@@ -37,6 +37,10 @@ if (!process.env.MONGO_ATLAS_URI && !process.env.MONGO_URI) {
 
 const app = express();
 
+const PORT = process.env.PORT || 5000;
+const API_BASE_PATH = process.env.API_BASE_PATH || "/api";
+const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
+
 // CORS
 // IMPORTANT (prod): when frontend and backend are on different origins, you must set CORS_ORIGIN
 // to the frontend origin(s), e.g. "https://palmaroots.my.id,https://www.palmaroots.my.id".
@@ -49,21 +53,37 @@ const allowedOrigins = (CORS_ORIGIN || "")
   .map((s) => s.trim())
   .filter(Boolean);
 
+const normalizeOrigin = (value) =>
+  String(value || "")
+    .trim()
+    .replace(/\/+$/, "")
+    .toLowerCase();
+
 // Safe defaults if env is not set (helps avoid accidental prod outage).
 if (allowedOrigins.length === 0) {
   allowedOrigins.push("https://palmaroots.my.id", "https://www.palmaroots.my.id");
 }
+
+const allowedOriginsNormalized = new Set(allowedOrigins.map(normalizeOrigin));
 
 const corsOptions = {
   origin: (origin, callback) => {
     // Allow non-browser requests or same-origin
     if (!origin) return callback(null, true);
 
+    const normalizedOrigin = normalizeOrigin(origin);
+
     // Auto-allow all Vercel preview domains if running on Vercel
-    const isVercel = process.env.VERCEL && origin.endsWith(".vercel.app");
-    const isAllowed = allowedOrigins.includes(origin) || isVercel;
+    const isVercel =
+      process.env.VERCEL && normalizedOrigin.endsWith(".vercel.app");
+    const isAllowed = allowedOriginsNormalized.has(normalizedOrigin) || isVercel;
 
     if (isAllowed) return callback(null, true);
+    console.warn("CORS blocked", {
+      origin,
+      normalizedOrigin,
+      allowedOrigins: Array.from(allowedOriginsNormalized),
+    });
     return callback(new Error(`CORS blocked for origin ${origin}`));
   },
   credentials: true,
@@ -81,6 +101,21 @@ app.use((req, res, next) => {
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
 
+// Debug endpoint (open it directly on the API domain to inspect CORS env parsing)
+const corsDebugHandler = (req, res) => {
+  res.json({
+    ok: true,
+    nodeEnv: process.env.NODE_ENV,
+    apiBasePath: API_BASE_PATH,
+    corsOriginEnv: process.env.CORS_ORIGIN || null,
+    requestOrigin: req.headers.origin || null,
+    allowedOrigins: Array.from(allowedOriginsNormalized),
+  });
+};
+app.get(`${API_BASE_PATH}/cors-debug`, corsDebugHandler);
+app.get("/api/cors-debug", corsDebugHandler);
+app.get("/cors-debug", corsDebugHandler);
+
 // Security Headers (Helmet) - DISABLED TEMPORARILY FOR DEBUGGING
 // app.use(helmet({
 //   crossOriginResourcePolicy: false,
@@ -89,10 +124,6 @@ app.options("*", cors(corsOptions));
 app.use(compression()); // Compress responses
 app.use(express.json({ limit: "50mb" })); // Increase limit for large imports
 app.use(cookieParser());
-// Re-declare constants needed later
-const PORT = process.env.PORT || 5000;
-const API_BASE_PATH = process.env.API_BASE_PATH || "/api";
-const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
 
 const toDivId = (v) => (v === undefined || v === null || isNaN(Number(v)) ? v : Number(v));
 const divQuery = (v) => (v === undefined || v === null || isNaN(Number(v)) ? v : { $in: [Number(v), String(v)] });

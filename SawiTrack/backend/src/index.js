@@ -37,36 +37,16 @@ if (!process.env.MONGO_ATLAS_URI && !process.env.MONGO_URI) {
 
 const app = express();
 
-// CORS Configuration - MOVED TO TOP
-const CORS_STRING = process.env.CORS_ORIGIN || "https://palmaroots.my.id,https://www.palmaroots.my.id";
-const allowedOrigins = CORS_STRING
-  .split(",")
-  .map((s) => s.trim())
-  .filter(Boolean);
-
-console.log("Allowed Origins:", allowedOrigins);
-
+// CORS Configuration - ULTIMATE FIX
+// We use 'origin: true' to tell express-cors to simply reflect the request's origin.
+// This effectively allows ANY domain to connect while still supporting credentials (cookies).
 const corsOptions = {
-  origin: (origin, callback) => {
-    // Allow non-browser requests or same-origin
-    if (!origin) return callback(null, true);
-
-    // Check against allowed origins
-    const isAllowed =
-      allowedOrigins.includes("*") || allowedOrigins.includes(origin);
-
-    // Auto-allow all Vercel domains if running on Vercel
-    const isVercel = process.env.VERCEL && origin.endsWith(".vercel.app");
-
-    if (isAllowed || isVercel) {
-      return callback(null, true);
-    }
-
-    console.error(`CORS Blocked for origin: ${origin}`);
-    return callback(new Error(`CORS blocked for origin ${origin}`));
-  },
+  origin: true,
   credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
 };
+
+console.log("CORS Configured with origin: true (Reflection Mode)");
 
 // Enable Preflight for all routes
 app.options("*", cors(corsOptions));

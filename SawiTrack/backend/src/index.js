@@ -36,14 +36,48 @@ if (!process.env.MONGO_ATLAS_URI && !process.env.MONGO_URI) {
 }
 
 const app = express();
+
+// CORS Configuration - MOVED TO TOP
+const CORS_STRING = process.env.CORS_ORIGIN || "https://palmaroots.my.id,https://www.palmaroots.my.id";
+const allowedOrigins = CORS_STRING
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+console.log("Allowed Origins:", allowedOrigins);
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Allow non-browser requests or same-origin
+    if (!origin) return callback(null, true);
+
+    // Check against allowed origins
+    const isAllowed =
+      allowedOrigins.includes("*") || allowedOrigins.includes(origin);
+
+    // Auto-allow all Vercel domains if running on Vercel
+    const isVercel = process.env.VERCEL && origin.endsWith(".vercel.app");
+
+    if (isAllowed || isVercel) {
+      return callback(null, true);
+    }
+
+    console.error(`CORS Blocked for origin: ${origin}`);
+    return callback(new Error(`CORS blocked for origin ${origin}`));
+  },
+  credentials: true,
+};
+
+app.use(cors(corsOptions)); // Apply CORS before anything else
+
 app.use(helmet()); // Secure HTTP headers
 app.use(compression()); // Compress responses
 app.use(express.json({ limit: "50mb" })); // Increase limit for large imports
 app.use(cookieParser());
-
+// Re-declare constants needed later
 const PORT = process.env.PORT || 5000;
 const API_BASE_PATH = process.env.API_BASE_PATH || "/api";
-const CORS_ORIGIN = process.env.CORS_ORIGIN;
+// CORS_ORIGIN handled above as CORS_STRING
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
 
 const toDivId = (v) => (v === undefined || v === null || isNaN(Number(v)) ? v : Number(v));
@@ -74,35 +108,6 @@ function getMonthRangeUtc(yearInput, monthInput) {
   const endMs = Date.UTC(year, month + 1, 1, 0, 0, 0) - APP_TZ_OFFSET_MS - 1;
   return { startDate: new Date(startMs), endDate: new Date(endMs) };
 }
-
-// Support multiple origins via comma-separated list, or '*' to allow all (dev only)
-const allowedOrigins = (CORS_ORIGIN || "")
-  .split(",")
-  .map((s) => s.trim())
-  .filter(Boolean);
-const corsOptions = {
-  origin: (origin, callback) => {
-    // Allow non-browser requests or same-origin
-    if (!origin) return callback(null, true);
-
-    // Check against allowed origins
-    const isAllowed =
-      allowedOrigins.includes("*") || allowedOrigins.includes(origin);
-
-    // Auto-allow all Vercel domains if running on Vercel (includes previews)
-    const isVercel = process.env.VERCEL && origin.endsWith(".vercel.app");
-
-    if (isAllowed || isVercel) {
-      return callback(null, true);
-    }
-    return callback(new Error(`CORS blocked for origin ${origin}`));
-  },
-  credentials: true,
-};
-
-app.use(cors(corsOptions));
-
-const DB_NAME = process.env.MONGO_DB_NAME;
 let MONGO_URI = process.env.MONGO_ATLAS_URI || process.env.MONGO_URI;
 if (!MONGO_URI) {
   const u = process.env.MONGO_USER;

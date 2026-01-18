@@ -37,22 +37,32 @@ if (!process.env.MONGO_ATLAS_URI && !process.env.MONGO_URI) {
 
 const app = express();
 
-// CORS Configuration - ULTIMATE FIX
-// We use 'origin: true' to tell express-cors to simply reflect the request's origin.
-// This effectively allows ANY domain to connect while still supporting credentials (cookies).
-const corsOptions = {
-  origin: true,
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-};
+// MANUAL CORS MIDDLEWARE (The "Nuclear Option")
+// Bypassing the 'cors' library entirely to force headers manually.
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
 
-console.log("CORS Configured with origin: true (Reflection Mode)");
+  // Allow any origin that comes in (Reflection)
+  if (origin) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+  } else {
+    // Fallback for non-browser tools like Postman
+    res.setHeader("Access-Control-Allow-Origin", "*");
+  }
 
-// Enable Preflight for all routes
-app.options("*", cors(corsOptions));
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
+  res.setHeader("Access-Control-Allow-Credentials", "true");
 
-// Apply CORS middleware
-app.use(cors(corsOptions));
+  // Handle Preflight (OPTIONS) immediately
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
+
+  next();
+});
+
+console.log("Manual CORS Middleware Applied.");
 
 // Security Headers (Helmet)
 // Disable Cross-Origin-Resource-Policy to allow cross-origin fetching

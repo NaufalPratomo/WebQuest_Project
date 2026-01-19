@@ -1330,6 +1330,29 @@ app.get(`${API_BASE_PATH}/daily-reports`, async (req, res) => {
   }
 });
 
+// Get daily reports by specific date (supports /daily-reports/2026-01-18 format)
+app.get(`${API_BASE_PATH}/daily-reports/:date`, async (req, res) => {
+  try {
+    const { date } = req.params;
+    const { mandorName, division } = req.query;
+
+    // Validate date format (YYYY-MM-DD)
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(date)) {
+      return res.status(400).json({ error: "Invalid date format. Use YYYY-MM-DD" });
+    }
+
+    const filter = { date };
+    if (mandorName) filter.mandorName = mandorName;
+    if (division) filter.division = division;
+
+    const records = await DailyReport.find(filter).sort({ mandorName: 1 }).lean();
+    res.json(records);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post(`${API_BASE_PATH}/daily-reports`, async (req, res) => {
   try {
     const data = Array.isArray(req.body) ? req.body : [req.body];

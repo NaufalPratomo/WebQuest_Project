@@ -51,7 +51,7 @@ type RealRow = {
 
 const RealHarvest = () => {
   const [date, setDate] = useState(
-    () => new Date().toISOString().split("T")[0]
+    () => new Date().toISOString().split("T")[0],
   );
   const [search, setSearch] = useState("");
   const [rows, setRows] = useState<RealRow[]>([]);
@@ -67,7 +67,7 @@ const RealHarvest = () => {
   >([]);
   const [estateId, setEstateId] = useState<string | undefined>(undefined);
   const [divisions, setDivisions] = useState<Array<{ division_id: number }>>(
-    []
+    [],
   );
   const [blocks, setBlocks] = useState<
     Array<{ id_blok?: string; no_blok?: string }>
@@ -98,16 +98,16 @@ const RealHarvest = () => {
   // live preview for upah based on current form inputs
   const janjangTBSNum = useMemo(
     () => Number(form.janjangTBS || 0),
-    [form.janjangTBS]
+    [form.janjangTBS],
   );
   const upahPreview = useMemo(
     () => janjangTBSNum * TARIF_DASAR_PER_JANJANG,
-    [janjangTBSNum]
+    [janjangTBSNum],
   );
   const premiNum = useMemo(() => Number(form.premi || 0), [form.premi]);
   const totalPreview = useMemo(
     () => upahPreview + premiNum,
-    [upahPreview, premiNum]
+    [upahPreview, premiNum],
   );
 
   useEffect(() => {
@@ -131,8 +131,8 @@ const RealHarvest = () => {
           })
           .catch(() =>
             setEmployees(
-              (base || []).map((e) => ({ _id: e._id, name: e.name }))
-            )
+              (base || []).map((e) => ({ _id: e._id, name: e.name })),
+            ),
           );
       })
       .catch(() => setEmployees([]));
@@ -148,7 +148,7 @@ const RealHarvest = () => {
             p.estateId;
           return {
             id: String(
-              p._id || `${date}_${p.employeeId || ""}_${p.block_no || ""}`
+              p._id || `${date}_${p.employeeId || ""}_${p.block_no || ""}`,
             ),
             timestamp: p._id ? String(p._id) : new Date(date).toISOString(),
             date,
@@ -163,7 +163,7 @@ const RealHarvest = () => {
             jobCode: p.jobCode || "panen",
             janjangTBS: Number((p as { janjangTBS?: number }).janjangTBS ?? 0),
             janjangKosong: Number(
-              (p as { janjangKosong?: number }).janjangKosong ?? 0
+              (p as { janjangKosong?: number }).janjangKosong ?? 0,
             ),
             upahBasis: Number((p as { upahBasis?: number }).upahBasis ?? 0),
             premi: Number((p as { premi?: number }).premi ?? 0),
@@ -178,8 +178,8 @@ const RealHarvest = () => {
         .attendanceList({ date })
         .then((list) =>
           setAttendance(
-            list.map((r) => ({ employeeId: r.employeeId, status: r.status }))
-          )
+            list.map((r) => ({ employeeId: r.employeeId, status: r.status })),
+          ),
         )
         .catch(() => setAttendance([]));
     })();
@@ -205,7 +205,7 @@ const RealHarvest = () => {
     api
       .blocks(estateId, form.division)
       .then((rows: Array<{ id_blok?: string; no_blok?: string }>) =>
-        setBlocks(rows || [])
+        setBlocks(rows || []),
       )
       .catch(() => toast.error("Gagal memuat blok"));
   }, [estateId, form.division]);
@@ -216,19 +216,19 @@ const RealHarvest = () => {
         (r) =>
           (r.division || "").toLowerCase().includes(search.toLowerCase()) ||
           r.mandor.toLowerCase().includes(search.toLowerCase()) ||
-          r.pemanenName.toLowerCase().includes(search.toLowerCase())
+          r.pemanenName.toLowerCase().includes(search.toLowerCase()),
       ),
-    [rows, search]
+    [rows, search],
   );
 
   const totals = useMemo(() => {
     const janjangTBS = filteredRows.reduce(
       (s, r) => s + (r.janjangTBS || 0),
-      0
+      0,
     );
     const janjangKosong = filteredRows.reduce(
       (s, r) => s + (r.janjangKosong || 0),
-      0
+      0,
     );
     return { janjangTBS, janjangKosong };
   }, [filteredRows]);
@@ -249,7 +249,7 @@ const RealHarvest = () => {
         }, 0);
         const ton = list.reduce(
           (s, r) => s + (r.taksasiTon || (r.weightKg || 0) / 1000),
-          0
+          0,
         );
         setTaksasiTotals({
           taksasiJanjang: janjang,
@@ -273,7 +273,7 @@ const RealHarvest = () => {
     estateId: string,
     division_id: number,
     block_no: string,
-    noTPH: string
+    noTPH: string,
   ) {
     try {
       // Get all RealHarvest data for this date/estate/division/block/noTPH combination
@@ -285,14 +285,14 @@ const RealHarvest = () => {
           p.estateId === estateId &&
           p.division_id === division_id &&
           p.block_no === block_no &&
-          (p as { noTPH?: string }).noTPH === noTPH
+          (p as { noTPH?: string }).noTPH === noTPH,
       );
 
       // Aggregate total janjangTBS for this TPH
       const totalJJG = samePanen.reduce(
         (sum, p) =>
           sum + Number((p as { janjangTBS?: number }).janjangTBS || 0),
-        0
+        0,
       );
 
       // Check if Angkut record already exists for this combination
@@ -302,7 +302,7 @@ const RealHarvest = () => {
           a.estateId === estateId &&
           a.division_id === division_id &&
           a.block_no === block_no &&
-          a.noTPH === noTPH
+          a.noTPH === noTPH,
       );
 
       if (angkutRecord && angkutRecord._id) {
@@ -321,9 +321,19 @@ const RealHarvest = () => {
           block_no,
           noTPH,
           jjgRealisasi: totalJJG,
-          jjgAngkut: 0, // Mandor will input this later
+          jumlah: 0, // Mandor will input this later
           weightKg: totalJJG * 15, // Assume 15kg per janjang
-        } as { date_panen: string; date_angkut: string; estateId: string; division_id: number; block_no: string; noTPH: string; jjgRealisasi: number; jjgAngkut: number; weightKg: number });
+        } as {
+          date_panen: string;
+          date_angkut: string;
+          estateId: string;
+          division_id: number;
+          block_no: string;
+          noTPH: string;
+          jjgRealisasi: number;
+          jumlah: number;
+          weightKg: number;
+        });
       }
 
       console.log(`Angkut synced: TPH ${noTPH} = ${totalJJG} JJG`);
@@ -349,7 +359,7 @@ const RealHarvest = () => {
       return;
     }
     const estateName = estates.find(
-      (e) => e._id === form.estateId
+      (e) => e._id === form.estateId,
     )?.estate_name;
     const pemanenName =
       employees.find((e) => e._id === form.pemanenId)?.name || form.pemanenId;
@@ -378,7 +388,7 @@ const RealHarvest = () => {
               premi,
               totalUpah,
             }
-          : r
+          : r,
       );
       persist(next);
       // attempt backend update if _id stored previously
@@ -402,7 +412,23 @@ const RealHarvest = () => {
             upahBasis,
             premi,
             totalUpah,
-          } as { date_panen: string; estateId: string; division_id: number; block_no: string; weightKg: number; employeeId: string; employeeName: string; mandorName: string; jobCode: string; noTPH: string; janjangTBS: number; janjangKosong: number; upahBasis: number; premi: number; totalUpah: number });
+          } as {
+            date_panen: string;
+            estateId: string;
+            division_id: number;
+            block_no: string;
+            weightKg: number;
+            employeeId: string;
+            employeeName: string;
+            mandorName: string;
+            jobCode: string;
+            noTPH: string;
+            janjangTBS: number;
+            janjangKosong: number;
+            upahBasis: number;
+            premi: number;
+            totalUpah: number;
+          });
 
           // Auto-update Angkut: re-aggregate by noTPH
           await syncToAngkut(
@@ -410,7 +436,7 @@ const RealHarvest = () => {
             form.estateId || "",
             Number(form.division),
             form.blockNo,
-            form.noTPH
+            form.noTPH,
           );
         } catch (e) {
           console.warn("Gagal update backend panen row", e);
@@ -457,7 +483,23 @@ const RealHarvest = () => {
           upahBasis,
           premi,
           totalUpah,
-        } as { date_panen: string; estateId: string; division_id: number; block_no: string; weightKg: number; employeeId: string; employeeName: string; mandorName: string; jobCode: string; noTPH: string; janjangTBS: number; janjangKosong: number; upahBasis: number; premi: number; totalUpah: number });
+        } as {
+          date_panen: string;
+          estateId: string;
+          division_id: number;
+          block_no: string;
+          weightKg: number;
+          employeeId: string;
+          employeeName: string;
+          mandorName: string;
+          jobCode: string;
+          noTPH: string;
+          janjangTBS: number;
+          janjangKosong: number;
+          upahBasis: number;
+          premi: number;
+          totalUpah: number;
+        });
         // store backend id for edit flows (assuming single object return)
         const backendId = (
           Array.isArray(created)
@@ -468,7 +510,7 @@ const RealHarvest = () => {
           const withId = next.map((r) =>
             r.id === row.id
               ? ({ ...r, _backendId: backendId } as unknown as RealRow)
-              : r
+              : r,
           );
           // Persisting with extended metadata will drop _backendId due to typing; we only need it transiently in memory
           persist(withId as RealRow[]);
@@ -480,7 +522,7 @@ const RealHarvest = () => {
           form.estateId || "",
           Number(form.division),
           form.blockNo,
-          form.noTPH
+          form.noTPH,
         );
       } catch (e) {
         console.warn("Gagal simpan ke backend panen", e);
@@ -672,11 +714,11 @@ const RealHarvest = () => {
                   <SelectContent>
                     {attendance
                       .filter(
-                        (a) => a.status === "hadir" || a.status === "present"
+                        (a) => a.status === "hadir" || a.status === "present",
                       )
                       .map((a) => {
                         const emp = employees.find(
-                          (e) => e._id === a.employeeId
+                          (e) => e._id === a.employeeId,
                         );
                         return (
                           <SelectItem key={a.employeeId} value={a.employeeId}>
@@ -685,7 +727,7 @@ const RealHarvest = () => {
                         );
                       })}
                     {attendance.filter(
-                      (a) => a.status === "hadir" || a.status === "present"
+                      (a) => a.status === "hadir" || a.status === "present",
                     ).length === 0 && (
                       <SelectItem value="__none" disabled>
                         Tidak ada karyawan hadir
@@ -823,7 +865,7 @@ const RealHarvest = () => {
             <TableBody>
               {filteredRows.map((r) => {
                 const isComplete = Boolean(
-                  r.jobCode && r.noTPH && r.janjangTBS > 0
+                  r.jobCode && r.noTPH && r.janjangTBS > 0,
                 );
                 return (
                   <TableRow key={r.id}>
@@ -879,7 +921,7 @@ const RealHarvest = () => {
                   <TableCell className="text-right">
                     {filteredRows.reduce(
                       (s, r) => s + (r.janjangKosong || 0),
-                      0
+                      0,
                     )}
                   </TableCell>
                   <TableCell className="text-right">

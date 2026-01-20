@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+import mongoose from "mongoose";
 
 const AngkutSchema = new mongoose.Schema(
   {
@@ -10,15 +10,20 @@ const AngkutSchema = new mongoose.Schema(
     division_id: { type: mongoose.Schema.Types.Mixed, required: true },
     block_id: { type: String },
     block_no: { type: String, required: true },
-    noTPH: { type: String }, // Nomor TPH for aggregation
+    no_spb: { type: String }, // Nomor SPB for aggregation
     weightKg: { type: Number, required: true, min: 0 },
-    jjgRealisasi: { type: Number, default: 0 }, // Auto-aggregated from RealHarvest per TPH
-    jjgAngkut: { type: Number, default: 0 }, // Manual input by mandor (berapa yang diangkut)
+    jumlah: { type: Number, default: 0 }, // Manual input by mandor (berapa yang diangkut)
     notes: { type: String },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
-AngkutSchema.index({ date_panen: 1, date_angkut: 1, estateId: 1, division_id: 1, block_no: 1 });
+AngkutSchema.index({
+  date_panen: 1,
+  date_angkut: 1,
+  estateId: 1,
+  division_id: 1,
+  block_no: 1,
+});
 
-export default mongoose.models.Angkut || mongoose.model('Angkut', AngkutSchema);
+export default mongoose.models.Angkut || mongoose.model("Angkut", AngkutSchema);

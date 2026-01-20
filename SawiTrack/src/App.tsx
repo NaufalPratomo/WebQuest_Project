@@ -24,7 +24,7 @@ import Reports from "./pages/Reports";
 import NotFound from "./pages/NotFound";
 import TaksasiPanen from "./pages/manager/TaksasiPanen";
 import Harvest from "./pages/transactions/Harvest";
-import Transport from "./pages/transactions/Transport";
+import Transport from "./pages/transactions/transport/index";
 import Attendance from "./pages/transactions/Attendance";
 import Upah from "./pages/transactions/Upah";
 import Closing from "./pages/transactions/Closing";
@@ -221,9 +221,7 @@ const App = () => (
               <Route
                 path="/activities/input"
                 element={
-                  <ProtectedRoute
-                    allowedRoles={["staff", "non-staff"]}
-                  >
+                  <ProtectedRoute allowedRoles={["staff", "non-staff"]}>
                     <Layout>
                       <InputReport />
                     </Layout>
@@ -234,9 +232,7 @@ const App = () => (
               <Route
                 path="/activities/history"
                 element={
-                  <ProtectedRoute
-                    allowedRoles={["staff", "non-staff"]}
-                  >
+                  <ProtectedRoute allowedRoles={["staff", "non-staff"]}>
                     <Layout>
                       <History />
                     </Layout>

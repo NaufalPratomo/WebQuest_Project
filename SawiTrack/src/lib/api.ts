@@ -164,10 +164,9 @@ export type AngkutRow = {
   division_id: number | string;
   block_no: string;
   block_id?: string;
-  noTPH?: string; // Nomor TPH for aggregation
+  no_spb?: string; // Nomor SPB for aggregation
   weightKg: number;
-  jjgRealisasi?: number; // Auto-aggregated from RealHarvest per TPH
-  jjgAngkut?: number; // Manual input by mandor (berapa JJG yang diangkut)
+  jumlah?: number; // Manual input by mandor (berapa JJG yang diangkut)
   notes?: string;
 };
 
@@ -210,7 +209,7 @@ function toQS(params?: Record<string, string | number | undefined>): string {
 
 async function http<T>(
   path: string,
-  init?: RequestInit & { disableLog?: boolean }
+  init?: RequestInit & { disableLog?: boolean },
 ): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = {
@@ -262,7 +261,7 @@ export const api = {
       password: string;
       division: string | null;
       status: string;
-    }>
+    }>,
   ) =>
     http<User>(`/users/${id}`, { method: "PUT", body: JSON.stringify(body) }),
   deleteUser: (id: string) => http<void>(`/users/${id}`, { method: "DELETE" }),
@@ -305,7 +304,7 @@ export const api = {
       division: string;
       joinDate: string;
       status: string;
-    }>
+    }>,
   ) =>
     http<Employee>(`/employees/${id}`, {
       method: "PUT",
@@ -333,7 +332,7 @@ export const api = {
       email: string;
       estates: string[];
       status: string;
-    }>
+    }>,
   ) =>
     http<Company>(`/companies/${id}`, {
       method: "PUT",
@@ -351,18 +350,22 @@ export const api = {
   }) => http(`/estates`, { method: "POST", body: JSON.stringify(body) }),
   updateEstate: (
     id: string,
-    body: Partial<{ estate_name: string; divisions: unknown[]; status: string }>
+    body: Partial<{
+      estate_name: string;
+      divisions: unknown[];
+      status: string;
+    }>,
   ) => http(`/estates/${id}`, { method: "PUT", body: JSON.stringify(body) }),
   deleteEstate: (id: string) => http(`/estates/${id}`, { method: "DELETE" }),
   divisions: (estateId: string) =>
     http<Array<{ division_id: number | string }>>(
-      `/estates/${encodeURIComponent(estateId)}/divisions`
+      `/estates/${encodeURIComponent(estateId)}/divisions`,
     ),
   blocks: (estateId: string, divisionId: number | string) =>
     http(
       `/estates/${encodeURIComponent(estateId)}/divisions/${encodeURIComponent(
-        divisionId
-      )}/blocks`
+        divisionId,
+      )}/blocks`,
     ),
   targets: () => http<Target[]>(`/targets`),
   target: (id: string) => http<Target>(`/targets/${id}`),
@@ -382,7 +385,7 @@ export const api = {
       target: number;
       achieved: number;
       status: TargetStatus;
-    }>
+    }>,
   ) =>
     http<Target>(`/targets/${id}`, {
       method: "PUT",
@@ -396,7 +399,7 @@ export const api = {
   },
   report: (id: string) => http<ReportDoc>(`/reports/${id}`),
   createReport: (
-    body: Omit<ReportDoc, "_id" | "status"> & { status?: ReportStatus }
+    body: Omit<ReportDoc, "_id" | "status"> & { status?: ReportStatus },
   ) =>
     http<ReportDoc>(`/reports`, { method: "POST", body: JSON.stringify(body) }),
   updateReport: (id: string, body: Partial<Omit<ReportDoc, "_id">>) =>
@@ -473,7 +476,7 @@ export const api = {
     http<{ ok: boolean }>(`/taksasi-selections/${id}`, { method: "DELETE" }),
   customWorkers: () =>
     http<Array<{ _id: string; name: string; active: boolean }>>(
-      `/custom-workers`
+      `/custom-workers`,
     ),
   createCustomWorker: (name: string) =>
     http<{ _id: string; name: string; active: boolean }>(`/custom-workers`, {
@@ -509,7 +512,7 @@ export const api = {
       name: string;
       category: "panen" | "non-panen";
       hkValue: number;
-    }>
+    }>,
   ) =>
     http<{ code: string }>(`/jobcodes/${code}`, {
       method: "PUT",
@@ -603,7 +606,7 @@ export const api = {
       status?: string;
       division_id?: number | string;
       notes?: string;
-    }
+    },
   ) =>
     http<{ _id: string }>(`/attendance/${id}`, {
       method: "PUT",
@@ -630,12 +633,12 @@ export const api = {
                 err.message
               }; Alias: ${
                 inner instanceof Error ? inner.message : String(inner)
-              }`
+              }`,
             );
           });
         }
         throw err;
-      }
+      },
     );
   },
   // Closing endpoints
@@ -694,7 +697,7 @@ export const api = {
     return http<DailyReport[]>(`/daily-reports${search}`);
   },
   dailyReportCreate: (
-    body: Partial<DailyReport> | Array<Partial<DailyReport>>
+    body: Partial<DailyReport> | Array<Partial<DailyReport>>,
   ) =>
     http<DailyReport | DailyReport[]>(`/daily-reports`, {
       method: "POST",

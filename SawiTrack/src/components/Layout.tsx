@@ -129,7 +129,7 @@ const Layout = ({ children }: LayoutProps) => {
         {
           path: "/reports/daily-input",
           icon: FileText,
-          label: "Input Laporan Harian",
+          label: "Input Laporan Bulanan",
           roles: ["staff", "non-staff"],
         },
         {

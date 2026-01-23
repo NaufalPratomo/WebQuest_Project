@@ -25,8 +25,10 @@ type DivisionOption = { division_id: number | string };
 type Block = {
   id_blok?: string;
   no_blok?: string;
+  blok_baru?: string;
+  blok_lama?: string;
   luas_blok?: number;
-  jumlak_pokok?: number; 
+  jumlak_pokok?: number;
   pokok_produktif?: number;
   pokok_belum_produktif?: number;
   pokok_mati?: number;
@@ -214,7 +216,7 @@ export default function TaksasiPanen() {
   // RELEVANCE UPDATE: Since 2026 data separates PROD and MATI, 
   // we assume the census is done on the PROD population directly.
   const akpPercent = samplePokok > 0 ? (bmm / samplePokok) * 100 : 0;
-  
+
   // Janjang calculation: AKP * Produktif Trees
   const calculationBase = pProduktif > 0 ? pProduktif : totalPokok;
   const taksasiJanjang = Math.round((akpPercent / 100) * calculationBase);
@@ -429,36 +431,36 @@ export default function TaksasiPanen() {
 
         // Header grup + kolom
         const groupHeaders = [
-          'Data Input','Data Input','Data Input','Data Input',
-          'Master Data Base','Master Data Base','Master Data Base','Master Data Base',
+          'Data Input', 'Data Input', 'Data Input', 'Data Input',
+          'Master Data Base', 'Master Data Base', 'Master Data Base', 'Master Data Base',
           'Input Data Hasil Sensus AKP Harian',
-          'Hasil Perhitungan','Hasil Perhitungan','Hasil Perhitungan','Hasil Perhitungan'
+          'Hasil Perhitungan', 'Hasil Perhitungan', 'Hasil Perhitungan', 'Hasil Perhitungan'
         ];
         const headers = [
-          'Tanggal','Estate','Divisi','Blok','Total Pokok','BJR (kg)','Basis (jjg/org)','Sample Pokok',
+          'Tanggal', 'Estate', 'Divisi', 'Blok', 'Total Pokok', 'BJR (kg)', 'Basis (jjg/org)', 'Sample Pokok',
           'Buah Merah Membrodol (BMM)',
-          'AKP %','Taksasi (Janjang)','Taksasi (Ton)','Kebutuhan Pemanen'
+          'AKP %', 'Taksasi (Janjang)', 'Taksasi (Ton)', 'Kebutuhan Pemanen'
         ];
 
         ws.addRow(groupHeaders);
         ws.addRow(headers);
 
         // Merge grup
-        ws.mergeCells(1,1,1,4); // A1:D1
-        ws.mergeCells(1,5,1,8); // E1:H1
-        ws.mergeCells(1,9,1,9); // I1:I1
-        ws.mergeCells(1,10,1,13); // J1:M1
+        ws.mergeCells(1, 1, 1, 4); // A1:D1
+        ws.mergeCells(1, 5, 1, 8); // E1:H1
+        ws.mergeCells(1, 9, 1, 9); // I1:I1
+        ws.mergeCells(1, 10, 1, 13); // J1:M1
 
         // Styling header
-        const headerStyle = { alignment: { horizontal: 'center', vertical: 'middle' }, font: { bold: true }, border: { top:{style:'thin'}, left:{style:'thin'}, right:{style:'thin'}, bottom:{style:'thin'} } };
+        const headerStyle = { alignment: { horizontal: 'center', vertical: 'middle' }, font: { bold: true }, border: { top: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' }, bottom: { style: 'thin' } } };
         ws.getRow(1).height = 22;
         ws.getRow(2).height = 20;
         ws.getRow(1).eachCell(cell => { cell.style = headerStyle; });
         ws.getRow(2).eachCell(cell => { cell.style = headerStyle; });
 
         // Column widths
-        const widths = [14,20,10,12,14,10,14,14,30,10,16,14,20];
-        widths.forEach((w, i) => { ws.getColumn(i+1).width = w; });
+        const widths = [14, 20, 10, 12, 14, 10, 14, 14, 30, 10, 16, 14, 20];
+        widths.forEach((w, i) => { ws.getColumn(i + 1).width = w; });
 
         // Data rows
         for (const r of allData) {
@@ -466,16 +468,16 @@ export default function TaksasiPanen() {
           if (r.date) {
             const d = new Date(r.date);
             if (!isNaN(d.getTime())) {
-              const day = String(d.getDate()).padStart(2,'0');
-              const month = String(d.getMonth()+1).padStart(2,'0');
+              const day = String(d.getDate()).padStart(2, '0');
+              const month = String(d.getMonth() + 1).padStart(2, '0');
               const year = d.getFullYear();
               formattedDate = `${day}-${month}-${year}`;
             }
           }
           const estateName = estates.find(e => e._id === r.estateId)?.estate_name || '-';
-          const akpVal = (r.akpPercent ?? (r.samplePokok && r.samplePokok>0 ? (r.bmm||0)/r.samplePokok*100 : 0));
-          const taksasiJanjangVal = r.taksasiJanjang ?? Math.round((akpVal/100)*(r.totalPokok||0));
-          const taksasiTonVal = r.taksasiTon ?? (taksasiJanjangVal*(r.avgWeightKg||0))/1000;
+          const akpVal = (r.akpPercent ?? (r.samplePokok && r.samplePokok > 0 ? (r.bmm || 0) / r.samplePokok * 100 : 0));
+          const taksasiJanjangVal = r.taksasiJanjang ?? Math.round((akpVal / 100) * (r.totalPokok || 0));
+          const taksasiTonVal = r.taksasiTon ?? (taksasiJanjangVal * (r.avgWeightKg || 0)) / 1000;
           const kebutuhanVal = r.kebutuhanPemanen ?? (r.basisJanjangPerPemanen ? Math.ceil(taksasiJanjangVal / r.basisJanjangPerPemanen) : 0);
           const row = ws.addRow([
             formattedDate,
@@ -494,7 +496,7 @@ export default function TaksasiPanen() {
           ]);
           row.eachCell(cell => {
             cell.alignment = { horizontal: 'center', vertical: 'middle' };
-            cell.border = { top:{style:'thin'}, left:{style:'thin'}, right:{style:'thin'}, bottom:{style:'thin'} };
+            cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' }, bottom: { style: 'thin' } };
           });
         }
 
@@ -511,15 +513,15 @@ export default function TaksasiPanen() {
 
       // Fallback tanpa styling (xlsx komunitas)
       const groupHeaders = [
-        'Data Input','Data Input','Data Input','Data Input',
-        'Master Data Base','Master Data Base','Master Data Base','Master Data Base',
+        'Data Input', 'Data Input', 'Data Input', 'Data Input',
+        'Master Data Base', 'Master Data Base', 'Master Data Base', 'Master Data Base',
         'Input Data Hasil Sensus AKP Harian',
-        'Hasil Perhitungan','Hasil Perhitungan','Hasil Perhitungan','Hasil Perhitungan'
+        'Hasil Perhitungan', 'Hasil Perhitungan', 'Hasil Perhitungan', 'Hasil Perhitungan'
       ];
       const headers = [
-        'Tanggal','Estate','Divisi','Blok','Total Pokok','BJR (kg)','Basis (jjg/org)','Sample Pokok',
+        'Tanggal', 'Estate', 'Divisi', 'Blok', 'Total Pokok', 'BJR (kg)', 'Basis (jjg/org)', 'Sample Pokok',
         'Buah Merah Membrodol (BMM)',
-        'AKP %','Taksasi (Janjang)','Taksasi (Ton)','Kebutuhan Pemanen'
+        'AKP %', 'Taksasi (Janjang)', 'Taksasi (Ton)', 'Kebutuhan Pemanen'
       ];
       const wbSimple = XLSX.utils.book_new();
       const wsSimple = XLSX.utils.aoa_to_sheet([groupHeaders, headers]);
@@ -529,16 +531,16 @@ export default function TaksasiPanen() {
         if (r.date) {
           const d = new Date(r.date);
           if (!isNaN(d.getTime())) {
-            const day = String(d.getDate()).padStart(2,'0');
-            const month = String(d.getMonth()+1).padStart(2,'0');
+            const day = String(d.getDate()).padStart(2, '0');
+            const month = String(d.getMonth() + 1).padStart(2, '0');
             const year = d.getFullYear();
             formattedDate = `${day}-${month}-${year}`;
           }
         }
         const estateName = estates.find(e => e._id === r.estateId)?.estate_name || '-';
-        const akpVal = (r.akpPercent ?? (r.samplePokok && r.samplePokok>0 ? (r.bmm||0)/r.samplePokok*100 : 0));
-        const taksasiJanjangVal = r.taksasiJanjang ?? Math.round((akpVal/100)*(r.totalPokok||0));
-        const taksasiTonVal = r.taksasiTon ?? (taksasiJanjangVal*(r.avgWeightKg||0))/1000;
+        const akpVal = (r.akpPercent ?? (r.samplePokok && r.samplePokok > 0 ? (r.bmm || 0) / r.samplePokok * 100 : 0));
+        const taksasiJanjangVal = r.taksasiJanjang ?? Math.round((akpVal / 100) * (r.totalPokok || 0));
+        const taksasiTonVal = r.taksasiTon ?? (taksasiJanjangVal * (r.avgWeightKg || 0)) / 1000;
         const kebutuhanVal = r.kebutuhanPemanen ?? (r.basisJanjangPerPemanen ? Math.ceil(taksasiJanjangVal / r.basisJanjangPerPemanen) : 0);
         XLSX.utils.sheet_add_aoa(wsSimple, [[
           formattedDate, estateName, r.division_id, r.block_no, r.totalPokok, r.avgWeightKg, r.basisJanjangPerPemanen,
@@ -547,12 +549,12 @@ export default function TaksasiPanen() {
         rowIndex++;
       }
       wsSimple['!merges'] = [
-        { s:{r:0,c:0}, e:{r:0,c:3} },
-        { s:{r:0,c:4}, e:{r:0,c:7} },
-        { s:{r:0,c:8}, e:{r:0,c:8} },
-        { s:{r:0,c:9}, e:{r:0,c:12} }
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 3 } },
+        { s: { r: 0, c: 4 }, e: { r: 0, c: 7 } },
+        { s: { r: 0, c: 8 }, e: { r: 0, c: 8 } },
+        { s: { r: 0, c: 9 }, e: { r: 0, c: 12 } }
       ];
-      wsSimple['!cols'] = [14,20,10,12,14,10,14,14,22,10,16,14,18].map(w=>({wch:w}));
+      wsSimple['!cols'] = [14, 20, 10, 12, 14, 10, 14, 14, 22, 10, 16, 14, 18].map(w => ({ wch: w }));
       XLSX.utils.book_append_sheet(wbSimple, wsSimple, 'Taksasi');
       XLSX.writeFile(wbSimple, 'Taksasi_All.xlsx');
       toast.success('Export berhasil (tanpa styling penuh)');
@@ -575,7 +577,7 @@ export default function TaksasiPanen() {
 
         // Detect multi-row header (group header row) and reconstruct data if present
         let data: Record<string, unknown>[];
-        const rawMatrix = XLSX.utils.sheet_to_json<(string|number)[]>(ws, { header: 1, blankrows: false });
+        const rawMatrix = XLSX.utils.sheet_to_json<(string | number)[]>(ws, { header: 1, blankrows: false });
         if (rawMatrix.length > 1 && typeof rawMatrix[0][0] === 'string' && /(Data Input)/i.test(String(rawMatrix[0][0]))) {
           // Use second row as headers
           const headerRow = rawMatrix[1].map(h => String(h).trim());
@@ -911,8 +913,8 @@ export default function TaksasiPanen() {
                   <SelectContent>
                     {divisions.map((d) => (
                       <SelectItem key={String(d.division_id)} value={String(d.division_id)}>
-                        {typeof d.division_id === 'number' || !String(d.division_id).toLowerCase().startsWith('divisi') 
-                          ? `Divisi ${d.division_id}` 
+                        {typeof d.division_id === 'number' || !String(d.division_id).toLowerCase().startsWith('divisi')
+                          ? `Divisi ${d.division_id}`
                           : d.division_id}
                       </SelectItem>
                     ))}
@@ -927,12 +929,22 @@ export default function TaksasiPanen() {
                   </SelectTrigger>
                   <SelectContent>
                     {blocks.map((b, idx) => (
-                      <SelectItem key={`${b.no_blok ?? idx}`} value={String(idx)}>
-                        {b.no_blok ?? b.id_blok ?? `Blok ${idx + 1}`}
+                      <SelectItem key={`${b.blok_baru ?? b.no_blok ?? idx}`} value={String(idx)}>
+                        {b.blok_baru ?? b.no_blok ?? b.id_blok ?? `Blok ${idx + 1}`}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+              {/* Block Lama - auto-fill readonly */}
+              <div className="space-y-2">
+                <Label>Block Lama</Label>
+                <Input
+                  readOnly
+                  value={selectedBlock?.blok_lama || '-'}
+                  className="bg-muted/50 text-muted-foreground text-xs"
+                  placeholder="Otomatis terisi"
+                />
               </div>
             </div>
 
@@ -1068,9 +1080,9 @@ export default function TaksasiPanen() {
                           >
                             <div className="font-medium truncate">{emp.name}</div>
                             <div className="text-xs text-muted-foreground">
-                              {emp.division 
-                                ? (!emp.division.toLowerCase().startsWith('divisi') 
-                                  ? `Divisi ${emp.division}` 
+                              {emp.division
+                                ? (!emp.division.toLowerCase().startsWith('divisi')
+                                  ? `Divisi ${emp.division}`
                                   : emp.division)
                                 : '-'}
                             </div>
@@ -1147,8 +1159,8 @@ export default function TaksasiPanen() {
                   <TableRow key={r.timestamp + i}>
                     <TableCell>{r.estateName}</TableCell>
                     <TableCell>
-                      {!r.divisionId.toLowerCase().startsWith('divisi') 
-                        ? `Divisi ${r.divisionId}` 
+                      {!r.divisionId.toLowerCase().startsWith('divisi')
+                        ? `Divisi ${r.divisionId}`
                         : r.divisionId}
                     </TableCell>
                     <TableCell>{r.blockLabel}</TableCell>

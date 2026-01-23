@@ -99,6 +99,8 @@ type Block = {
   id_blok?: string;
   no_blok?: string;
   no_blok_display?: string;
+  blok_baru?: string;
+  blok_lama?: string;
   no_tph?: string;
   status?: string;
   luas_blok?: number;
@@ -340,7 +342,7 @@ const Locations = () => {
           blocksByDivision: Record<string | number, Block[]>;
         }
       > = { ...meta }; // Start with existing meta
-      
+
       for (const es of estates) {
         // Skip if already loaded and has divisions
         if (next[es._id] && next[es._id].divisions.length > 0) continue;
@@ -348,7 +350,7 @@ const Locations = () => {
         try {
           const divs: Division[] = await api.divisions(es._id);
           const blocksByDivision: Record<string | number, Block[]> = {};
-          
+
           if (divs && divs.length > 0) {
             for (const d of divs) {
               try {
@@ -362,9 +364,9 @@ const Locations = () => {
               }
             }
           }
-          
+
           next[es._id] = { divisions: divs || [], blocksByDivision };
-          
+
           // Yield to UI after each estate to show progress
           if (!cancelled) {
             setMeta({ ...next });
@@ -375,11 +377,11 @@ const Locations = () => {
         }
       }
     }
-    
+
     if (estates.length > 0) {
       loadMeta();
     }
-    
+
     return () => {
       cancelled = true;
     };
@@ -493,7 +495,7 @@ const Locations = () => {
           for (let i = 0; i < Math.min(rows.length, 10); i++) {
             const row = rows[i];
             if (!Array.isArray(row)) continue;
-            
+
             const idx = row.findIndex((cell: unknown) => {
               const s = String(cell || "").toLowerCase().trim();
               return (
@@ -685,11 +687,11 @@ const Locations = () => {
       const metaEs = meta[estate._id];
       const blocksFlat: Array<{ division_id: number | string; block: Block }> = metaEs
         ? Object.entries(metaEs.blocksByDivision).flatMap(([divId, blks]) =>
-            (blks || []).map((b) => ({
-              division_id: isNaN(parseInt(divId)) ? divId : Number(divId),
-              block: b,
-            }))
-          )
+          (blks || []).map((b) => ({
+            division_id: isNaN(parseInt(divId)) ? divId : Number(divId),
+            block: b,
+          }))
+        )
         : [];
 
       blocksFlat.forEach(({ division_id, block }) => {
@@ -731,7 +733,8 @@ const Locations = () => {
         "PT",
         "Estate",
         "Divisi",
-        "No Blok",
+        "No Blok Baru",
+        "No Blok Lama",
         "TT",
         "Luas",
         "TOTAL",
@@ -752,7 +755,8 @@ const Locations = () => {
         company.company_name, // PT name
         estateName, // Estate name
         typeof division_id === "number" ? `Divisi ${division_id}` : String(division_id),
-        strOrEmpty(block.no_blok_display ?? block.no_blok ?? "-"),
+        strOrEmpty(block.blok_baru ?? block.no_blok ?? "-"),
+        strOrEmpty(block.blok_lama ?? "-"),
         strOrEmpty(block.tahun_ ?? block.tahun ?? "-"),
         numOr0(block.luas_blok ?? block.luas_tanam_),
         numOr0(block.pokok_total ?? block.jumlah_pokok ?? block.jumlak_pokok),
@@ -772,9 +776,9 @@ const Locations = () => {
     // Merge cells for parent headers
     worksheet["!merges"] = [
       // Data Master Blok Aresta 2026: A1:F1
-      { s: { r: 0, c: 0 }, e: { r: 0, c: 5 } },
+      { s: { r: 0, c: 0 }, e: { r: 0, c: 6 } },
       // POKOK: G1:J1
-      { s: { r: 0, c: 6 }, e: { r: 0, c: 9 } },
+      { s: { r: 0, c: 7 }, e: { r: 0, c: 10 } },
     ];
 
     // Set column widths
@@ -782,7 +786,8 @@ const Locations = () => {
       { wch: 15 }, // PT
       { wch: 20 }, // Estate
       { wch: 15 }, // Divisi
-      { wch: 20 }, // No Blok
+      { wch: 15 }, // No Blok Baru
+      { wch: 25 }, // No Blok Lama
       { wch: 8 },  // TT
       { wch: 10 }, // Luas
       { wch: 12 }, // TOTAL
@@ -887,11 +892,11 @@ const Locations = () => {
     const metaEs = meta[estateId];
     const blocksFlat: Array<{ division_id: number | string; block: Block }> = metaEs
       ? Object.entries(metaEs.blocksByDivision).flatMap(([divId, blks]) =>
-          (blks || []).map((b) => ({
-            division_id: isNaN(parseInt(divId)) ? divId : Number(divId),
-            block: b,
-          }))
-        )
+        (blks || []).map((b) => ({
+          division_id: isNaN(parseInt(divId)) ? divId : Number(divId),
+          block: b,
+        }))
+      )
       : [];
 
     const numOr0 = (v: unknown): number => (typeof v === "number" ? v : 0);
@@ -1061,8 +1066,7 @@ const Locations = () => {
     // Write file with cellStyles enabled
     XLSX.writeFile(
       workbook,
-      `Aresta_${estate.estate_name}_${
-        new Date().toISOString().split("T")[0]
+      `Aresta_${estate.estate_name}_${new Date().toISOString().split("T")[0]
       }.xlsx`,
       {
         cellStyles: true,
@@ -1078,11 +1082,11 @@ const Locations = () => {
     const metaEs = meta[estateId];
     const blocksFlat: Array<{ division_id: number; block: Block }> = metaEs
       ? Object.entries(metaEs.blocksByDivision).flatMap(([divId, blks]) =>
-          (blks || []).map((b) => ({
-            division_id: Number(divId),
-            block: b,
-          }))
-        )
+        (blks || []).map((b) => ({
+          division_id: Number(divId),
+          block: b,
+        }))
+      )
       : [];
 
     const doc = new jsPDF({
@@ -1377,8 +1381,7 @@ const Locations = () => {
     });
 
     doc.save(
-      `Aresta_${estate.estate_name}_${
-        new Date().toISOString().split("T")[0]
+      `Aresta_${estate.estate_name}_${new Date().toISOString().split("T")[0]
       }.pdf`
     );
   };
@@ -1427,11 +1430,11 @@ const Locations = () => {
           // Relaxed detection: if it has PT and (Wilayah OR Estate OR No Blok OR TOTAL), consider it new format
           // This covers single estate export which might not have separate "Wilayah" column if it's implicitly the division or missing
           const isNewFormat =
-            headerRow2.includes("PT") && 
-            (headerRow2.includes("Wilayah") || 
-             headerRow2.includes("Estate") || 
-             headerRow2.includes("No Blok") ||
-             headerRow2.includes("TOTAL"));
+            headerRow2.includes("PT") &&
+            (headerRow2.includes("Wilayah") ||
+              headerRow2.includes("Estate") ||
+              headerRow2.includes("No Blok") ||
+              headerRow2.includes("TOTAL"));
 
           let jsonData: ExcelRow[] = [];
           if (isNewFormat) {
@@ -1455,7 +1458,7 @@ const Locations = () => {
             for (let i = 2; i < rawRows.length; i++) {
               const r = rawRows[i];
               if (!r || r.length < 5) continue;
-              
+
               // Helper to safely get value by index (returns "" if index is -1)
               const getVal = (idx: number) => idx !== -1 ? toStr(r[idx]) : "";
 
@@ -1506,7 +1509,7 @@ const Locations = () => {
             const ptName = toStr(row.PT);
             // Search company ID by name if PT column exists
             const matchedCompany = companies.find(c => c.company_name.toLowerCase().trim() === ptName.toLowerCase().trim());
-            
+
             const blockData: Partial<Block> = {
               id_pt: isNewFormat ? (matchedCompany?._id || ptName) : undefined,
               id_blok: toStr(row["ID Blok"] || row.id_blok),
@@ -1522,14 +1525,14 @@ const Locations = () => {
               topografi: toStr(row["TOPOGRAFI"] ?? row["Topografi"]),
               luas_tanam_: toNum(
                 row[isNewFormat ? "LUAS" : "Luas Tanam Awal"] ??
-                  row["Luas Tanam"]
+                row["Luas Tanam"]
               ),
               tahun_: toNum(
                 row[isNewFormat ? "TT" : "Tahun Tanam"] ?? row["Tahun"]
               ),
               jumlak_pokok: toNum(
                 row[isNewFormat ? "TOTAL" : "Jumlah Pokok Awal"] ??
-                  row["Jumlah Pokok"]
+                row["Jumlah Pokok"]
               ),
               jenis_bibit: toStr(
                 row[isNewFormat ? "ASAL BIBIT" : "Jenis Bibit"]
@@ -1665,10 +1668,10 @@ const Locations = () => {
                 if (norm1 !== norm2) {
                   // Special check for no_blok vs no_blok_display
                   if (field === "no_blok" && block2.no_blok_display) {
-                      const normDisplay = String(block2.no_blok_display).trim().toLowerCase();
-                      if (norm1 === normDisplay) return true;
+                    const normDisplay = String(block2.no_blok_display).trim().toLowerCase();
+                    if (norm1 === normDisplay) return true;
                   }
-                  
+
                   return false;
                 }
               } else {
@@ -1719,11 +1722,11 @@ const Locations = () => {
                   if (newBlock.id_blok && b.id_blok) {
                     return b.id_blok === newBlock.id_blok;
                   }
-                  
+
                   const bNo = String(b.no_blok || "").trim().toLowerCase();
                   const bNoDisp = String(b.no_blok_display || "").trim().toLowerCase();
                   const nNo = String(newBlock.no_blok || "").trim().toLowerCase();
-                  
+
                   return (bNo !== "" && bNo === nNo) || (bNoDisp !== "" && bNoDisp === nNo);
                 }
               );
@@ -1952,7 +1955,7 @@ const Locations = () => {
   const handleExportGlobal = () => {
     const numOr0 = (v: unknown): number => (typeof v === "number" ? v : 0);
     const strOrEmpty = (v: unknown): string => (v != null ? String(v) : "");
-    
+
     const exportData: any[] = [];
     let totalBlocks = 0;
 
@@ -2120,7 +2123,7 @@ const Locations = () => {
 
               // Process blocks for this division
               const blocksToAdd: Block[] = [];
-              
+
               for (const row of blockRows) {
                 const numOr0 = (key: string): number => {
                   const val = row[key];
@@ -2179,7 +2182,7 @@ const Locations = () => {
                   const divisionIndex = existingDivisions.findIndex(
                     (d) => d.division_id === 0
                   );
-                  
+
                   if (divisionIndex === -1) {
                     // Create new division
                     existingDivisions.push({
@@ -2227,7 +2230,7 @@ const Locations = () => {
                 blocks?: Block[];
               }>;
               const blocksByDivision: Record<number, Block[]> = {};
-              
+
               for (const d of divisions || []) {
                 try {
                   const blocks = await api.blocks(estate._id, d.division_id);
@@ -2238,7 +2241,7 @@ const Locations = () => {
                   blocksByDivision[d.division_id] = [];
                 }
               }
-              
+
               setMeta((prev) => ({
                 ...prev,
                 [estate._id]: {
@@ -2487,7 +2490,7 @@ const Locations = () => {
                             division_id: number | string;
                             block: Block;
                           }> = metaEs
-                            ? Object.entries(metaEs.blocksByDivision).flatMap(
+                              ? Object.entries(metaEs.blocksByDivision).flatMap(
                                 ([divId, blks]) =>
                                   (blks || []).map((b) => ({
                                     division_id: isNaN(parseInt(divId))
@@ -2496,7 +2499,7 @@ const Locations = () => {
                                     block: b,
                                   }))
                               )
-                            : [];
+                              : [];
 
                           const currentPage = currentPages[es._id] || 1;
                           const itemsPerPage = 10;
@@ -2615,7 +2618,13 @@ const Locations = () => {
                                           rowSpan={2}
                                           className="text-center bg-blue-50 border border-gray-300"
                                         >
-                                          No Blok
+                                          No Blok Baru
+                                        </TableHead>
+                                        <TableHead
+                                          rowSpan={2}
+                                          className="text-center bg-blue-50 border border-gray-300"
+                                        >
+                                          No Blok Lama
                                         </TableHead>
                                         <TableHead
                                           rowSpan={2}
@@ -2680,11 +2689,10 @@ const Locations = () => {
                                       {paginatedBlocks.map(
                                         ({ division_id, block }, idx) => (
                                           <TableRow
-                                            key={`${division_id}-${
-                                              block.no_blok ??
+                                            key={`${division_id}-${block.no_blok ??
                                               block.id_blok ??
                                               idx
-                                            }`}
+                                              }`}
                                           >
                                             <TableCell className="text-center border border-gray-300">
                                               {String(block.pt_ownership ?? block.id_pt ?? block.pt ?? "-")}
@@ -2697,14 +2705,17 @@ const Locations = () => {
                                                   : division_id
                                                 : "-"}
                                             </TableCell>
-                                            <TableCell className="text-center border border-gray-300 min-w-[120px]">
-                                              {block.no_blok_display || block.no_blok || "-"}
+                                            <TableCell className="text-center border border-gray-300 min-w-[100px] font-medium">
+                                              {block.blok_baru || block.no_blok || "-"}
+                                            </TableCell>
+                                            <TableCell className="text-center border border-gray-300 min-w-[120px] text-xs text-muted-foreground">
+                                              {block.blok_lama || "-"}
                                             </TableCell>
                                             <TableCell className="text-center border border-gray-300">
                                               {String(
                                                 block.tahun_ ??
-                                                  block.tahun ??
-                                                  "-"
+                                                block.tahun ??
+                                                "-"
                                               )}
                                             </TableCell>
                                             <TableCell className="text-right border border-gray-300">
@@ -2712,8 +2723,8 @@ const Locations = () => {
                                             </TableCell>
                                             <TableCell className="text-right border border-gray-300">
                                               {formatNumber(
-                                                block.pokok_total ?? 
-                                                block.jumlah_pokok ?? 
+                                                block.pokok_total ??
+                                                block.jumlah_pokok ??
                                                 block.jumlak_pokok
                                               )}
                                             </TableCell>
@@ -2751,11 +2762,11 @@ const Locations = () => {
                                                         division_id
                                                       ].map((b) =>
                                                         b.no_blok ===
-                                                        block.no_blok
+                                                          block.no_blok
                                                           ? {
-                                                              ...b,
-                                                              status: newStatus,
-                                                            }
+                                                            ...b,
+                                                            status: newStatus,
+                                                          }
                                                           : b
                                                       );
                                                     await api.updateEstate(
@@ -2768,13 +2779,13 @@ const Locations = () => {
                                                                 d.division_id,
                                                               blocks:
                                                                 d.division_id ===
-                                                                division_id
+                                                                  division_id
                                                                   ? updatedBlocks
                                                                   : metaEs
-                                                                      .blocksByDivision[
-                                                                      d
-                                                                        .division_id
-                                                                    ],
+                                                                    .blocksByDivision[
+                                                                  d
+                                                                    .division_id
+                                                                  ],
                                                             })
                                                           ),
                                                       }
@@ -2866,7 +2877,7 @@ const Locations = () => {
                                               (sum, { block }) =>
                                                 sum +
                                                 (typeof block.luas_blok ===
-                                                "number"
+                                                  "number"
                                                   ? block.luas_blok
                                                   : 0),
                                               0
@@ -2891,7 +2902,7 @@ const Locations = () => {
                                               (sum, { block }) =>
                                                 sum +
                                                 (typeof block.luas_nursery ===
-                                                "number"
+                                                  "number"
                                                   ? block.luas_nursery
                                                   : 0),
                                               0
@@ -2916,7 +2927,7 @@ const Locations = () => {
                                               (sum, { block }) =>
                                                 sum +
                                                 (typeof block.luas_garapan ===
-                                                "number"
+                                                  "number"
                                                   ? block.luas_garapan
                                                   : 0),
                                               0
@@ -2926,7 +2937,7 @@ const Locations = () => {
                                               (sum, { block }) =>
                                                 sum +
                                                 (typeof block.luas_rawa ===
-                                                "number"
+                                                  "number"
                                                   ? block.luas_rawa
                                                   : 0),
                                               0
@@ -2936,7 +2947,7 @@ const Locations = () => {
                                               (sum, { block }) =>
                                                 sum +
                                                 (typeof block.luas_area_non_efektif ===
-                                                "number"
+                                                  "number"
                                                   ? block.luas_area_non_efektif
                                                   : 0),
                                               0
@@ -2946,7 +2957,7 @@ const Locations = () => {
                                               (sum, { block }) =>
                                                 sum +
                                                 (typeof block.luas_konservasi ===
-                                                "number"
+                                                  "number"
                                                   ? block.luas_konservasi
                                                   : 0),
                                               0
@@ -3115,8 +3126,8 @@ const Locations = () => {
                                 const newTphs = e.target.checked
                                   ? [...currentTphs, String(num)]
                                   : currentTphs.filter(
-                                      (t) => t !== String(num)
-                                    );
+                                    (t) => t !== String(num)
+                                  );
                                 setEditFormData({
                                   ...editFormData,
                                   no_tph: newTphs

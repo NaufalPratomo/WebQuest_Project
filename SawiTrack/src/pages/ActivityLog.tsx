@@ -28,9 +28,7 @@ export default function ActivityLogPage() {
     const fetchLogs = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`${API_BASE}/activity-logs?page=${page}&limit=${limit}`, {
-          cache: 'no-cache',
-        });
+        const res = await fetch(`${API_BASE}/activity-logs?page=${page}&limit=${limit}`);
         if (!res.ok) throw new Error('Failed to fetch');
 
         const json = await res.json();

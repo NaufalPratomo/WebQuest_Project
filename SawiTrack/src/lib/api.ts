@@ -221,7 +221,6 @@ async function http<T>(
   const res = await fetch(fullUrl, {
     headers,
     credentials: "include", // allow cookie-based session fallback
-    cache: "no-cache", // Revalidate with server but use cache if unchanged
     ...init,
   });
 

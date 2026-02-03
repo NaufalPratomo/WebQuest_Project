@@ -1116,11 +1116,29 @@ app.delete(`${API_BASE_PATH}/closing-periods/:id`, async (req, res) => {
 app.get(`${API_BASE_PATH}/activity-logs`, async (req, res) => {
   try {
     const limit = Number(req.query.limit) || 50;
-    const docs = await ActivityLog.find({})
-      .sort({ timestamp: -1 })
-      .limit(limit)
-      .lean();
-    res.json(docs);
+    const page = Number(req.query.page) || 1;
+    const skip = (page - 1) * limit;
+
+    const [docs, totalCount] = await Promise.all([
+      ActivityLog.find({})
+        .sort({ timestamp: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      ActivityLog.countDocuments({})
+    ]);
+
+    const totalPages = Math.ceil(totalCount / limit);
+
+    res.json({
+      data: docs,
+      pagination: {
+        page,
+        limit,
+        total: totalCount,
+        pages: totalPages
+      }
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1315,12 +1333,23 @@ app.get(`${API_BASE_PATH}/daily-reports`, async (req, res) => {
   try {
     const { date, startDate, endDate, mandorName, division } = req.query;
     const filter = {};
-    if (date) filter.date = date;
-    if (startDate || endDate) {
+    
+    // Convert string dates to Date objects for proper MongoDB Date comparison
+    if (date) {
+      // Single date: match entire day (UTC)
+      const dateStart = new Date(date + 'T00:00:00.000Z');
+      const dateEnd = new Date(date + 'T23:59:59.999Z');
+      filter.date = { $gte: dateStart, $lte: dateEnd };
+    } else if (startDate || endDate) {
       filter.date = {};
-      if (startDate) filter.date.$gte = startDate;
-      if (endDate) filter.date.$lte = endDate;
+      if (startDate) {
+        filter.date.$gte = new Date(startDate + 'T00:00:00.000Z');
+      }
+      if (endDate) {
+        filter.date.$lte = new Date(endDate + 'T23:59:59.999Z');
+      }
     }
+    
     if (mandorName) filter.mandorName = mandorName;
     if (division) filter.division = division;
     const records = await DailyReport.find(filter).sort({ date: -1 }).lean();
@@ -1342,7 +1371,11 @@ app.get(`${API_BASE_PATH}/daily-reports/:date`, async (req, res) => {
       return res.status(400).json({ error: "Invalid date format. Use YYYY-MM-DD" });
     }
 
-    const filter = { date };
+    // Convert to Date range for proper MongoDB Date comparison
+    const dateStart = new Date(date + 'T00:00:00.000Z');
+    const dateEnd = new Date(date + 'T23:59:59.999Z');
+    
+    const filter = { date: { $gte: dateStart, $lte: dateEnd } };
     if (mandorName) filter.mandorName = mandorName;
     if (division) filter.division = division;
 

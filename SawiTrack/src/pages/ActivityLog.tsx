@@ -28,9 +28,11 @@ export default function ActivityLogPage() {
     const fetchLogs = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`${API_BASE}/activity-logs?page=${page}&limit=${limit}`);
+        const res = await fetch(`${API_BASE}/activity-logs?page=${page}&limit=${limit}`, {
+          cache: 'no-cache',
+        });
         if (!res.ok) throw new Error('Failed to fetch');
-        
+
         const json = await res.json();
         setLogs(json.data || []);
         setTotal(json.pagination?.pages || 1);
@@ -41,7 +43,7 @@ export default function ActivityLogPage() {
         setLoading(false);
       }
     };
-    
+
     fetchLogs();
   }, [page]);
 
